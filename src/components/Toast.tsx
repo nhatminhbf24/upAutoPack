@@ -16,17 +16,17 @@ export const ToastContainer: React.FC<ToastProps> = ({ toasts, onDismiss }) => {
   if (toasts.length === 0) return null;
 
   return (
-    <div id="toast-container" className="no-print fixed top-4 right-4 z-50 flex flex-col gap-2 pointer-events-auto">
+    <div id="toast-container" className="no-print fixed bottom-5 right-5 z-50 flex flex-col-reverse gap-2.5 pointer-events-auto">
       {toasts.map((toast) => (
         <div
           key={toast.id}
           id={`toast-${toast.id}`}
-          className={`flex items-center gap-2.5 px-4 py-3 rounded-xl shadow-lg text-xs font-medium transition-all duration-300 text-white min-w-[280px] max-w-md ${
+          className={`flex items-center gap-2.5 px-4 py-3 rounded-2xl shadow-xl text-xs font-semibold transition-all duration-300 text-white min-w-[280px] max-w-md border border-white/10 animate-fadeIn ${
             toast.type === 'error'
-              ? 'bg-rose-600 shadow-rose-600/20'
+              ? 'bg-rose-600 shadow-rose-600/30'
               : toast.type === 'info'
-              ? 'bg-blue-600 shadow-blue-600/20'
-              : 'bg-gray-900 shadow-gray-900/30'
+              ? 'bg-blue-600 shadow-blue-600/30'
+              : 'bg-slate-900/95 backdrop-blur-md shadow-slate-900/40'
           }`}
         >
           {toast.type === 'success' && <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />}
