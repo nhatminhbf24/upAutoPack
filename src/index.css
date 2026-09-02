@@ -1,0 +1,151 @@
+@import "tailwindcss";
+
+@layer utilities {
+  .shape-circle {
+    border-radius: 50% !important;
+  }
+
+  .shape-heart {
+    -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z' fill='black'/%3E%3C/svg%3E");
+    -webkit-mask-size: 100% 100%;
+    -webkit-mask-repeat: no-repeat;
+    -webkit-mask-position: center;
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z' fill='black'/%3E%3C/svg%3E");
+    mask-size: 100% 100%;
+    mask-repeat: no-repeat;
+    mask-position: center;
+  }
+
+  .cut-lines-box {
+    outline: 1px dashed #9ca3af;
+    outline-offset: 0px;
+  }
+}
+
+/* Hide number input spinners (up/down arrows) completely */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none !important;
+  margin: 0 !important;
+}
+input[type="number"] {
+  -moz-appearance: textfield !important;
+  appearance: textfield !important;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Print Specific Rules */
+@media print {
+  @page {
+    size: auto;
+    margin: 0mm !important;
+  }
+
+  *,
+  *::before,
+  *::after {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    box-sizing: border-box !important;
+  }
+
+  html,
+  body {
+    width: 100% !important;
+    height: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+    overflow: visible !important;
+  }
+
+  /* Hide all UI elements, sidebars, modals, toolbars */
+  .no-print,
+  #sidebar,
+  #list-sidebar,
+  #toast-container,
+  #preview-topbar,
+  #modal-backdrop,
+  #crop-modal,
+  header,
+  nav,
+  aside {
+    display: none !important;
+  }
+
+  #app-root {
+    display: block !important;
+    width: 100% !important;
+    height: auto !important;
+    overflow: visible !important;
+    background: transparent !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  #preview-area {
+    display: block !important;
+    width: 100% !important;
+    height: auto !important;
+    overflow: visible !important;
+    background: transparent !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    position: static !important;
+  }
+
+  .print-area-wrapper {
+    display: block !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: transparent !important;
+    overflow: visible !important;
+  }
+
+  #pages-container {
+    display: block !important;
+    transform: none !important;
+    gap: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  .a4-page-sheet {
+    display: block !important;
+    margin: 0 auto !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+    border: none !important;
+    page-break-inside: avoid !important;
+    page-break-after: always !important;
+    break-inside: avoid !important;
+    break-after: page !important;
+    position: relative !important;
+    transform: none !important;
+    top: 0 !important;
+    left: 0 !important;
+    overflow: hidden !important;
+    background: white !important;
+  }
+
+  .a4-page-sheet:last-child {
+    page-break-after: auto !important;
+    break-after: auto !important;
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "name": "Update AutoPack Print - v1",
+  "description": "Công cụ dàn trang in ảnh A4 tự động thông minh, tách chi tiết sticker PNG trong suốt, tùy chỉnh kích thước, xoay, cắt và xuất ảnh độ phân giải cao 300 DPI.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
