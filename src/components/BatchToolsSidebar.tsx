@@ -327,33 +327,6 @@ export const BatchToolsSidebar: React.FC<BatchToolsSidebarProps> = ({
       ) : (
         /* Scrollable Container */
         <div className="flex-1 overflow-y-auto p-3 space-y-3.5">
-          {/* CÔNG CỤ ĐẶC BIỆT: TÁCH STICKER TỪ SHEET PNG */}
-          {onOpenPngSplitter && (
-            <div className="bg-gradient-to-r from-blue-500 via-indigo-600 to-blue-600 rounded-xl p-3 text-white shadow-sm shadow-blue-500/20 space-y-2">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1.5 font-black text-xs tracking-tight">
-                  <Scissors className="w-4 h-4 text-blue-200" />
-                  <span>Tách Sticker / Sheet PNG</span>
-                </div>
-                <span className="text-[9px] bg-white/20 backdrop-blur-xs px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">
-                  Mới
-                </span>
-              </div>
-              <p className="text-[11px] text-blue-100 leading-snug">
-                Tự động cắt ảnh PNG nhiều chi tiết thành từng ảnh sticker riêng lẻ và tải ZIP.
-              </p>
-              <button
-                type="button"
-                id="btn-batch-open-splitter"
-                onClick={onOpenPngSplitter}
-                className="w-full flex items-center justify-center gap-1.5 bg-white hover:bg-blue-50 text-blue-800 font-bold py-1.5 px-2.5 rounded-lg text-xs shadow-2xs transition active:scale-95 cursor-pointer"
-              >
-                <Scissors className="w-3.5 h-3.5 text-blue-600" />
-                <span>Mở công cụ Tách Sticker</span>
-              </button>
-            </div>
-          )}
-
           {/* CỤM 1: ĐỒNG BỘ KÍCH THƯỚC (Pastel Sky) */}
           <div className="bg-sky-50/80 rounded-xl p-3.5 border border-sky-200/90 shadow-2xs space-y-2.5 transition hover:border-sky-300">
             <div className="flex items-center justify-between">

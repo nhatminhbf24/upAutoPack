@@ -119,41 +119,35 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
       ) : (
         /* Main Settings Body */
         <div className="flex-1 overflow-y-auto p-3.5 space-y-3.5 bg-slate-50/50">
-          {/* Page Stats & Orientation (Pastel Sky) */}
-          <div className="bg-sky-50/70 rounded-xl p-3.5 border border-sky-200/90 shadow-2xs space-y-2.5">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-sky-950">Tổng trang A4:</span>
-              <span className="bg-white text-sky-700 border border-sky-300 px-2.5 py-0.5 rounded-md text-xs font-black font-mono shadow-2xs">
-                {pageCount} trang
-              </span>
-            </div>
+          {/* Page Stats & Orientation (1 Compact Line) */}
+          <div className="bg-sky-50/70 rounded-xl px-3 py-2 border border-sky-200/90 shadow-2xs flex items-center justify-between gap-2">
+            <span className="bg-white text-sky-700 border border-sky-300 px-2.5 py-1 rounded-lg text-xs font-black font-mono shadow-2xs shrink-0">
+              {pageCount} trang
+            </span>
 
-            <div className="flex items-center justify-between pt-2 border-t border-sky-200/80">
-              <span className="text-[11px] font-bold text-sky-900">Hướng giấy:</span>
-              <div className="flex bg-white p-0.5 rounded-lg text-xs font-semibold border border-sky-200">
-                <button
-                  type="button"
-                  onClick={() => onUpdateSettings({ paperOrientation: 'portrait' })}
-                  className={`px-2.5 py-1 rounded-md transition ${
-                    settings.paperOrientation === 'portrait'
-                      ? 'bg-sky-600 text-white font-bold shadow-2xs'
-                      : 'text-slate-600 hover:text-sky-900'
-                  }`}
-                >
-                  Khổ Dọc
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onUpdateSettings({ paperOrientation: 'landscape' })}
-                  className={`px-2.5 py-1 rounded-md transition ${
-                    settings.paperOrientation === 'landscape'
-                      ? 'bg-sky-600 text-white font-bold shadow-2xs'
-                      : 'text-slate-600 hover:text-sky-900'
-                  }`}
-                >
-                  Khổ Ngang
-                </button>
-              </div>
+            <div className="flex bg-white p-0.5 rounded-lg text-xs font-semibold border border-sky-200">
+              <button
+                type="button"
+                onClick={() => onUpdateSettings({ paperOrientation: 'portrait' })}
+                className={`px-2.5 py-1 rounded-md transition cursor-pointer ${
+                  settings.paperOrientation === 'portrait'
+                    ? 'bg-sky-600 text-white font-bold shadow-2xs'
+                    : 'text-slate-600 hover:text-sky-900'
+                }`}
+              >
+                Khổ Dọc
+              </button>
+              <button
+                type="button"
+                onClick={() => onUpdateSettings({ paperOrientation: 'landscape' })}
+                className={`px-2.5 py-1 rounded-md transition cursor-pointer ${
+                  settings.paperOrientation === 'landscape'
+                    ? 'bg-sky-600 text-white font-bold shadow-2xs'
+                    : 'text-slate-600 hover:text-sky-900'
+                }`}
+              >
+                Khổ Ngang
+              </button>
             </div>
           </div>
 
@@ -301,56 +295,60 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
             </div>
           )}
 
-          {/* Non-black vibrant Print Button */}
-          <button
-            type="button"
-            id="btn-print"
-            onClick={onPrint}
-            disabled={totalPhotos === 0 || isExporting}
-            className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-pink-600 via-rose-600 to-pink-700 hover:from-pink-700 hover:to-rose-800 disabled:opacity-50 text-white font-bold py-2.5 rounded-xl text-xs transition shadow-md shadow-pink-500/20 active:scale-95 cursor-pointer"
-          >
-            <Printer className="w-4 h-4" />
-            <span>In ngay (Print A4)</span>
-          </button>
+          {/* Row 1: Print & Export PDF */}
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              id="btn-print"
+              onClick={onPrint}
+              disabled={totalPhotos === 0 || isExporting}
+              className="flex items-center justify-center gap-1.5 bg-gradient-to-r from-pink-600 to-rose-600 hover:from-pink-700 hover:to-rose-700 disabled:opacity-50 text-white font-bold py-2 rounded-xl text-xs transition shadow-md shadow-pink-500/20 active:scale-95 cursor-pointer truncate"
+              title="In trực tiếp trang A4 (Ctrl+P)"
+            >
+              <Printer className="w-3.5 h-3.5 shrink-0" />
+              <span className="truncate">In ngay (A4)</span>
+            </button>
 
-          {/* Export PNG & JPG Buttons */}
+            {onExportPdf && (
+              <button
+                type="button"
+                id="btn-export-pdf"
+                onClick={onExportPdf}
+                disabled={totalPhotos === 0 || isExporting}
+                className="flex items-center justify-center gap-1.5 bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-700 hover:to-rose-700 disabled:opacity-50 text-white font-bold py-2 rounded-xl text-xs transition shadow-md shadow-red-500/20 active:scale-95 cursor-pointer truncate"
+                title={`Xuất file PDF in ấn chuẩn 300 DPI (${pageCount} trang)`}
+              >
+                <FileText className="w-3.5 h-3.5 shrink-0" />
+                <span className="truncate">Xuất PDF ({pageCount} tr)</span>
+              </button>
+            )}
+          </div>
+
+          {/* Row 2: Export PNG & Export JPG */}
           <div className="grid grid-cols-2 gap-2">
             <button
               type="button"
               id="btn-export-png"
               onClick={() => onExport('png')}
               disabled={totalPhotos === 0 || isExporting}
-              className="flex items-center justify-center gap-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-bold py-2 rounded-xl text-xs transition shadow-xs active:scale-95 cursor-pointer"
+              className="flex items-center justify-center gap-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-bold py-2 rounded-xl text-xs transition shadow-xs active:scale-95 cursor-pointer truncate"
+              title="Xuất file ảnh PNG chất lượng cao"
             >
-              <Download className="w-3.5 h-3.5" />
-              <span>Xuất PNG</span>
+              <Download className="w-3.5 h-3.5 shrink-0" />
+              <span className="truncate">Xuất PNG</span>
             </button>
             <button
               type="button"
               id="btn-export-jpg"
               onClick={() => onExport('jpeg')}
               disabled={totalPhotos === 0 || isExporting}
-              className="flex items-center justify-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold py-2 rounded-xl text-xs transition shadow-xs active:scale-95 cursor-pointer"
+              className="flex items-center justify-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold py-2 rounded-xl text-xs transition shadow-xs active:scale-95 cursor-pointer truncate"
+              title="Xuất file ảnh JPG tiết kiệm dung lượng"
             >
-              <Download className="w-3.5 h-3.5" />
-              <span>Xuất JPG</span>
+              <Download className="w-3.5 h-3.5 shrink-0" />
+              <span className="truncate">Xuất JPG</span>
             </button>
           </div>
-
-          {/* PDF Multi-page Export Button */}
-          {onExportPdf && (
-            <button
-              type="button"
-              id="btn-export-pdf"
-              onClick={onExportPdf}
-              disabled={totalPhotos === 0 || isExporting}
-              className="w-full flex items-center justify-center gap-1.5 bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-700 hover:to-rose-700 disabled:opacity-50 text-white font-bold py-2 rounded-xl text-xs transition shadow-sm shadow-red-500/20 active:scale-95 cursor-pointer"
-              title="Xuất file PDF nhiều trang độ nét cao 300 DPI chuẩn in ấn"
-            >
-              <FileText className="w-3.5 h-3.5" />
-              <span>Xuất file PDF in ấn ({pageCount} trang)</span>
-            </button>
-          )}
         </div>
       )}
     </aside>

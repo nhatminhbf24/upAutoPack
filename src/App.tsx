@@ -23,6 +23,7 @@ import { RestoreSessionModal } from './components/RestoreSessionModal';
 import { SaveProjectModal } from './components/SaveProjectModal';
 import { ActivationModal } from './components/ActivationModal';
 import { PngSplitterModal } from './components/PngSplitterModal';
+import { ClearConfirmModal } from './components/ClearConfirmModal';
 import { ToolSelectorHub } from './components/ToolSelectorHub';
 import { PngSplitterWorkspace } from './components/PngSplitterWorkspace';
 import { ToastContainer, ToastMessage } from './components/Toast';
@@ -94,6 +95,7 @@ export default function App() {
 
   const [isSaveProjectModalOpen, setIsSaveProjectModalOpen] = useState(false);
   const [isPngSplitterOpen, setIsPngSplitterOpen] = useState(false);
+  const [isClearConfirmOpen, setIsClearConfirmOpen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [exportProgress, setExportProgress] = useState<{ current: number; total: number } | null>(null);
 
@@ -362,13 +364,19 @@ export default function App() {
     addToast('info', 'Đã xóa ảnh');
   }, [setPhotos, addToast]);
 
-  const handleClearAll = useCallback(async () => {
-    if (window.confirm('Bạn có chắc chắn muốn xóa toàn bộ ảnh trong dự án?')) {
-      setPhotos([]);
-      await clearSavedSession();
-      setIsAutoSaved(false);
-      addToast('info', 'Đã xóa toàn bộ ảnh');
+  const handleClearAll = useCallback(() => {
+    if (photos.length === 0) {
+      addToast('info', 'Danh sách ảnh đang trống.');
+      return;
     }
+    setIsClearConfirmOpen(true);
+  }, [photos.length, addToast]);
+
+  const handleConfirmClearAll = useCallback(async () => {
+    setPhotos([]);
+    await clearSavedSession();
+    setIsAutoSaved(false);
+    addToast('info', 'Đã xóa toàn bộ ảnh trong dự án');
   }, [setPhotos, addToast]);
 
   const handleUpdateSettings = useCallback((updates: Partial<LayoutSettings>) => {
@@ -623,7 +631,6 @@ export default function App() {
             smartCrop={settings.smartCrop}
             customPresets={customPresets}
             onOpenCustomSizeModal={() => setCustomSizeModalConfig({ isOpen: true, targetPhoto: null })}
-            onOpenPngSplitter={() => setActiveView('png-splitter')}
           />
 
           {/* Column 3: Settings Sidebar */}
@@ -711,6 +718,14 @@ export default function App() {
               smartCrop={settings.smartCrop}
             />
           )}
+
+          {/* Modal for Confirming Clear All Photos */}
+          <ClearConfirmModal
+            isOpen={isClearConfirmOpen}
+            photoCount={photos.length}
+            onConfirm={handleConfirmClearAll}
+            onClose={() => setIsClearConfirmOpen(false)}
+          />
         </div>
       )}
     </>
