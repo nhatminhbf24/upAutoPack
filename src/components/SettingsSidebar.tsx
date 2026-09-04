@@ -346,15 +346,8 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
           </div>
 
           {/* Print 100% Scale Calibration Tip */}
-          <div className="bg-amber-50/80 border border-amber-200/80 rounded-xl p-2 text-[10.5px] text-amber-900 leading-snug space-y-1">
-            <div className="font-bold flex items-center gap-1 text-amber-800">
-              <span>💡 Mẹo in đúng chuẩn kích thước:</span>
-            </div>
-            <p className="text-amber-800/90 text-[10px]">
-              Trong hộp thoại in (Ctrl+P): chọn <span className="font-bold">Khổ giấy A4</span>,{' '}
-              <span className="font-bold">Lề: Không / Tối thiểu</span> và{' '}
-              <span className="font-bold">Tỷ lệ: 100% (Mặc định)</span>. Tránh chọn &quot;Vừa với trang&quot; để không bị co nhỏ ảnh.
-            </p>
+          <div className="bg-amber-50/80 border border-amber-200/80 rounded-xl px-2.5 py-1.5 text-[10.5px] text-amber-900 leading-snug">
+            <span className="font-bold text-amber-800">💡 Mẹo in:</span> Khổ giấy A4 , Lề: Không , Tỷ lệ: 100% (Mặc định) , Đồ họa nền.
           </div>
         </div>
       )}
