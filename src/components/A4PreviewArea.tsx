@@ -270,6 +270,16 @@ export const A4PreviewArea: React.FC<A4PreviewAreaProps> = ({
       ref={containerRef}
       className="flex-1 flex flex-col items-center bg-slate-200/90 overflow-y-auto h-full relative"
     >
+      {/* Enforce 100% exact A4 paper dimensions and 0 margin in print dialog */}
+      <style>{`
+        @media print {
+          @page {
+            size: ${pageW_mm}mm ${pageH_mm}mm !important;
+            margin: 0mm !important;
+          }
+        }
+      `}</style>
+
       {/* Top Floating Control Bar */}
       <div
         id="preview-topbar"

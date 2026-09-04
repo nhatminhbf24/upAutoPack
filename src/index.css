@@ -52,7 +52,7 @@ input[type="number"] {
 /* Print Specific Rules */
 @media print {
   @page {
-    size: auto;
+    size: A4;
     margin: 0mm !important;
   }
 
