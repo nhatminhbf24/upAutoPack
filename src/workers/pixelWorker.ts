@@ -6,6 +6,7 @@ export interface EnhanceOptions {
   brightnessAmount?: number;
   vibranceAmount?: number;
   denoiseAmount?: number;
+  upscaleFactor?: 1 | 2 | 4;
 }
 
 export type WorkerRequest =
@@ -15,6 +16,15 @@ export type WorkerRequest =
       buffer: ArrayBuffer;
       width: number;
       height: number;
+      options: EnhanceOptions;
+    }
+  | {
+      id: number;
+      type: 'SUPER_RES';
+      buffer: ArrayBuffer;
+      width: number;
+      height: number;
+      upscaleFactor: 1 | 2 | 4;
       options: EnhanceOptions;
     }
   | {
@@ -116,6 +126,128 @@ ctx.onmessage = (e: MessageEvent<WorkerRequest>) => {
       }
 
       // Transfer back buffer
+      ctx.postMessage(
+        {
+          id: req.id,
+          type: 'SUCCESS',
+          buffer: data.buffer,
+        },
+        [data.buffer]
+      );
+    } else if (req.type === 'SUPER_RES') {
+      const { buffer, width, height, upscaleFactor, options } = req;
+      const data = new Uint8ClampedArray(buffer);
+      const len = data.length;
+
+      const sharpen = options.sharpenAmount ?? (upscaleFactor >= 4 ? 0.75 : 0.62);
+      const contrast = options.contrastAmount ?? 0.12;
+      const brightness = options.brightnessAmount ?? 0.03;
+      const vibrance = options.vibranceAmount ?? 0.16;
+
+      // Pass 1: Contrast, Brightness & Vibrance
+      const contrastFactor = (259 * (contrast * 100 + 255)) / (255 * (259 - contrast * 100));
+      const brightAdd = brightness * 255;
+
+      for (let i = 0; i < len; i += 4) {
+        let r = data[i];
+        let g = data[i + 1];
+        let b = data[i + 2];
+
+        // Brightness & Contrast
+        r = contrastFactor * (r + brightAdd - 128) + 128;
+        g = contrastFactor * (g + brightAdd - 128) + 128;
+        b = contrastFactor * (b + brightAdd - 128) + 128;
+
+        // Vibrance
+        const max = Math.max(r, Math.max(g, b));
+        const avg = (r + g + b) / 3;
+        const sat = (max - avg) / (max || 1);
+        const amt = (1 - sat) * vibrance;
+
+        if (r !== max) r += (max - r) * amt;
+        if (g !== max) g += (max - g) * amt;
+        if (b !== max) b += (max - b) * amt;
+
+        data[i] = r > 255 ? 255 : r < 0 ? 0 : r;
+        data[i + 1] = g > 255 ? 255 : g < 0 ? 0 : g;
+        data[i + 2] = b > 255 ? 255 : b < 0 ? 0 : b;
+      }
+
+      // Pass 2: Edge-Directed Super-Resolution Reconstruction & De-blocking
+      if (width > 4 && height > 4) {
+        const srcCopy = new Uint8ClampedArray(data);
+        const stride = width * 4;
+
+        // Edge sharpening multiplier
+        const sharpK = Math.min(1.4, Math.max(0.3, sharpen * (upscaleFactor >= 4 ? 1.2 : 0.95)));
+
+        for (let y = 1; y < height - 1; y++) {
+          const yPrev = (y - 1) * stride;
+          const yCurr = y * stride;
+          const yNext = (y + 1) * stride;
+
+          for (let x = 1; x < width - 1; x++) {
+            const xPrev = (x - 1) * 4;
+            const xCurr = x * 4;
+            const xNext = (x + 1) * 4;
+
+            const idx = yCurr + xCurr;
+
+            // Calculate luminance for Sobel edge detection
+            const lTL = 0.299 * srcCopy[yPrev + xPrev] + 0.587 * srcCopy[yPrev + xPrev + 1] + 0.114 * srcCopy[yPrev + xPrev + 2];
+            const lTC = 0.299 * srcCopy[yPrev + xCurr] + 0.587 * srcCopy[yPrev + xCurr + 1] + 0.114 * srcCopy[yPrev + xCurr + 2];
+            const lTR = 0.299 * srcCopy[yPrev + xNext] + 0.587 * srcCopy[yPrev + xNext + 1] + 0.114 * srcCopy[yPrev + xNext + 2];
+
+            const lML = 0.299 * srcCopy[yCurr + xPrev] + 0.587 * srcCopy[yCurr + xPrev + 1] + 0.114 * srcCopy[yCurr + xPrev + 2];
+            const lMC = 0.299 * srcCopy[idx] + 0.587 * srcCopy[idx + 1] + 0.114 * srcCopy[idx + 2];
+            const lMR = 0.299 * srcCopy[yCurr + xNext] + 0.587 * srcCopy[yCurr + xNext + 1] + 0.114 * srcCopy[yCurr + xNext + 2];
+
+            const lBL = 0.299 * srcCopy[yNext + xPrev] + 0.587 * srcCopy[yNext + xPrev + 1] + 0.114 * srcCopy[yNext + xPrev + 2];
+            const lBC = 0.299 * srcCopy[yNext + xCurr] + 0.587 * srcCopy[yNext + xCurr + 1] + 0.114 * srcCopy[yNext + xCurr + 2];
+            const lBR = 0.299 * srcCopy[yNext + xNext] + 0.587 * srcCopy[yNext + xNext + 1] + 0.114 * srcCopy[yNext + xNext + 2];
+
+            // Sobel Gradient Magnitude
+            const gx = (lTR + 2 * lMR + lBR) - (lTL + 2 * lML + lBL);
+            const gy = (lBL + 2 * lBC + lBR) - (lTL + 2 * lTC + lTR);
+            const grad = (Math.abs(gx) + Math.abs(gy)) * 0.125;
+
+            if (grad > 12) {
+              // High detail / Edge area: apply edge-directed sharpening to recover crisp boundaries
+              for (let c = 0; c < 3; c++) {
+                const center = srcCopy[idx + c];
+                const top = srcCopy[yPrev + xCurr + c];
+                const bottom = srcCopy[yNext + xCurr + c];
+                const left = srcCopy[yCurr + xPrev + c];
+                const right = srcCopy[yCurr + xNext + c];
+
+                const avgNeigh = (top + bottom + left + right) * 0.25;
+                const highFreq = center - avgNeigh;
+                const val = center + highFreq * sharpK;
+
+                // Clamp to prevent oversaturation / halos
+                const minNeigh = Math.min(top, bottom, left, right, center) - 4;
+                const maxNeigh = Math.max(top, bottom, left, right, center) + 4;
+                const clamped = Math.max(Math.max(0, minNeigh), Math.min(Math.min(255, maxNeigh), val));
+
+                data[idx + c] = clamped;
+              }
+            } else if (grad < 5) {
+              // Smooth / Flat area (skin, plain backdrop): apply subtle de-blocking to remove JPEG noise
+              for (let c = 0; c < 3; c++) {
+                const center = srcCopy[idx + c];
+                const top = srcCopy[yPrev + xCurr + c];
+                const bottom = srcCopy[yNext + xCurr + c];
+                const left = srcCopy[yCurr + xPrev + c];
+                const right = srcCopy[yCurr + xNext + c];
+
+                const smoothVal = center * 0.5 + (top + bottom + left + right) * 0.125;
+                data[idx + c] = Math.round(smoothVal);
+              }
+            }
+          }
+        }
+      }
+
       ctx.postMessage(
         {
           id: req.id,

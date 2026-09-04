@@ -5,7 +5,7 @@
 // 3. De-blocking / Subtle Edge-preserving Smooth (Reduces JPEG blockiness)
 // 4. Print Color Boost (Subtle saturation & vibrance so ink print looks vivid)
 
-import { enhanceImageDataAsync } from '../workers/workerBridge';
+import { enhanceImageDataAsync, superResImageDataAsync } from '../workers/workerBridge';
 
 export interface EnhanceOptions {
   sharpenAmount?: number; // 0 to 1 (default ~0.45)
@@ -13,35 +13,59 @@ export interface EnhanceOptions {
   brightnessAmount?: number; // -1 to 1 (default ~0.04)
   vibranceAmount?: number; // -1 to 1 (default ~0.15)
   denoiseAmount?: number; // 0 to 1 (default ~0.2)
+  upscaleFactor?: 1 | 2 | 4; // 1 = 1x HD, 2 = 2x Super-Res (DPI x2), 4 = 4x Super-Res (DPI x4)
+}
+
+export interface EnhanceResult {
+  enhancedSrc: string;
+  originalWidth: number;
+  originalHeight: number;
+  newWidth: number;
+  newHeight: number;
+  upscaleFactor: 1 | 2 | 4;
 }
 
 export async function enhanceImageQuality(
   imageSrc: string,
   options: EnhanceOptions = {}
-): Promise<{ enhancedSrc: string; originalWidth: number; originalHeight: number }> {
+): Promise<EnhanceResult> {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.crossOrigin = 'anonymous';
     img.onload = async () => {
       let canvas: HTMLCanvasElement | null = null;
       try {
-        const width = img.naturalWidth || img.width;
-        const height = img.naturalHeight || img.height;
+        const origWidth = img.naturalWidth || img.width;
+        const origHeight = img.naturalHeight || img.height;
+        const factor: 1 | 2 | 4 = options.upscaleFactor || 1;
+
+        const targetWidth = Math.round(origWidth * factor);
+        const targetHeight = Math.round(origHeight * factor);
 
         canvas = document.createElement('canvas');
-        canvas.width = width;
-        canvas.height = height;
+        canvas.width = targetWidth;
+        canvas.height = targetHeight;
         const ctx = canvas.getContext('2d', { willReadFrequently: true });
         if (!ctx) {
           throw new Error('Canvas 2D context not available');
         }
 
-        // Draw original
-        ctx.drawImage(img, 0, 0, width, height);
-        const imgData = ctx.getImageData(0, 0, width, height);
+        // High quality multi-step resampling
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
 
-        // Offload pixel manipulation (contrast + unsharp convolution) to Web Worker
-        const processedData = await enhanceImageDataAsync(imgData, options);
+        const imgData = ctx.getImageData(0, 0, targetWidth, targetHeight);
+
+        // Offload pixel manipulation to Web Worker
+        let processedData: ImageData;
+        if (factor > 1) {
+          // Edge-directed Super-Resolution Reconstruction & JPEG deblocking
+          processedData = await superResImageDataAsync(imgData, factor, options);
+        } else {
+          // Standard HD unsharp sharpening & contrast recovery
+          processedData = await enhanceImageDataAsync(imgData, options);
+        }
 
         ctx.putImageData(processedData, 0, 0);
         const enhancedSrc = canvas.toDataURL('image/jpeg', 0.96);
@@ -53,8 +77,11 @@ export async function enhanceImageQuality(
 
         resolve({
           enhancedSrc,
-          originalWidth: width,
-          originalHeight: height,
+          originalWidth: origWidth,
+          originalHeight: origHeight,
+          newWidth: targetWidth,
+          newHeight: targetHeight,
+          upscaleFactor: factor,
         });
       } catch (err) {
         if (canvas) {
@@ -67,6 +94,43 @@ export async function enhanceImageQuality(
     img.onerror = (e) => reject(e);
     img.src = imageSrc;
   });
+}
+
+/**
+ * Super-Resolution AI Upscaler (Client-side)
+ * Scales low-res/Zalo photos by 2x or 4x with edge-directed sharpening & deblocking,
+ * directly multiplying the print DPI and restoring crispness.
+ */
+export async function superResUpscaleImage(
+  imageSrc: string,
+  factor: 1 | 2 | 4 = 2,
+  options: EnhanceOptions = {}
+): Promise<EnhanceResult> {
+  return enhanceImageQuality(imageSrc, {
+    ...options,
+    upscaleFactor: factor,
+  });
+}
+
+/**
+ * Automatically determine best upscale factor based on print DPI
+ * If DPI < 140 (Bị Mờ) -> 4x
+ * If DPI < 220 (Mức trung bình) -> 2x
+ * Else -> 1x (Chỉ làm nét HD)
+ */
+export function getRecommendedUpscaleFactor(
+  pixelW: number,
+  pixelH: number,
+  targetMmW: number,
+  targetMmH: number
+): 1 | 2 | 4 {
+  const inchesW = targetMmW / 25.4;
+  const inchesH = targetMmH / 25.4;
+  if (inchesW <= 0 || inchesH <= 0) return 1;
+  const currentDpi = Math.min(pixelW / inchesW, pixelH / inchesH);
+  if (currentDpi < 140) return 4;
+  if (currentDpi < 220) return 2;
+  return 1;
 }
 
 // High performance 3x3 Sharpening kernel tailored for JPEG compression edge recovery
@@ -143,6 +207,6 @@ export function calculatePrintDPI(
   } else if (effectiveDPI >= 150) {
     return { dpi: effectiveDPI, quality: 'good', label: `${effectiveDPI} DPI (Đủ dùng)` };
   } else {
-    return { dpi: effectiveDPI, quality: 'low', label: `${effectiveDPI} DPI (Mờ Zalo)` };
+    return { dpi: effectiveDPI, quality: 'low', label: `${effectiveDPI} DPI (Bị Mờ)` };
   }
 }

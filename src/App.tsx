@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
-import { PhotoItem, LayoutSettings, ShapeType, SizePreset } from './types';
+import { PhotoItem, LayoutSettings, ShapeType, SizePreset, DEFAULT_SIZE_PRESETS } from './types';
 import { packImagesToPages } from './utils/packing';
 import { exportPagesToImage, calculateCrop } from './utils/imageUtils';
 import { exportPagesToPdf } from './utils/pdfExport';
@@ -65,7 +65,7 @@ export default function App() {
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [cropModalConfig, setCropModalConfig] = useState<{
     photo: PhotoItem;
-    initialTab?: 'crop' | 'adjust';
+    initialTab?: 'size' | 'crop' | 'enhance' | 'adjust';
   } | null>(null);
 
   // Restore Session Modal State
@@ -99,14 +99,45 @@ export default function App() {
   const [isExporting, setIsExporting] = useState(false);
   const [exportProgress, setExportProgress] = useState<{ current: number; total: number } | null>(null);
 
-  const defaultSize = useMemo<{ width: number; height: number; shape: ShapeType }>(
-    () => ({
-      width: 60,
-      height: 90,
-      shape: 'rect',
-    }),
-    []
+  // Khổ in mặc định được cài trên ứng dụng (active preset) và tùy chọn tự khớp chiều
+  const [activePresetId, setActivePresetId] = useState<string>(() => {
+    try {
+      return localStorage.getItem('daudau_active_preset_id') || '60x80_rect';
+    } catch {
+      return '60x80_rect';
+    }
+  });
+
+  const [autoMatchOrientation, setAutoMatchOrientation] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('daudau_auto_match_orientation');
+      return saved !== null ? saved === 'true' : true;
+    } catch {
+      return true;
+    }
+  });
+
+  const allPresets = useMemo(
+    () => [...customPresets, ...DEFAULT_SIZE_PRESETS],
+    [customPresets]
   );
+
+  const activePreset = useMemo<SizePreset>(() => {
+    return (
+      allPresets.find((p) => p.id === activePresetId) ||
+      allPresets.find((p) => p.id === '60x80_rect') ||
+      DEFAULT_SIZE_PRESETS[0]
+    );
+  }, [allPresets, activePresetId]);
+
+  const handleActivePresetChange = useCallback((id: string) => {
+    setActivePresetId(id);
+    try {
+      localStorage.setItem('daudau_active_preset_id', id);
+    } catch (e) {
+      console.warn(e);
+    }
+  }, []);
 
   const addToast = useCallback((type: 'success' | 'error' | 'info', text: string) => {
     const id = 'toast_' + Math.random().toString(36).substring(2, 9);
@@ -119,6 +150,85 @@ export default function App() {
   const dismissToast = useCallback((id: string) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
+
+  // Bật/tắt "Tự khớp chiều theo ảnh" -> áp dụng tức thì cho cả các ảnh đã tải lên trước đó
+  const handleToggleAutoMatchOrientation = useCallback(
+    (enabled: boolean) => {
+      setAutoMatchOrientation(enabled);
+      try {
+        localStorage.setItem('daudau_auto_match_orientation', String(enabled));
+      } catch (e) {
+        console.warn(e);
+      }
+
+      if (photos.length === 0) {
+        addToast('info', enabled ? 'Đã bật tự khớp chiều theo ảnh' : 'Đã tắt tự khớp chiều theo ảnh');
+        return;
+      }
+
+      let changedCount = 0;
+      const updatedPhotos = photos.map((photo) => {
+        if (photo.shape !== 'rect') return photo;
+
+        let targetW = photo.targetWidth;
+        let targetH = photo.targetHeight;
+
+        if (enabled) {
+          // Bật: Ảnh ngang -> Khổ ngang, Ảnh dọc -> Khổ dọc
+          if (photo.imgWidth > photo.imgHeight) {
+            targetW = Math.max(photo.targetWidth, photo.targetHeight);
+            targetH = Math.min(photo.targetWidth, photo.targetHeight);
+          } else if (photo.imgHeight > photo.imgWidth) {
+            targetW = Math.min(photo.targetWidth, photo.targetHeight);
+            targetH = Math.max(photo.targetWidth, photo.targetHeight);
+          }
+        } else {
+          // Tắt: Đồng bộ theo chiều gốc của khổ in đang cài trên ứng dụng
+          if (activePreset.height >= activePreset.width) {
+            targetW = Math.min(photo.targetWidth, photo.targetHeight);
+            targetH = Math.max(photo.targetWidth, photo.targetHeight);
+          } else {
+            targetW = Math.max(photo.targetWidth, photo.targetHeight);
+            targetH = Math.min(photo.targetWidth, photo.targetHeight);
+          }
+        }
+
+        if (targetW !== photo.targetWidth || targetH !== photo.targetHeight) {
+          changedCount++;
+          const crop = calculateCrop(photo.imgWidth, photo.imgHeight, targetW, targetH, settings.smartCrop);
+          return {
+            ...photo,
+            targetWidth: targetW,
+            targetHeight: targetH,
+            cropX: crop.cropX,
+            cropY: crop.cropY,
+            cropW: crop.cropW,
+            cropH: crop.cropH,
+            scale: 1,
+          };
+        }
+        return photo;
+      });
+
+      if (changedCount > 0) {
+        setPhotos(updatedPhotos);
+        addToast(
+          'success',
+          enabled
+            ? `Đã bật tự khớp chiều: Tự xoay ${changedCount} ảnh theo chiều ảnh gốc!`
+            : `Đã tắt tự khớp chiều: Đồng bộ ${changedCount} ảnh theo chiều khổ in!`
+        );
+      } else {
+        addToast(
+          'info',
+          enabled
+            ? 'Đã bật tự khớp chiều (các ảnh hiện tại đã khớp đúng chiều)'
+            : 'Đã tắt tự khớp chiều theo ảnh'
+        );
+      }
+    },
+    [photos, activePreset, settings.smartCrop, setPhotos, addToast]
+  );
 
   // =========================================================================
   // LỚP 1: Chống tắt tab / tải lại trang đột ngột (beforeunload)
@@ -491,7 +601,14 @@ export default function App() {
       }
       return updated;
     });
-    addToast('success', `Đã lưu mẫu kích thước: ${preset.label}`);
+    // Kích hoạt ngay khổ in tùy chỉnh mới làm khổ in mặc định hiện tại
+    setActivePresetId(preset.id);
+    try {
+      localStorage.setItem('daudau_active_preset_id', preset.id);
+    } catch (e) {
+      console.warn(e);
+    }
+    addToast('success', `Đã lưu và chọn kích thước: ${preset.label}`);
   }, [addToast]);
 
   const handleRemoveCustomPreset = useCallback((id: string) => {
@@ -615,7 +732,7 @@ export default function App() {
             onUpdatePhoto={handleUpdatePhoto}
             onRemovePhoto={handleRemovePhoto}
             onClearAll={handleClearAll}
-            onOpenCropModal={(photo, initialTab) => setCropModalConfig({ photo, initialTab: initialTab || 'crop' })}
+            onOpenCropModal={(photo, initialTab) => setCropModalConfig({ photo, initialTab: initialTab || 'size' })}
             onOpenCustomSizeModal={(photo) => setCustomSizeModalConfig({ isOpen: true, targetPhoto: photo || null })}
             customPresets={customPresets}
             onToast={addToast}
@@ -629,6 +746,10 @@ export default function App() {
             onUpdatePhoto={handleUpdatePhoto}
             onToast={addToast}
             smartCrop={settings.smartCrop}
+            activePresetId={activePresetId}
+            onChangeActivePresetId={handleActivePresetChange}
+            autoMatchOrientation={autoMatchOrientation}
+            onToggleAutoMatchOrientation={handleToggleAutoMatchOrientation}
             customPresets={customPresets}
             onOpenCustomSizeModal={() => setCustomSizeModalConfig({ isOpen: true, targetPhoto: null })}
           />
@@ -650,7 +771,8 @@ export default function App() {
             isExporting={isExporting}
             exportProgress={exportProgress}
             onToast={addToast}
-            defaultSize={defaultSize}
+            activePreset={activePreset}
+            autoMatchOrientation={autoMatchOrientation}
             customPresets={customPresets}
             onOpenPngSplitter={() => setActiveView('png-splitter')}
           />
@@ -661,7 +783,7 @@ export default function App() {
             settings={settings}
             onUpdatePhoto={handleUpdatePhoto}
             onReorderPhotos={handleReorderPhotos}
-            onOpenCropModal={(photo) => setCropModalConfig({ photo, initialTab: 'crop' })}
+            onOpenCropModal={(photo) => setCropModalConfig({ photo, initialTab: 'size' })}
             totalPhotos={photos.length}
             onUndo={onUndoWithToast}
             onRedo={onRedoWithToast}
@@ -675,7 +797,7 @@ export default function App() {
           {cropModalConfig && (
             <CropModal
               photo={cropModalConfig.photo}
-              initialTab={cropModalConfig.initialTab || 'crop'}
+              initialTab={cropModalConfig.initialTab || 'size'}
               onClose={() => setCropModalConfig(null)}
               onSave={handleUpdatePhoto}
               smartCrop={settings.smartCrop}

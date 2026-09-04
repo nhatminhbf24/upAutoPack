@@ -13,7 +13,7 @@ import {
   ChevronLeft,
   ChevronRight,
 } from 'lucide-react';
-import { LayoutSettings, ShapeType, SizePreset } from '../types';
+import { LayoutSettings, SizePreset } from '../types';
 import { Uploader } from './Uploader';
 import { PhotoItem } from '../types';
 
@@ -33,7 +33,8 @@ interface SettingsSidebarProps {
   isExporting: boolean;
   exportProgress: { current: number; total: number } | null;
   onToast: (type: 'success' | 'error' | 'info', text: string) => void;
-  defaultSize: { width: number; height: number; shape: ShapeType };
+  activePreset: SizePreset;
+  autoMatchOrientation: boolean;
   customPresets?: SizePreset[];
   onOpenPngSplitter?: () => void;
   isCollapsed?: boolean;
@@ -56,7 +57,8 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
   isExporting,
   exportProgress,
   onToast,
-  defaultSize,
+  activePreset,
+  autoMatchOrientation,
   customPresets = [],
   onOpenPngSplitter,
   isCollapsed = false,
@@ -161,7 +163,8 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
             <Uploader
               onAddPhotos={onAddPhotos}
               onToast={onToast}
-              defaultSize={defaultSize}
+              activePreset={activePreset}
+              autoMatchOrientation={autoMatchOrientation}
               smartCrop={settings.smartCrop}
               customPresets={customPresets}
               onOpenPngSplitter={onOpenPngSplitter}
@@ -314,7 +317,7 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
                 title={`Xuất file PDF in ấn chuẩn 300 DPI (${pageCount} trang)`}
               >
                 <FileText className="w-3.5 h-3.5 shrink-0" />
-                <span className="truncate">Xuất PDF ({pageCount} tr)</span>
+                <span className="truncate">Xuất PDF</span>
               </button>
             )}
           </div>

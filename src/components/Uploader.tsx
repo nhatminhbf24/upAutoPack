@@ -1,13 +1,13 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { UploadCloud, Image as ImageIcon, Sparkles, Plus, Loader2, Scissors } from 'lucide-react';
 import { PhotoItem, ShapeType, SizePreset } from '../types';
-import { readFileAsDataURL, getImageDimensions, calculateCrop, createOptimizedPreview } from '../utils/imageUtils';
-import { findClosestPreset } from '../utils/presetMatcher';
+import { readFileAsDataURL, getImageDimensions, calculateCrop, createOptimizedPreview, getOrientedDimensions } from '../utils/imageUtils';
 
 interface UploaderProps {
   onAddPhotos: (newPhotos: PhotoItem[]) => void;
   onToast: (type: 'success' | 'error' | 'info', text: string) => void;
-  defaultSize: { width: number; height: number; shape: ShapeType };
+  activePreset: SizePreset;
+  autoMatchOrientation: boolean;
   smartCrop: boolean;
   customPresets?: SizePreset[];
   onOpenPngSplitter?: () => void;
@@ -16,7 +16,8 @@ interface UploaderProps {
 export const Uploader: React.FC<UploaderProps> = ({
   onAddPhotos,
   onToast,
-  defaultSize,
+  activePreset,
+  autoMatchOrientation,
   smartCrop,
   customPresets = [],
   onOpenPngSplitter,
@@ -57,11 +58,16 @@ export const Uploader: React.FC<UploaderProps> = ({
           // Generate lightweight preview for buttery smooth UI rendering (60fps)
           const previewSrc = await createOptimizedPreview(dataUrl, 800, 0.85);
 
-          // Auto choose closest preset from the system template library + custom presets
-          const matchedPreset = findClosestPreset(dims.width, dims.height, customPresets);
-          const targetW = matchedPreset.width;
-          const targetH = matchedPreset.height;
-          const targetShape = matchedPreset.shape;
+          // Determine target dimensions based on active preset configured on the app
+          let targetW = activePreset.width;
+          let targetH = activePreset.height;
+          const targetShape: ShapeType = activePreset.shape;
+
+          if (autoMatchOrientation && targetShape === 'rect') {
+            const oriented = getOrientedDimensions(dims.width, dims.height, targetW, targetH, true, targetShape);
+            targetW = oriented.targetWidth;
+            targetH = oriented.targetHeight;
+          }
 
           const crop = calculateCrop(dims.width, dims.height, targetW, targetH, smartCrop);
 
@@ -95,7 +101,13 @@ export const Uploader: React.FC<UploaderProps> = ({
 
       if (addedPhotos.length > 0) {
         onAddPhotos(addedPhotos);
-        onToast('success', `Đã nạp & tối ưu ${addedPhotos.length} ảnh siêu tốc!`);
+        const portraitCount = addedPhotos.filter((p) => p.targetHeight >= p.targetWidth).length;
+        const landscapeCount = addedPhotos.length - portraitCount;
+        const detailMsg =
+          portraitCount > 0 && landscapeCount > 0
+            ? ` (${portraitCount} ảnh dọc, ${landscapeCount} ảnh ngang)`
+            : '';
+        onToast('success', `Đã nạp ${addedPhotos.length} ảnh${detailMsg} theo khổ ${activePreset.label}!`);
       } else {
         onToast('error', 'Không thể đọc nội dung file ảnh.');
       }
@@ -134,7 +146,7 @@ export const Uploader: React.FC<UploaderProps> = ({
 
     window.addEventListener('paste', handlePaste);
     return () => window.removeEventListener('paste', handlePaste);
-  }, [defaultSize, smartCrop, customPresets]);
+  }, [activePreset, autoMatchOrientation, smartCrop, customPresets]);
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
@@ -185,10 +197,15 @@ export const Uploader: React.FC<UploaderProps> = ({
       for (const sample of sampleUrls) {
         const dims = await getImageDimensions(sample.url);
         const previewSrc = await createOptimizedPreview(sample.url, 800, 0.85);
-        const matchedPreset = findClosestPreset(dims.width, dims.height, customPresets);
-        const targetW = matchedPreset.width;
-        const targetH = matchedPreset.height;
-        const targetShape = matchedPreset.shape;
+        let targetW = activePreset.width;
+        let targetH = activePreset.height;
+        const targetShape: ShapeType = activePreset.shape;
+
+        if (autoMatchOrientation && targetShape === 'rect') {
+          const oriented = getOrientedDimensions(dims.width, dims.height, targetW, targetH, true, targetShape);
+          targetW = oriented.targetWidth;
+          targetH = oriented.targetHeight;
+        }
 
         const crop = calculateCrop(dims.width, dims.height, targetW, targetH, smartCrop);
         addedPhotos.push({
@@ -211,7 +228,7 @@ export const Uploader: React.FC<UploaderProps> = ({
         });
       }
       onAddPhotos(addedPhotos);
-      onToast('success', 'Đã nạp 3 ảnh mẫu và tự động chọn mẫu kích thước phù hợp nhất!');
+      onToast('success', `Đã nạp 3 ảnh mẫu theo khổ ${activePreset.label}!`);
     } catch (e) {
       console.error(e);
       onToast('error', 'Không thể tải ảnh mẫu.');
@@ -221,7 +238,7 @@ export const Uploader: React.FC<UploaderProps> = ({
   };
 
   return (
-    <div id="uploader-section" className="space-y-2">
+    <div id="uploader-section" className="space-y-2.5">
       {/* Hidden File Input */}
       <input
         ref={fileInputRef}
@@ -233,20 +250,20 @@ export const Uploader: React.FC<UploaderProps> = ({
         className="hidden"
       />
 
-      {/* Main Upload Dropzone */}
+      {/* Main Upload Dropzone (Ô cấu hình trùng lặp đã được gỡ bỏ theo yêu cầu) */}
       <div
         id="drop-zone-container"
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
         onClick={() => fileInputRef.current?.click()}
-        className={`relative border-2 border-dashed rounded-xl p-5 text-center cursor-pointer transition-all duration-200 group select-none ${
+        className={`relative border-2 border-dashed rounded-xl p-4 text-center cursor-pointer transition-all duration-200 group select-none ${
           isDragging
             ? 'border-blue-500 bg-blue-50 ring-4 ring-blue-100 scale-[0.99]'
             : 'border-blue-200 bg-blue-50/40 hover:bg-blue-50/80 hover:border-blue-400'
         }`}
       >
-        <div className="w-11 h-11 mx-auto bg-white rounded-xl shadow-sm border border-blue-100 flex items-center justify-center mb-2.5 group-hover:scale-105 transition-transform">
+        <div className="w-10 h-10 mx-auto bg-white rounded-xl shadow-sm border border-blue-100 flex items-center justify-center mb-2 group-hover:scale-105 transition-transform">
           {isProcessing ? (
             <div className="w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
           ) : (
@@ -274,7 +291,8 @@ export const Uploader: React.FC<UploaderProps> = ({
           </div>
         ) : (
           <p className="text-[11px] text-gray-500">
-            Hỗ trợ JPG, PNG, WebP • Dán <kbd className="px-1.5 py-0.5 bg-white border rounded text-[10px] font-mono text-gray-700 shadow-xs">Ctrl+V</kbd>
+            Tự định dạng sang <strong className="text-blue-700 font-semibold">{activePreset.label}</strong>
+            {autoMatchOrientation ? ' (Tự khớp chiều)' : ''}
           </p>
         )}
 
@@ -285,7 +303,7 @@ export const Uploader: React.FC<UploaderProps> = ({
             e.stopPropagation();
             fileInputRef.current?.click();
           }}
-          className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg text-xs font-semibold shadow-xs transition active:scale-95 cursor-pointer"
+          className="mt-2.5 inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg text-xs font-semibold shadow-xs transition active:scale-95 cursor-pointer"
         >
           <Plus className="w-3.5 h-3.5" />
           <span>Chọn tệp từ máy</span>

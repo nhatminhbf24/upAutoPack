@@ -14,17 +14,19 @@ import {
   ChevronDown,
   GripVertical,
   AlertTriangle,
+  Zap,
+  Check,
 } from 'lucide-react';
 import { PhotoItem, DEFAULT_SIZE_PRESETS, SizePreset } from '../types';
 import { rotateImageBase64, calculateCrop, createOptimizedPreview } from '../utils/imageUtils';
-import { enhanceImageQuality, calculatePrintDPI } from '../utils/imageEnhancer';
+import { enhanceImageQuality, calculatePrintDPI, getRecommendedUpscaleFactor } from '../utils/imageEnhancer';
 
 interface ImageListSidebarProps {
   photos: PhotoItem[];
   onUpdatePhoto: (id: string, updates: Partial<PhotoItem>) => void;
   onRemovePhoto: (id: string) => void;
   onClearAll: () => void;
-  onOpenCropModal: (photo: PhotoItem, initialTab?: 'crop' | 'adjust') => void;
+  onOpenCropModal: (photo: PhotoItem, initialTab?: 'size' | 'crop' | 'enhance' | 'adjust') => void;
   onOpenCustomSizeModal?: (photo?: PhotoItem) => void;
   customPresets?: SizePreset[];
   onToast: (type: 'success' | 'error' | 'info', text: string) => void;
@@ -51,45 +53,105 @@ export const ImageListSidebar: React.FC<ImageListSidebarProps> = ({
   const [enhancingId, setEnhancingId] = useState<string | null>(null);
   const [rotatingId, setRotatingId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [upscaleMenuId, setUpscaleMenuId] = useState<string | null>(null);
 
   const totalCopies = photos.reduce((acc, p) => acc + (p.qty || 1), 0);
 
   // Combine standard and custom presets
   const allPresets = [...customPresets, ...DEFAULT_SIZE_PRESETS];
 
-  // Enhance / Revert single image
-  const handleEnhanceSingle = async (photo: PhotoItem) => {
+  // Enhance / Super-Res Upscale / Revert single image
+  const handleEnhanceSingle = async (photo: PhotoItem, chosenFactor?: 1 | 2 | 4) => {
     if (enhancingId) return;
     setEnhancingId(photo.id);
+    setUpscaleMenuId(null);
 
     try {
-      if (photo.isEnhanced && photo.rawOriginalSrc) {
+      if (photo.isEnhanced && !chosenFactor) {
         // Revert to raw original
-        const previewSrc = await createOptimizedPreview(photo.rawOriginalSrc, 800, 0.85);
+        const origW = photo.rawOriginalWidth || photo.imgWidth;
+        const origH = photo.rawOriginalHeight || photo.imgHeight;
+        const origCrop = photo.rawOriginalCrop || {
+          cropX: photo.cropX,
+          cropY: photo.cropY,
+          cropW: photo.cropW,
+          cropH: photo.cropH,
+        };
+        const rawSrc = photo.rawOriginalSrc || photo.originalSrc;
+        const previewSrc = await createOptimizedPreview(rawSrc, 800, 0.85);
+
         onUpdatePhoto(photo.id, {
-          originalSrc: photo.rawOriginalSrc,
+          originalSrc: rawSrc,
           previewSrc: previewSrc,
           isEnhanced: false,
+          upscaleFactor: 1,
+          imgWidth: origW,
+          imgHeight: origH,
+          cropX: origCrop.cropX,
+          cropY: origCrop.cropY,
+          cropW: origCrop.cropW,
+          cropH: origCrop.cropH,
         });
         onToast('info', 'Đã khôi phục ảnh gốc ban đầu');
       } else {
-        // Apply Smart Sharpness & Contrast Recovery
+        // Base source and raw metrics
         const sourceForEnhancing = photo.rawOriginalSrc || photo.originalSrc;
+        const rawW = photo.rawOriginalWidth || photo.imgWidth;
+        const rawH = photo.rawOriginalHeight || photo.imgHeight;
+        const rawCrop = photo.rawOriginalCrop || {
+          cropX: photo.cropX,
+          cropY: photo.cropY,
+          cropW: photo.cropW,
+          cropH: photo.cropH,
+        };
+
+        // Determine factor (or auto-calculate recommended factor to achieve print-safe DPI)
+        const factor: 1 | 2 | 4 = chosenFactor ?? getRecommendedUpscaleFactor(
+          rawW,
+          rawH,
+          photo.targetWidth,
+          photo.targetHeight
+        );
+
         const result = await enhanceImageQuality(sourceForEnhancing, {
-          sharpenAmount: 0.55,
+          sharpenAmount: factor >= 4 ? 0.72 : factor === 2 ? 0.62 : 0.52,
           contrastAmount: 0.12,
-          brightnessAmount: 0.04,
-          vibranceAmount: 0.18,
+          brightnessAmount: 0.03,
+          vibranceAmount: 0.16,
+          upscaleFactor: factor,
         });
 
         const previewSrc = await createOptimizedPreview(result.enhancedSrc, 800, 0.85);
+
+        // Scale crop coordinates to new dimensions proportionally
+        const newCropX = Math.round(rawCrop.cropX * factor);
+        const newCropY = Math.round(rawCrop.cropY * factor);
+        const newCropW = Math.round(rawCrop.cropW * factor);
+        const newCropH = Math.round(rawCrop.cropH * factor);
+
         onUpdatePhoto(photo.id, {
           originalSrc: result.enhancedSrc,
           previewSrc: previewSrc,
           rawOriginalSrc: sourceForEnhancing,
+          rawOriginalWidth: rawW,
+          rawOriginalHeight: rawH,
+          rawOriginalCrop: rawCrop,
           isEnhanced: true,
+          upscaleFactor: factor,
+          imgWidth: result.newWidth,
+          imgHeight: result.newHeight,
+          cropX: newCropX,
+          cropY: newCropY,
+          cropW: newCropW,
+          cropH: newCropH,
         });
-        onToast('success', `Đã làm nét & tăng chất lượng ảnh: ${photo.name}`);
+
+        if (factor > 1) {
+          const newDpiInfo = calculatePrintDPI(result.newWidth, result.newHeight, photo.targetWidth, photo.targetHeight, photo.scale || 1);
+          onToast('success', `Đã nâng độ phân giải AI ${factor}x (${result.newWidth}×${result.newHeight} px) → ${newDpiInfo.label}!`);
+        } else {
+          onToast('success', `Đã làm nét & tăng chất lượng ảnh: ${photo.name}`);
+        }
       }
     } catch (err) {
       console.error(err);
@@ -294,10 +356,13 @@ export const ImageListSidebar: React.FC<ImageListSidebarProps> = ({
                         </span>
                         {photo.isEnhanced && (
                           <span
-                            className="absolute top-0.5 left-0.5 bg-amber-500 text-white p-0.5 rounded shadow-xs"
-                            title="Đã được tăng cường nét & tương phản"
+                            className="absolute top-0.5 left-0.5 bg-amber-500 text-white px-1 py-0.5 rounded shadow-xs flex items-center gap-0.5 text-[8px] font-bold"
+                            title={`Đã tối ưu ${photo.upscaleFactor && photo.upscaleFactor > 1 ? `AI ${photo.upscaleFactor}x (DPI x${photo.upscaleFactor})` : 'HD'}`}
                           >
                             <Sparkles className="w-2.5 h-2.5" />
+                            {photo.upscaleFactor && photo.upscaleFactor > 1 && (
+                              <span>{photo.upscaleFactor}x</span>
+                            )}
                           </span>
                         )}
                       </div>
@@ -308,19 +373,104 @@ export const ImageListSidebar: React.FC<ImageListSidebarProps> = ({
                           <div className="text-[11px] font-bold text-slate-800 truncate" title={photo.name}>
                             {photo.name}
                           </div>
-                          {/* DPI Badge */}
-                          <span
-                            className={`text-[9px] font-bold px-1.5 py-0.5 rounded shrink-0 ${
-                              dpiInfo.quality === 'high'
-                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                                : dpiInfo.quality === 'good'
-                                ? 'bg-blue-50 text-blue-700 border border-blue-200'
-                                : 'bg-rose-50 text-rose-700 border border-rose-200 animate-pulse'
-                            }`}
-                            title={`Độ nét in ước tính: ${dpiInfo.label}`}
-                          >
-                            {dpiInfo.label}
-                          </span>
+
+                          {/* Interactive DPI Badge with Upscale Menu */}
+                          <div className="relative shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => setUpscaleMenuId(upscaleMenuId === photo.id ? null : photo.id)}
+                              className={`text-[9px] font-bold px-1.5 py-0.5 rounded flex items-center gap-1 transition cursor-pointer hover:shadow-xs ${
+                                dpiInfo.quality === 'high'
+                                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100'
+                                  : dpiInfo.quality === 'good'
+                                  ? 'bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100'
+                                  : 'bg-rose-50 text-rose-700 border border-rose-300 ring-2 ring-rose-200/50 hover:bg-rose-100'
+                              }`}
+                              title="Bấm để tăng độ phân giải / DPI bằng AI"
+                            >
+                              {photo.upscaleFactor && photo.upscaleFactor > 1 && (
+                                <span className="bg-amber-400 text-amber-950 px-1 py-0.2 rounded text-[8px] font-black">
+                                  {photo.upscaleFactor}x
+                                </span>
+                              )}
+                              <span>{dpiInfo.label}</span>
+                              <ChevronDown className="w-2.5 h-2.5 opacity-60" />
+                            </button>
+
+                            {/* Dropdown Menu for DPI / Upscale */}
+                            {upscaleMenuId === photo.id && (
+                              <div className="absolute right-0 top-full mt-1.5 z-40 bg-white border border-slate-200 shadow-xl rounded-xl p-2 w-56 text-left">
+                                <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5 px-1 flex items-center justify-between">
+                                  <span>Nâng độ phân giải DPI</span>
+                                  <span className="text-amber-600 font-bold">AI Web Worker</span>
+                                </div>
+                                <div className="space-y-1 text-xs">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleEnhanceSingle(photo)}
+                                    className="w-full text-left px-2 py-1.5 rounded-lg hover:bg-amber-50 text-slate-700 hover:text-amber-900 flex items-center justify-between transition font-medium cursor-pointer"
+                                  >
+                                    <span className="flex items-center gap-1.5">
+                                      <Zap className="w-3.5 h-3.5 text-amber-500" />
+                                      <span>Tự động tối ưu DPI</span>
+                                    </span>
+                                    <span className="text-[9px] font-bold text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded">
+                                      Khuyên dùng
+                                    </span>
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => handleEnhanceSingle(photo, 2)}
+                                    className="w-full text-left px-2 py-1.5 rounded-lg hover:bg-blue-50 text-slate-700 hover:text-blue-900 flex items-center justify-between transition font-medium cursor-pointer"
+                                  >
+                                    <span className="flex items-center gap-1.5">
+                                      <Sparkles className="w-3.5 h-3.5 text-blue-500" />
+                                      <span>Phóng to x2 (DPI ×2)</span>
+                                    </span>
+                                    {photo.upscaleFactor === 2 && <Check className="w-3.5 h-3.5 text-blue-600" />}
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => handleEnhanceSingle(photo, 4)}
+                                    className="w-full text-left px-2 py-1.5 rounded-lg hover:bg-purple-50 text-slate-700 hover:text-purple-900 flex items-center justify-between transition font-medium cursor-pointer"
+                                  >
+                                    <span className="flex items-center gap-1.5">
+                                      <Sparkles className="w-3.5 h-3.5 text-purple-500" />
+                                      <span>Phóng to x4 Siêu nét</span>
+                                    </span>
+                                    {photo.upscaleFactor === 4 && <Check className="w-3.5 h-3.5 text-purple-600" />}
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => handleEnhanceSingle(photo, 1)}
+                                    className="w-full text-left px-2 py-1.5 rounded-lg hover:bg-slate-50 text-slate-700 flex items-center justify-between transition font-medium cursor-pointer"
+                                  >
+                                    <span className="flex items-center gap-1.5">
+                                      <Sliders className="w-3.5 h-3.5 text-slate-400" />
+                                      <span>Chỉ làm nét HD (1x)</span>
+                                    </span>
+                                    {photo.isEnhanced && photo.upscaleFactor === 1 && (
+                                      <Check className="w-3.5 h-3.5 text-slate-600" />
+                                    )}
+                                  </button>
+
+                                  {photo.isEnhanced && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleEnhanceSingle(photo)}
+                                      className="w-full text-left px-2 py-1.5 rounded-lg hover:bg-rose-50 text-rose-600 flex items-center gap-1.5 transition font-medium border-t border-slate-100 mt-1 pt-1.5 cursor-pointer"
+                                    >
+                                      <Undo2 className="w-3.5 h-3.5" />
+                                      <span>Khôi phục ảnh gốc</span>
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                          </div>
                         </div>
 
                         <div className="flex items-center gap-1">
@@ -435,9 +585,9 @@ export const ImageListSidebar: React.FC<ImageListSidebarProps> = ({
                         {/* Crop / Adjust framing */}
                         <button
                           type="button"
-                          onClick={() => onOpenCropModal(photo, 'crop')}
+                          onClick={() => onOpenCropModal(photo, 'size')}
                           className="p-1.5 rounded-md bg-white border border-slate-200 text-slate-700 hover:text-blue-600 hover:border-blue-300 transition shadow-2xs cursor-pointer"
-                          title="Chỉnh khung & Cắt góc"
+                          title="Cài đặt hình: Khổ in, khung & chỉnh sửa"
                         >
                           <Crop className="w-3.5 h-3.5" />
                         </button>

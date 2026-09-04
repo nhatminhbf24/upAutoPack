@@ -85,6 +85,50 @@ export async function enhanceImageDataAsync(
 }
 
 /**
+ * Executes AI Super-Resolution edge reconstruction & de-blocking in Web Worker
+ */
+export async function superResImageDataAsync(
+  imgData: ImageData,
+  upscaleFactor: 1 | 2 | 4,
+  options: EnhanceOptions = {}
+): Promise<ImageData> {
+  const worker = getWorker();
+  const width = imgData.width;
+  const height = imgData.height;
+
+  if (worker) {
+    return new Promise((resolve, reject) => {
+      const id = ++requestIdCounter;
+      pendingRequests.set(id, {
+        resolve: (buffer: ArrayBuffer) => {
+          const clamped = new Uint8ClampedArray(buffer);
+          resolve(new ImageData(clamped, width, height));
+        },
+        reject,
+      });
+
+      const buffer = imgData.data.buffer;
+      const msg: WorkerRequest = {
+        id,
+        type: 'SUPER_RES',
+        buffer,
+        width,
+        height,
+        upscaleFactor,
+        options,
+      };
+      worker.postMessage(msg, [buffer]);
+    });
+  }
+
+  // Fallback if worker not supported
+  return fallbackEnhanceSync(imgData, {
+    ...options,
+    sharpenAmount: options.sharpenAmount ?? (upscaleFactor >= 4 ? 0.75 : 0.6),
+  });
+}
+
+/**
  * Executes color adjustments in Web Worker using Transferable Objects
  */
 export async function applyAdjustmentsImageDataAsync(

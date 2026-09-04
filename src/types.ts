@@ -39,6 +39,10 @@ export interface PhotoItem {
   originalSrc: string;
   previewSrc?: string; // Lightweight downscaled preview (max 800px) for super-fast UI & A4 layout rendering
   rawOriginalSrc?: string; // Original unenhanced image for toggle/undo
+  rawOriginalWidth?: number; // Dimensions before super-res upscale
+  rawOriginalHeight?: number;
+  rawOriginalCrop?: { cropX: number; cropY: number; cropW: number; cropH: number };
+  upscaleFactor?: number; // 1, 2, 4
   isEnhanced?: boolean;
   adjustments?: ImageAdjustments;
   imgWidth: number;
@@ -89,6 +93,7 @@ export interface SizePreset {
 
 export const DEFAULT_SIZE_PRESETS: SizePreset[] = [
   // Ảnh tiêu chuẩn & Phổ biến (Standard & Popular)
+  { id: '30x80_rect', label: '3 x 8 cm (Bookmark / Photostrip)', category: 'Cơ bản & Phổ biến', width: 30, height: 80, shape: 'rect' },
   { id: '50x70_rect', label: '5 x 7 cm (Ảnh thẻ / Mini)', category: 'Cơ bản & Phổ biến', width: 50, height: 70, shape: 'rect' },
   { id: '60x80_rect', label: '6 x 8 cm', category: 'Cơ bản & Phổ biến', width: 60, height: 80, shape: 'rect' },
   { id: '60x90_rect', label: '6 x 9 cm (Phổ biến nhất)', category: 'Cơ bản & Phổ biến', width: 60, height: 90, shape: 'rect' },

@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   X,
   ZoomIn,
@@ -15,8 +15,15 @@ import {
   Scissors,
   CheckCircle2,
   Maximize2,
-  Info,
+  Minimize2,
   ArrowLeftRight,
+  Zap,
+  Palette,
+  Sun,
+  Moon,
+  Ruler,
+  Maximize,
+  HelpCircle,
 } from 'lucide-react';
 import { PhotoItem, ShapeType, ImageAdjustments, DEFAULT_ADJUSTMENTS } from '../types';
 import {
@@ -25,7 +32,7 @@ import {
   createOptimizedPreview,
   cropImageToCanvas,
 } from '../utils/imageUtils';
-import { enhanceImageQuality, calculatePrintDPI } from '../utils/imageEnhancer';
+import { enhanceImageQuality, calculatePrintDPI, getRecommendedUpscaleFactor } from '../utils/imageEnhancer';
 import { PhotoAdjustmentsPanel } from './PhotoAdjustmentsPanel';
 import {
   applyAdjustmentsToImage,
@@ -37,9 +44,10 @@ interface CropModalProps {
   onClose: () => void;
   onSave: (photoId: string, updates: Partial<PhotoItem>) => void;
   smartCrop: boolean;
-  initialTab?: 'crop' | 'adjust';
+  initialTab?: 'crop' | 'adjust' | 'size' | 'enhance';
 }
 
+type EditTab = 'size' | 'crop' | 'enhance' | 'adjust';
 type CropRatioPreset = 'free' | '1:1' | 'target' | '3:4' | '4:3' | '9:16' | '16:9';
 
 interface CropBoxCoords {
@@ -54,13 +62,26 @@ export const CropModal: React.FC<CropModalProps> = ({
   onClose,
   onSave,
   smartCrop,
-  initialTab = 'crop',
+  initialTab = 'size',
 }) => {
   if (!photo) return null;
 
-  const [activeTab, setActiveTab] = useState<'crop' | 'adjust'>(initialTab);
-  // In the crop tab, allow switching between "Khung in & Căn góc" and "Cắt xén ảnh (Interactive Crop)"
-  const [cropSubMode, setCropSubMode] = useState<'frame' | 'cropTool'>('frame');
+  // Determine initial active tab
+  const getInitialTab = (): EditTab => {
+    if (initialTab === 'adjust') return 'adjust';
+    if (initialTab === 'crop') return 'crop';
+    if (initialTab === 'enhance') return 'enhance';
+    return 'size';
+  };
+
+  const [activeTab, setActiveTab] = useState<EditTab>(getInitialTab);
+
+  useEffect(() => {
+    setActiveTab(getInitialTab());
+  }, [initialTab, photo.id]);
+
+  const [isMaximized, setIsMaximized] = useState<boolean>(false);
+  const [canvasTheme, setCanvasTheme] = useState<'dark' | 'light'>('dark');
 
   const [scale, setScale] = useState(photo.scale || 1);
   const [cropX, setCropX] = useState(photo.cropX);
@@ -71,6 +92,7 @@ export const CropModal: React.FC<CropModalProps> = ({
   const [shape, setShape] = useState<ShapeType>(photo.shape);
   const [curTargetWidth, setCurTargetWidth] = useState<number>(photo.targetWidth);
   const [curTargetHeight, setCurTargetHeight] = useState<number>(photo.targetHeight);
+
   // Remember original rectangular dimensions when switching between shapes
   const rectDimsRef = useRef<{ w: number; h: number }>({
     w: photo.targetWidth,
@@ -91,13 +113,15 @@ export const CropModal: React.FC<CropModalProps> = ({
 
   const [isDragging, setIsDragging] = useState(false);
   const [isEnhanced, setIsEnhanced] = useState(photo.isEnhanced || false);
+  const [upscaleFactor, setUpscaleFactor] = useState<1 | 2 | 4>(
+    (photo.upscaleFactor as 1 | 2 | 4) || 1
+  );
   const [currentBaseSrc, setCurrentBaseSrc] = useState(photo.originalSrc);
   const [rawSrc, setRawSrc] = useState(photo.rawOriginalSrc || photo.originalSrc);
   const [isEnhancing, setIsEnhancing] = useState(false);
   const [enhanceStrength, setEnhanceStrength] = useState<number>(55);
   const unenhancedBaseSrcRef = useRef<string>(photo.rawOriginalSrc || photo.originalSrc);
   const enhanceDebounceRef = useRef<NodeJS.Timeout | null>(null);
-  const previewBoxRef = useRef<HTMLDivElement | null>(null);
 
   const [showOriginalComparison, setShowOriginalComparison] = useState(false);
   const [cropSuccessToast, setCropSuccessToast] = useState<string | null>(null);
@@ -118,6 +142,34 @@ export const CropModal: React.FC<CropModalProps> = ({
     startCropX: 0,
     startCropY: 0,
   });
+
+  // Dynamic canvas container measurement
+  const canvasContainerRef = useRef<HTMLDivElement | null>(null);
+  const previewBoxRef = useRef<HTMLDivElement | null>(null);
+  const [containerDimensions, setContainerDimensions] = useState<{ width: number; height: number }>({
+    width: 650,
+    height: 520,
+  });
+
+  useEffect(() => {
+    const el = canvasContainerRef.current;
+    if (!el) return;
+
+    const updateSize = () => {
+      const rect = el.getBoundingClientRect();
+      if (rect.width > 50 && rect.height > 50) {
+        setContainerDimensions({
+          width: Math.round(rect.width),
+          height: Math.round(rect.height),
+        });
+      }
+    };
+
+    updateSize();
+    const observer = new ResizeObserver(updateSize);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [isMaximized]);
 
   // Interactive Crop Box state
   const [cropRatioPreset, setCropRatioPreset] = useState<CropRatioPreset>(
@@ -154,7 +206,7 @@ export const CropModal: React.FC<CropModalProps> = ({
       } catch (err) {
         console.error('Failed previewing adjustments:', err);
       }
-    }, 40);
+    }, 35);
   }, []);
 
   useEffect(() => {
@@ -254,6 +306,16 @@ export const CropModal: React.FC<CropModalProps> = ({
     setCropY(newY);
   }, []);
 
+  // Reset Pan and Center position
+  const handleResetCenter = () => {
+    const centerCrop = calculateCrop(currentImgWidth, currentImgHeight, effectiveTargetW, effectiveTargetH, smartCrop);
+    setCropX(centerCrop.cropX);
+    setCropY(centerCrop.cropY);
+    setScale(1);
+    setCropSuccessToast('Đã canh giữa ảnh & đặt lại thu phóng 100%');
+    setTimeout(() => setCropSuccessToast(null), 2000);
+  };
+
   // Mouse wheel zoom on preview box
   useEffect(() => {
     const el = previewBoxRef.current;
@@ -262,8 +324,7 @@ export const CropModal: React.FC<CropModalProps> = ({
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
       const curScale = stateRef.current.scale;
-      // Scrolling up (deltaY < 0) zooms in, scrolling down (deltaY > 0) zooms out
-      const step = e.deltaY < 0 ? 0.06 : -0.06;
+      const step = e.deltaY < 0 ? 0.08 : -0.08;
       const nextScale = Math.min(3, Math.max(1, Math.round((curScale + step) * 100) / 100));
       if (nextScale !== curScale) {
         handleScaleChange(nextScale);
@@ -274,11 +335,9 @@ export const CropModal: React.FC<CropModalProps> = ({
     return () => {
       el.removeEventListener('wheel', onWheel);
     };
-  }, [handleScaleChange, activeTab, cropSubMode]);
+  }, [handleScaleChange, activeTab]);
 
-
-
-  // Interactive Crop: Ratio calculation helper
+  // Ratio calculation helper
   const getRatioValue = useCallback(
     (preset: CropRatioPreset): number | null => {
       switch (preset) {
@@ -309,11 +368,11 @@ export const CropModal: React.FC<CropModalProps> = ({
         let w = prev.w;
         let h = w / ratio;
         if (h > currentImgHeight) {
-          h = currentImgHeight * 0.88;
+          h = currentImgHeight * 0.9;
           w = h * ratio;
         }
         if (w > currentImgWidth) {
-          w = currentImgWidth * 0.88;
+          w = currentImgWidth * 0.9;
           h = w / ratio;
         }
         const x = Math.max(0, Math.min(prev.x, currentImgWidth - w));
@@ -337,7 +396,7 @@ export const CropModal: React.FC<CropModalProps> = ({
     }
   };
 
-  // Helper to update target dimensions and recalculate crop/layout
+  // Helper to update target dimensions
   const updateTargetDimensions = useCallback(
     (wMm: number, hMm: number) => {
       const validW = Math.max(10, Math.min(600, Math.round(wMm)));
@@ -362,7 +421,7 @@ export const CropModal: React.FC<CropModalProps> = ({
     [currentImgWidth, currentImgHeight, smartCrop, shape, cropRatioPreset, updateCropBoxForRatio]
   );
 
-  // Swap width and height (Cao thành Rộng, Rộng thành Cao)
+  // Swap width and height
   const handleSwapDimensions = () => {
     if (shape === 'circle' || shape === 'heart') return;
     const oldW = curTargetWidth;
@@ -376,6 +435,8 @@ export const CropModal: React.FC<CropModalProps> = ({
     setCustomWidthInput(newWStr);
     setCustomHeightInput(newHStr);
     updateTargetDimensions(newW, newH);
+    setCropSuccessToast(`Đã đổi hướng: ${newWStr} × ${newHStr} ${sizeUnit}`);
+    setTimeout(() => setCropSuccessToast(null), 2500);
   };
 
   // Custom Width Input Change
@@ -638,7 +699,7 @@ export const CropModal: React.FC<CropModalProps> = ({
 
     try {
       const result = await cropImageToCanvas(currentBaseSrc, cropBox);
-      const newPreviewSrc = await createOptimizedPreview(result.croppedSrc, 800, 0.85);
+      const newPreviewSrc = await createOptimizedPreview(result.croppedSrc, 1000, 0.88);
 
       unenhancedBaseSrcRef.current = result.croppedSrc;
       setCurrentBaseSrc(result.croppedSrc);
@@ -668,11 +729,11 @@ export const CropModal: React.FC<CropModalProps> = ({
         h: result.height,
       });
 
-      setCropSuccessToast(`Đã cắt ảnh thành công (${result.width} × ${result.height} px)`);
+      setCropSuccessToast(`Đã cắt ảnh thành công: ${result.width} × ${result.height} px`);
       setTimeout(() => setCropSuccessToast(null), 3500);
 
-      // Switch back to framed preview to show final result
-      setCropSubMode('frame');
+      // Switch to size tab to view the final framed print result
+      setActiveTab('size');
     } catch (err) {
       console.error('Failed applying crop:', err);
     } finally {
@@ -720,15 +781,21 @@ export const CropModal: React.FC<CropModalProps> = ({
     }
   };
 
-  // Real-time HD Enhancement with adjustable strength
+  // Real-time HD Enhancement & Super-Resolution Upscaling with adjustable strength
   const applyEnhanceWithStrength = useCallback(
-    async (strength: number, shouldEnable: boolean = true) => {
+    async (strength: number, shouldEnable: boolean = true, factorOverride?: 1 | 2 | 4) => {
       setIsEnhancing(true);
       try {
         if (!shouldEnable) {
           setCurrentBaseSrc(unenhancedBaseSrcRef.current);
           setIsEnhanced(false);
+          setUpscaleFactor(1);
+          if (photo.rawOriginalWidth && photo.rawOriginalHeight) {
+            setCurrentImgWidth(photo.rawOriginalWidth);
+            setCurrentImgHeight(photo.rawOriginalHeight);
+          }
         } else {
+          const activeFactor = factorOverride !== undefined ? factorOverride : upscaleFactor;
           const sharpenVal = (strength / 100) * 0.85 + 0.1;
           const contrastVal = (strength / 100) * 0.16 + 0.04;
           const res = await enhanceImageQuality(unenhancedBaseSrcRef.current, {
@@ -736,9 +803,13 @@ export const CropModal: React.FC<CropModalProps> = ({
             contrastAmount: contrastVal,
             brightnessAmount: 0.04,
             vibranceAmount: 0.18,
+            upscaleFactor: activeFactor,
           });
           setCurrentBaseSrc(res.enhancedSrc);
+          setCurrentImgWidth(res.newWidth);
+          setCurrentImgHeight(res.newHeight);
           setIsEnhanced(true);
+          setUpscaleFactor(activeFactor);
         }
       } catch (err) {
         console.error('Failed to enhance in modal:', err);
@@ -746,10 +817,10 @@ export const CropModal: React.FC<CropModalProps> = ({
         setIsEnhancing(false);
       }
     },
-    []
+    [upscaleFactor, photo.rawOriginalWidth, photo.rawOriginalHeight]
   );
 
-  // Handle slider changes in real time (debounced ~180ms for silky smooth dragging)
+  // Handle slider changes in real time
   const handleEnhanceStrengthChange = (newStrength: number) => {
     setEnhanceStrength(newStrength);
     setIsEnhanced(true);
@@ -769,7 +840,10 @@ export const CropModal: React.FC<CropModalProps> = ({
     if (isEnhanced) {
       applyEnhanceWithStrength(enhanceStrength, false);
     } else {
-      applyEnhanceWithStrength(enhanceStrength, true);
+      const rawW = photo.rawOriginalWidth || photo.imgWidth;
+      const rawH = photo.rawOriginalHeight || photo.imgHeight;
+      const recommended = getRecommendedUpscaleFactor(rawW, rawH, curTargetWidth, curTargetHeight);
+      applyEnhanceWithStrength(enhanceStrength, true, recommended);
     }
   };
 
@@ -780,6 +854,8 @@ export const CropModal: React.FC<CropModalProps> = ({
     try {
       const calculated = await calculateAutoAdjustments(currentBaseSrc);
       setAdjustments(calculated);
+      setCropSuccessToast('Đã tự động cân bằng màu & ánh sáng!');
+      setTimeout(() => setCropSuccessToast(null), 2500);
     } catch (err) {
       console.error('Auto adjust failed:', err);
     } finally {
@@ -787,7 +863,7 @@ export const CropModal: React.FC<CropModalProps> = ({
     }
   };
 
-  // Rotate 90 degrees
+  // Rotate 90 degrees in-place
   const handleRotate = async () => {
     const rotatedBase = await rotateImageBase64(currentBaseSrc, 90);
     const rotatedRaw = await rotateImageBase64(rawSrc, 90);
@@ -801,28 +877,23 @@ export const CropModal: React.FC<CropModalProps> = ({
     setRawSrc(rotatedRaw);
     setCurrentImgWidth(newWidth);
     setCurrentImgHeight(newHeight);
+    setCropX(crop.cropX);
+    setCropY(crop.cropY);
+    setCropW(crop.cropW);
+    setCropH(crop.cropH);
+    setScale(1);
+
+    setCropBox({
+      x: Math.round(crop.cropX),
+      y: Math.round(crop.cropY),
+      w: Math.round(crop.cropW),
+      h: Math.round(crop.cropH),
+    });
 
     const finalAdjusted = await applyAdjustmentsToImage(rotatedBase, adjustments);
-    const previewSrc = await createOptimizedPreview(finalAdjusted, 800, 0.85);
-
-    onSave(photo.id, {
-      originalSrc: finalAdjusted,
-      previewSrc: previewSrc,
-      rawOriginalSrc: rotatedRaw,
-      isEnhanced,
-      adjustments,
-      imgWidth: newWidth,
-      imgHeight: newHeight,
-      targetWidth: curTargetWidth,
-      targetHeight: curTargetHeight,
-      shape,
-      cropX: crop.cropX,
-      cropY: crop.cropY,
-      cropW: crop.cropW,
-      cropH: crop.cropH,
-      scale: 1,
-    });
-    onClose();
+    setPreviewAdjustedSrc(finalAdjusted);
+    setCropSuccessToast('Đã xoay ảnh 90° thành công');
+    setTimeout(() => setCropSuccessToast(null), 2500);
   };
 
   // Save changes
@@ -830,12 +901,25 @@ export const CropModal: React.FC<CropModalProps> = ({
     setIsApplyingAdjustmentPreview(true);
     try {
       const finalImageSrc = await applyAdjustmentsToImage(currentBaseSrc, adjustments);
-      const previewSrc = await createOptimizedPreview(finalImageSrc, 800, 0.85);
+      const previewSrc = await createOptimizedPreview(finalImageSrc, 900, 0.88);
+      const rawW = photo.rawOriginalWidth || (upscaleFactor > 1 ? Math.round(currentImgWidth / upscaleFactor) : currentImgWidth);
+      const rawH = photo.rawOriginalHeight || (upscaleFactor > 1 ? Math.round(currentImgHeight / upscaleFactor) : currentImgHeight);
+      const rawCrop = photo.rawOriginalCrop || {
+        cropX: Math.round(cropX / upscaleFactor),
+        cropY: Math.round(cropY / upscaleFactor),
+        cropW: Math.round(cropW / upscaleFactor),
+        cropH: Math.round(cropH / upscaleFactor),
+      };
+
       onSave(photo.id, {
         originalSrc: finalImageSrc,
         previewSrc: previewSrc,
         rawOriginalSrc: rawSrc,
+        rawOriginalWidth: rawW,
+        rawOriginalHeight: rawH,
+        rawOriginalCrop: rawCrop,
         isEnhanced,
+        upscaleFactor,
         adjustments,
         scale,
         cropX,
@@ -881,191 +965,465 @@ export const CropModal: React.FC<CropModalProps> = ({
   const cropRightPct = 100 - (cropLeftPct + cropWidthPct);
   const cropBottomPct = 100 - (cropTopPct + cropHeightPct);
 
+  // Dynamic box sizing calculation based on canvas dimensions
+  const availableW = Math.max(260, containerDimensions.width - 56);
+  const availableH = Math.max(260, containerDimensions.height - 70);
+  const aspect = effectiveTargetW / effectiveTargetH;
+
+  let fitBoxW = availableW;
+  let fitBoxH = fitBoxW / aspect;
+  if (fitBoxH > availableH) {
+    fitBoxH = availableH;
+    fitBoxW = fitBoxH * aspect;
+  }
+  // Max cap for aesthetics
+  fitBoxW = Math.round(Math.min(fitBoxW, 720));
+  fitBoxH = Math.round(Math.min(fitBoxH, 620));
+
+  // Max bounds for interactive crop image
+  const maxCropImgW = Math.max(300, containerDimensions.width - 48);
+  const maxCropImgH = Math.max(280, containerDimensions.height - 70);
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs p-3 sm:p-4">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full overflow-hidden flex flex-col max-h-[92vh] border border-slate-200">
-        {/* Header */}
-        <div className="px-5 py-3 border-b border-slate-200 flex justify-between items-center bg-slate-50/90">
-          <div className="flex items-center gap-3">
-            <div>
-              <div className="flex items-center gap-2">
-                <h3 className="text-sm font-bold text-slate-900">{photo.name}</h3>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-2 sm:p-4">
+      <div
+        className={`bg-white shadow-2xl flex flex-col overflow-hidden border border-slate-200 transition-all duration-150 ${
+          isMaximized
+            ? 'fixed inset-0 w-screen h-screen rounded-none z-50 max-h-none max-w-none'
+            : 'rounded-2xl w-[98vw] max-w-[1440px] h-[94vh] max-h-[960px]'
+        }`}
+      >
+        {/* TOP HEADER: Title, Badges, Tab Switcher & Quick Actions */}
+        <header className="px-4 sm:px-6 py-2.5 border-b border-slate-200 flex flex-wrap gap-2 justify-between items-center bg-slate-50/95 shrink-0 select-none">
+          {/* Photo Info & DPI */}
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="text-sm font-bold text-slate-900 truncate max-w-[240px] sm:max-w-[340px]" title={photo.name}>
+                  {photo.name}
+                </h3>
+
+                {/* Print Quality Badge */}
                 <span
-                  className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                  className={`text-[10.5px] font-bold px-2 py-0.5 rounded-full inline-flex items-center gap-1 shadow-2xs ${
                     dpiInfo.quality === 'high'
-                      ? 'bg-emerald-100 text-emerald-800'
+                      ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
                       : dpiInfo.quality === 'good'
-                      ? 'bg-blue-100 text-blue-800'
-                      : 'bg-rose-100 text-rose-800'
+                      ? 'bg-blue-100 text-blue-800 border border-blue-300'
+                      : 'bg-rose-100 text-rose-800 border border-rose-300'
                   }`}
+                  title={`${dpiInfo.dpi} DPI tại khổ in hiện tại`}
                 >
-                  {dpiInfo.label}
+                  <span className={`w-1.5 h-1.5 rounded-full ${
+                    dpiInfo.quality === 'high' ? 'bg-emerald-500' : dpiInfo.quality === 'good' ? 'bg-blue-500' : 'bg-rose-500'
+                  }`} />
+                  {dpiInfo.label} ({dpiInfo.dpi} DPI)
+                </span>
+
+                {isEnhanced && (
+                  <span className="text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300 px-1.5 py-0.5 rounded-md flex items-center gap-0.5">
+                    <Sparkles className="w-3 h-3 text-amber-600" />
+                    HD {upscaleFactor > 1 ? `AI ${upscaleFactor}x` : ''}
+                  </span>
+                )}
+              </div>
+
+              <div className="text-[11px] text-slate-500 flex items-center gap-2 flex-wrap">
+                <span>
+                  Khổ in:{' '}
+                  <strong className="text-slate-700 font-semibold">
+                    {shape === 'circle'
+                      ? `Hình tròn Ø ${(curTargetWidth / 10).toFixed(1)} cm`
+                      : shape === 'heart'
+                      ? `Trái tim ${(curTargetWidth / 10).toFixed(1)} × ${(curTargetHeight / 10).toFixed(1)} cm`
+                      : `${(curTargetWidth / 10).toFixed(1)} × ${(curTargetHeight / 10).toFixed(1)} cm`}
+                  </strong>
+                </span>
+                <span>•</span>
+                <span>
+                  Gốc: <strong className="text-slate-700 font-semibold">{currentImgWidth} × {currentImgHeight} px</strong>
                 </span>
               </div>
-              <p className="text-[11px] text-slate-500">
-                {shape === 'circle' ? (
-                  <>In ấn: <strong className="text-slate-700 font-semibold">Hình tròn Ø {(curTargetWidth / 10).toFixed(1)} cm</strong></>
-                ) : shape === 'heart' ? (
-                  <>In ấn: <strong className="text-slate-700 font-semibold">Trái tim {(curTargetWidth / 10).toFixed(1)} x {(curTargetHeight / 10).toFixed(1)} cm</strong></>
-                ) : (
-                  <>In ấn: <strong className="text-slate-700 font-semibold">{(curTargetWidth / 10).toFixed(1)} x {(curTargetHeight / 10).toFixed(1)} cm</strong></>
-                )}{' '}
-                • Gốc: {currentImgWidth}x{currentImgHeight}px
-              </p>
             </div>
           </div>
 
-          {/* Tab switchers in header */}
-          <div className="flex items-center gap-1 bg-slate-200/80 p-1 rounded-xl">
+          {/* Center 4 Main Tabs */}
+          <nav className="flex items-center gap-1 bg-slate-200/90 p-1 rounded-xl shadow-inner border border-slate-300/60">
+            {/* Tab 1: Size & Framing */}
+            <button
+              type="button"
+              onClick={() => setActiveTab('size')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                activeTab === 'size'
+                  ? 'bg-white text-blue-700 shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
+              }`}
+            >
+              <Ruler className="w-3.5 h-3.5" />
+              <span>Khổ in & Khung</span>
+            </button>
+
+            {/* Tab 2: Interactive Crop */}
             <button
               type="button"
               onClick={() => setActiveTab('crop')}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
                 activeTab === 'crop'
-                  ? 'bg-white text-blue-700 shadow-2xs'
-                  : 'text-slate-600 hover:text-slate-900'
+                  ? 'bg-white text-blue-700 shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
               }`}
             >
-              <Crop className="w-3.5 h-3.5" />
-              <span>Cắt khung & Bố cục</span>
+              <Scissors className="w-3.5 h-3.5" />
+              <span>Cắt xén (Crop)</span>
             </button>
 
+            {/* Tab 3: HD Enhance & AI */}
+            <button
+              type="button"
+              onClick={() => setActiveTab('enhance')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                activeTab === 'enhance'
+                  ? 'bg-white text-amber-700 shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
+              }`}
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>Làm nét & AI</span>
+            </button>
+
+            {/* Tab 4: Color & Lighting */}
             <button
               type="button"
               onClick={() => setActiveTab('adjust')}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
                 activeTab === 'adjust'
-                  ? 'bg-white text-purple-700 shadow-2xs'
-                  : 'text-slate-600 hover:text-slate-900'
+                  ? 'bg-white text-purple-700 shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
               }`}
             >
-              <Sliders className="w-3.5 h-3.5" />
-              <span>Chỉnh màu & Ánh sáng</span>
+              <Palette className="w-3.5 h-3.5" />
+              <span>Màu & Ánh sáng</span>
+            </button>
+          </nav>
+
+          {/* Quick Header Actions: Compare, Theme, Maximize, Close */}
+          <div className="flex items-center gap-1.5">
+            {/* Hold to view original comparison */}
+            <button
+              type="button"
+              onMouseDown={() => setShowOriginalComparison(true)}
+              onMouseUp={() => setShowOriginalComparison(false)}
+              onMouseLeave={() => setShowOriginalComparison(false)}
+              onTouchStart={() => setShowOriginalComparison(true)}
+              onTouchEnd={() => setShowOriginalComparison(false)}
+              className="text-xs font-bold text-amber-900 bg-amber-100 hover:bg-amber-200 border border-amber-300 px-2.5 py-1.5 rounded-xl flex items-center gap-1.5 transition select-none cursor-pointer shadow-2xs active:scale-95"
+              title="Nhấn và giữ chuột để xem lại ảnh gốc ban đầu"
+            >
+              <Eye className="w-3.5 h-3.5 text-amber-700" />
+              <span className="hidden sm:inline">Giữ xem gốc</span>
+            </button>
+
+            {/* Canvas Theme Toggle */}
+            <button
+              type="button"
+              onClick={() => setCanvasTheme((prev) => (prev === 'dark' ? 'light' : 'dark'))}
+              className="p-1.5 rounded-xl bg-white border border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition cursor-pointer shadow-2xs"
+              title={canvasTheme === 'dark' ? 'Chuyển sang nền canvas sáng' : 'Chuyển sang nền canvas tối (phòng tối studio)'}
+            >
+              {canvasTheme === 'dark' ? <Sun className="w-4 h-4 text-amber-500" /> : <Moon className="w-4 h-4 text-slate-700" />}
+            </button>
+
+            {/* Fullscreen Maximize Toggle */}
+            <button
+              type="button"
+              onClick={() => setIsMaximized((prev) => !prev)}
+              className="p-1.5 rounded-xl bg-white border border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition cursor-pointer shadow-2xs"
+              title={isMaximized ? 'Thu nhỏ cửa sổ' : 'Phóng to toàn màn hình'}
+            >
+              {isMaximized ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+            </button>
+
+            {/* Close */}
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-1.5 rounded-xl text-slate-400 hover:text-slate-800 hover:bg-slate-200 transition cursor-pointer ml-1"
+              title="Đóng (Hủy bỏ)"
+            >
+              <X className="w-5 h-5" />
             </button>
           </div>
+        </header>
 
-          <button
-            onClick={onClose}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-200 transition cursor-pointer"
+        {/* MAIN BODY: Large Left Canvas & Organized Right Control Sidebar */}
+        <div className="flex-1 min-h-0 flex flex-col lg:flex-row overflow-hidden">
+          {/* LEFT COLUMN: Spacious Interactive Canvas Workspace */}
+          <div
+            className={`flex-1 flex flex-col relative min-h-[380px] select-none transition-colors duration-200 border-b lg:border-b-0 lg:border-r border-slate-200 ${
+              canvasTheme === 'dark'
+                ? 'bg-slate-950 text-slate-200'
+                : 'bg-slate-100/90 text-slate-800'
+            }`}
           >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
+            {/* Top Workspace Helper / Mode status */}
+            <div
+              className={`px-4 py-2 border-b flex items-center justify-between text-xs font-semibold shrink-0 z-10 ${
+                canvasTheme === 'dark'
+                  ? 'bg-slate-900/80 border-slate-800/80 text-slate-300'
+                  : 'bg-white/80 border-slate-200/80 text-slate-600'
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                {activeTab === 'crop' ? (
+                  <>
+                    <Scissors className="w-4 h-4 text-blue-400" />
+                    <span>Chế độ Cắt xén ảnh (Interactive Crop) • Kéo 8 điểm neo để định khung</span>
+                  </>
+                ) : (
+                  <>
+                    <Move className="w-4 h-4 text-blue-400" />
+                    <span>Khung in thực tế • Kéo chuột để di chuyển tâm • Lăn chuột để thu phóng</span>
+                  </>
+                )}
+              </div>
 
-        {/* Main Body - Split Preview Left & Controls Right */}
-        <div className="flex-1 overflow-y-auto grid grid-cols-1 md:grid-cols-12 min-h-0 bg-slate-100/50">
-          {/* Left Column: Canvas Preview */}
-          <div className="md:col-span-7 p-4 sm:p-6 flex flex-col items-center justify-center bg-slate-100/80 select-none relative border-b md:border-b-0 md:border-r border-slate-200 min-h-[380px]">
-            {/* Top Sub-Mode Bar: Frame View vs Crop Tool */}
-            {activeTab === 'crop' && (
-              <div className="w-full max-w-[360px] flex items-center justify-between mb-3">
-                <div className="flex items-center gap-1 bg-white p-1 rounded-xl border border-slate-200 shadow-2xs">
+              {/* Quick Jump Buttons */}
+              <div className="flex items-center gap-2">
+                {activeTab === 'size' && (
                   <button
                     type="button"
-                    onClick={() => setCropSubMode('frame')}
-                    className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
-                      cropSubMode === 'frame'
-                        ? 'bg-blue-600 text-white shadow-xs'
-                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-                    }`}
+                    onClick={() => setActiveTab('crop')}
+                    className="text-[11px] font-bold text-blue-500 hover:text-blue-400 flex items-center gap-1 cursor-pointer"
                   >
-                    <Move className="w-3.5 h-3.5" />
-                    <span>Khung in & Tâm</span>
+                    <span>Cắt ảnh thừa (Crop) &rarr;</span>
                   </button>
-
+                )}
+                {activeTab === 'crop' && (
                   <button
                     type="button"
-                    onClick={() => setCropSubMode('cropTool')}
-                    className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
-                      cropSubMode === 'cropTool'
-                        ? 'bg-blue-600 text-white shadow-xs'
-                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-                    }`}
+                    onClick={() => setActiveTab('size')}
+                    className="text-[11px] font-bold text-blue-500 hover:text-blue-400 flex items-center gap-1 cursor-pointer"
                   >
-                    <Scissors className="w-3.5 h-3.5" />
-                    <span>Cắt ảnh (Crop)</span>
-                  </button>
-                </div>
-
-                {(isEnhanced || activeTab === 'adjust') && (
-                  <button
-                    type="button"
-                    onMouseDown={() => setShowOriginalComparison(true)}
-                    onMouseUp={() => setShowOriginalComparison(false)}
-                    onMouseLeave={() => setShowOriginalComparison(false)}
-                    className="text-[11px] font-bold text-amber-800 bg-amber-100/90 hover:bg-amber-200 px-2 py-1 rounded-lg flex items-center gap-1 transition select-none cursor-pointer"
-                  >
-                    <Eye className="w-3.5 h-3.5" />
-                    <span>Giữ xem gốc</span>
+                    <span>Xem khung in &rarr;</span>
                   </button>
                 )}
               </div>
-            )}
+            </div>
 
             {/* Notification Toast */}
             {cropSuccessToast && (
-              <div className="absolute top-4 z-40 bg-emerald-700 text-white text-xs font-semibold px-3 py-1.5 rounded-full shadow-lg flex items-center gap-1.5 animate-in fade-in slide-in-from-top-2">
-                <CheckCircle2 className="w-4 h-4 text-emerald-200" />
+              <div className="absolute top-12 left-1/2 -translate-x-1/2 z-40 bg-emerald-600 text-white text-xs font-semibold px-4 py-1.5 rounded-full shadow-xl flex items-center gap-1.5 animate-in fade-in zoom-in-95">
+                <CheckCircle2 className="w-4 h-4 text-emerald-100" />
                 <span>{cropSuccessToast}</span>
               </div>
             )}
 
-            {/* View Mode 1: Framed Print Preview (with Pan & Zoom) */}
-            {activeTab === 'adjust' || cropSubMode === 'frame' ? (
-              <div className="flex flex-col items-center justify-center w-full">
-                <div className="text-[11px] text-slate-500 mb-2 flex items-center justify-center gap-1.5 w-full">
-                  <Move className="w-3.5 h-3.5 text-blue-500" />
-                  <span>Kéo chuột để dịch tâm • Lăn chuột để phóng to / thu nhỏ</span>
-                </div>
+            {/* MAIN PREVIEW CANVAS AREA */}
+            <div
+              ref={canvasContainerRef}
+              className="flex-1 flex items-center justify-center relative overflow-hidden p-4 sm:p-6"
+            >
+              {/* Studio Background Ambient Pattern */}
+              <div
+                className="absolute inset-0 pointer-events-none opacity-20"
+                style={{
+                  backgroundImage:
+                    canvasTheme === 'dark'
+                      ? 'radial-gradient(circle at 50% 50%, rgba(59, 130, 246, 0.15), transparent 70%)'
+                      : 'radial-gradient(circle at 50% 50%, rgba(59, 130, 246, 0.08), transparent 70%)',
+                }}
+              />
 
-                {/* The Preview Box Container */}
-                <div
-                  ref={previewBoxRef}
-                  onMouseDown={handleMouseDown}
-                  onMouseMove={handleMouseMove}
-                  onMouseUp={handleMouseUp}
-                  onMouseLeave={handleMouseUp}
-                  style={{
-                    aspectRatio: `${effectiveTargetW} / ${effectiveTargetH}`,
-                    width: effectiveTargetW >= effectiveTargetH ? '310px' : 'auto',
-                    height: effectiveTargetH > effectiveTargetW ? '310px' : 'auto',
-                    maxHeight: '340px',
-                    maxWidth: '340px',
-                  }}
-                  className={`relative border-2 border-dashed border-blue-400 shadow-lg overflow-hidden cursor-grab active:cursor-grabbing bg-white transition-all ${
-                    shape === 'circle' ? 'shape-circle' : shape === 'heart' ? 'shape-heart' : 'rounded-xl'
-                  }`}
-                >
-                  <img
-                    src={displayImageSrc}
-                    alt="Live preview"
-                    draggable={false}
-                    className="absolute max-w-none pointer-events-none transition-none"
+              {/* MODE 1: Framed Print Preview (Used in Size, Enhance, Adjust tabs) */}
+              {activeTab !== 'crop' ? (
+                <div className="flex flex-col items-center justify-center w-full h-full relative">
+                  {/* Dynamic Sized Framed Box */}
+                  <div
+                    ref={previewBoxRef}
+                    onMouseDown={handleMouseDown}
+                    onMouseMove={handleMouseMove}
+                    onMouseUp={handleMouseUp}
+                    onMouseLeave={handleMouseUp}
                     style={{
-                      width: `${percentW}%`,
-                      height: `${percentH}%`,
-                      left: `${percentX}%`,
-                      top: `${percentY}%`,
+                      width: `${fitBoxW}px`,
+                      height: `${fitBoxH}px`,
+                      aspectRatio: `${effectiveTargetW} / ${effectiveTargetH}`,
                     }}
-                  />
+                    className={`relative border-2 border-dashed border-blue-400 shadow-2xl overflow-hidden cursor-grab active:cursor-grabbing bg-white transition-all select-none ${
+                      shape === 'circle' ? 'shape-circle' : shape === 'heart' ? 'shape-heart' : 'rounded-2xl'
+                    }`}
+                  >
+                    <img
+                      src={displayImageSrc}
+                      alt="Live preview"
+                      draggable={false}
+                      className="absolute max-w-none pointer-events-none transition-none"
+                      style={{
+                        width: `${percentW}%`,
+                        height: `${percentH}%`,
+                        left: `${percentX}%`,
+                        top: `${percentY}%`,
+                      }}
+                    />
 
-                  {showOriginalComparison && (
-                    <div className="absolute top-2 left-2 bg-black/80 backdrop-blur-xs text-white text-[10px] font-bold px-2 py-0.5 rounded shadow">
-                      Ảnh gốc ban đầu
-                    </div>
-                  )}
+                    {/* Original Comparison Badge */}
+                    {showOriginalComparison && (
+                      <div className="absolute top-3 left-3 bg-black/85 backdrop-blur-xs text-white text-[11px] font-bold px-2.5 py-1 rounded-md shadow-lg border border-white/20">
+                        Ảnh gốc ban đầu
+                      </div>
+                    )}
 
-                  {/* Circular visual indicator badge */}
-                  {shape === 'circle' && (
-                    <div className="absolute top-2 right-2 bg-blue-600/90 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full pointer-events-none shadow-xs">
-                      Ø {(curTargetWidth / 10).toFixed(1)} cm
+                    {/* Shape dimensions indicator badge */}
+                    <div className="absolute bottom-2.5 right-2.5 bg-slate-900/80 backdrop-blur-xs text-white text-[10px] font-mono font-bold px-2 py-0.5 rounded-md pointer-events-none shadow-xs border border-white/10">
+                      {shape === 'circle'
+                        ? `Ø ${(curTargetWidth / 10).toFixed(1)} cm`
+                        : `${(curTargetWidth / 10).toFixed(1)} × ${(curTargetHeight / 10).toFixed(1)} cm`}
                     </div>
-                  )}
+
+                    {/* Center Crosshair Guide */}
+                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none opacity-40">
+                      <div className="absolute top-0 bottom-0 left-1/2 w-px -translate-x-1/2 bg-blue-500" />
+                      <div className="absolute left-0 right-0 top-1/2 h-px -translate-y-1/2 bg-blue-500" />
+                    </div>
+                  </div>
                 </div>
+              ) : (
+                /* MODE 2: Interactive Crop Workspace */
+                <div className="flex flex-col items-center justify-center w-full h-full relative">
+                  {/* Image and Crop Box Container */}
+                  <div className="relative inline-block select-none overflow-hidden rounded-xl shadow-2xl">
+                    <img
+                      ref={imageElRef}
+                      src={displayImageSrc}
+                      alt="Original for crop"
+                      style={{
+                        maxHeight: `${maxCropImgH}px`,
+                        maxWidth: `${maxCropImgW}px`,
+                      }}
+                      className="w-auto h-auto block select-none pointer-events-none object-contain"
+                      draggable={false}
+                    />
 
-                {/* Quick Zoom Bar under preview */}
-                <div className="mt-4 flex items-center gap-3 w-full max-w-[320px] bg-white px-3 py-1.5 rounded-full border border-slate-200/80 shadow-2xs">
-                  <ZoomOut className="w-3.5 h-3.5 text-slate-400" />
+                    {/* 4 Darkened Background Overlays */}
+                    <div
+                      className="absolute bg-black/65 pointer-events-none"
+                      style={{ top: 0, left: 0, right: 0, height: `${cropTopPct}%` }}
+                    />
+                    <div
+                      className="absolute bg-black/65 pointer-events-none"
+                      style={{ bottom: 0, left: 0, right: 0, height: `${cropBottomPct}%` }}
+                    />
+                    <div
+                      className="absolute bg-black/65 pointer-events-none"
+                      style={{
+                        top: `${cropTopPct}%`,
+                        bottom: `${cropBottomPct}%`,
+                        left: 0,
+                        width: `${cropLeftPct}%`,
+                      }}
+                    />
+                    <div
+                      className="absolute bg-black/65 pointer-events-none"
+                      style={{
+                        top: `${cropTopPct}%`,
+                        bottom: `${cropBottomPct}%`,
+                        right: 0,
+                        width: `${cropRightPct}%`,
+                      }}
+                    />
+
+                    {/* The Interactive Crop Box */}
+                    <div
+                      onMouseDown={(e) => handleCropBoxMouseDown(e, 'move')}
+                      style={{
+                        left: `${cropLeftPct}%`,
+                        top: `${cropTopPct}%`,
+                        width: `${cropWidthPct}%`,
+                        height: `${cropHeightPct}%`,
+                      }}
+                      className="absolute border-2 border-white shadow-[0_0_0_1px_rgba(0,0,0,0.6)] cursor-move select-none"
+                    >
+                      {/* Rule of Thirds Grid */}
+                      <div className="absolute top-0 bottom-0 left-1/3 w-px bg-white/40 pointer-events-none" />
+                      <div className="absolute top-0 bottom-0 left-2/3 w-px bg-white/40 pointer-events-none" />
+                      <div className="absolute left-0 right-0 top-1/3 h-px bg-white/40 pointer-events-none" />
+                      <div className="absolute left-0 right-0 top-2/3 h-px bg-white/40 pointer-events-none" />
+
+                      {/* Circular Cut Guide when shape is 'circle' or ratio is 1:1 */}
+                      {(shape === 'circle' || cropRatioPreset === '1:1') && (
+                        <div className="absolute inset-0 rounded-full border-2 border-dashed border-amber-300 pointer-events-none shadow-[0_0_8px_rgba(0,0,0,0.3)]" />
+                      )}
+
+                      {/* Dimensions Pill inside Crop Box */}
+                      <div className="absolute bottom-1.5 left-1.5 bg-black/80 backdrop-blur-xs text-white text-[10px] font-mono font-bold px-2 py-0.5 rounded pointer-events-none border border-white/20">
+                        {Math.round(cropBox.w)} × {Math.round(cropBox.h)} px
+                      </div>
+
+                      {/* 4 Corner Handles */}
+                      <div
+                        onMouseDown={(e) => handleCropBoxMouseDown(e, 'nw')}
+                        className="absolute -top-2 -left-2 w-4 h-4 bg-white border-2 border-blue-600 rounded-xs cursor-nwse-resize shadow-md"
+                      />
+                      <div
+                        onMouseDown={(e) => handleCropBoxMouseDown(e, 'ne')}
+                        className="absolute -top-2 -right-2 w-4 h-4 bg-white border-2 border-blue-600 rounded-xs cursor-nesw-resize shadow-md"
+                      />
+                      <div
+                        onMouseDown={(e) => handleCropBoxMouseDown(e, 'sw')}
+                        className="absolute -bottom-2 -left-2 w-4 h-4 bg-white border-2 border-blue-600 rounded-xs cursor-nesw-resize shadow-md"
+                      />
+                      <div
+                        onMouseDown={(e) => handleCropBoxMouseDown(e, 'se')}
+                        className="absolute -bottom-2 -right-2 w-4 h-4 bg-white border-2 border-blue-600 rounded-xs cursor-nwse-resize shadow-md"
+                      />
+
+                      {/* 4 Edge Handles */}
+                      <div
+                        onMouseDown={(e) => handleCropBoxMouseDown(e, 'n')}
+                        className="absolute -top-1.5 left-1/2 -translate-x-1/2 w-8 h-2 bg-white border-2 border-blue-600 rounded-xs cursor-ns-resize shadow-md"
+                      />
+                      <div
+                        onMouseDown={(e) => handleCropBoxMouseDown(e, 's')}
+                        className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-8 h-2 bg-white border-2 border-blue-600 rounded-xs cursor-ns-resize shadow-md"
+                      />
+                      <div
+                        onMouseDown={(e) => handleCropBoxMouseDown(e, 'w')}
+                        className="absolute -left-1.5 top-1/2 -translate-y-1/2 w-2 h-8 bg-white border-2 border-blue-600 rounded-xs cursor-ew-resize shadow-md"
+                      />
+                      <div
+                        onMouseDown={(e) => handleCropBoxMouseDown(e, 'e')}
+                        className="absolute -right-1.5 top-1/2 -translate-y-1/2 w-2 h-8 bg-white border-2 border-blue-600 rounded-xs cursor-ew-resize shadow-md"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* BOTTOM CANVAS FLOATING TOOLBAR: Zoom, Center, Rotate */}
+            <div
+              className={`px-4 py-2.5 border-t flex flex-wrap items-center justify-between gap-3 shrink-0 z-10 ${
+                canvasTheme === 'dark'
+                  ? 'bg-slate-900/90 border-slate-800/80 text-slate-300'
+                  : 'bg-white/90 border-slate-200/80 text-slate-700'
+              }`}
+            >
+              {/* Zoom Controls */}
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                <button
+                  type="button"
+                  onClick={() => handleScaleChange(Math.max(1, Math.round((scale - 0.1) * 100) / 100))}
+                  className={`p-1.5 rounded-lg border transition cursor-pointer ${
+                    canvasTheme === 'dark'
+                      ? 'bg-slate-800 border-slate-700 hover:bg-slate-700 text-slate-200'
+                      : 'bg-white border-slate-200 hover:bg-slate-100 text-slate-700'
+                  }`}
+                  title="Thu nhỏ"
+                >
+                  <ZoomOut className="w-4 h-4" />
+                </button>
+
+                <div className="flex items-center gap-2 flex-1 sm:w-44">
                   <input
                     type="range"
                     min="1"
@@ -1073,790 +1431,773 @@ export const CropModal: React.FC<CropModalProps> = ({
                     step="0.05"
                     value={scale}
                     onChange={(e) => handleScaleChange(parseFloat(e.target.value))}
-                    className="flex-1 h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                    className="w-full h-1.5 bg-slate-400/40 rounded-lg appearance-none cursor-pointer accent-blue-600"
                   />
-                  <ZoomIn className="w-3.5 h-3.5 text-slate-400" />
-                  <span className="text-xs font-mono font-bold text-slate-700 w-9 text-right">
+                  <span className="text-xs font-mono font-bold w-11 text-right">
                     {Math.round(scale * 100)}%
                   </span>
                 </div>
-              </div>
-            ) : (
-              /* View Mode 2: Interactive Crop Box Workspace */
-              <div className="flex flex-col items-center justify-center w-full">
-                <div className="text-[11px] text-slate-500 mb-2 flex items-center justify-center gap-1.5">
-                  <Scissors className="w-3 h-3 text-blue-500" />
-                  <span>Kéo 8 điểm neo hoặc di chuyển khung để chọn vùng cắt</span>
-                </div>
 
-                {/* Image and Crop Box Container */}
-                <div className="relative inline-block select-none overflow-hidden rounded-lg shadow-md max-h-[350px] max-w-full">
-                  <img
-                    ref={imageElRef}
-                    src={displayImageSrc}
-                    alt="Original for crop"
-                    className="max-h-[330px] max-w-[420px] w-auto h-auto block select-none pointer-events-none"
-                    draggable={false}
-                  />
+                <button
+                  type="button"
+                  onClick={() => handleScaleChange(Math.min(3, Math.round((scale + 0.1) * 100) / 100))}
+                  className={`p-1.5 rounded-lg border transition cursor-pointer ${
+                    canvasTheme === 'dark'
+                      ? 'bg-slate-800 border-slate-700 hover:bg-slate-700 text-slate-200'
+                      : 'bg-white border-slate-200 hover:bg-slate-100 text-slate-700'
+                  }`}
+                  title="Phóng to"
+                >
+                  <ZoomIn className="w-4 h-4" />
+                </button>
 
-                  {/* 4 Darkened Background Overlays */}
-                  <div
-                    className="absolute bg-black/60 pointer-events-none"
-                    style={{ top: 0, left: 0, right: 0, height: `${cropTopPct}%` }}
-                  />
-                  <div
-                    className="absolute bg-black/60 pointer-events-none"
-                    style={{ bottom: 0, left: 0, right: 0, height: `${cropBottomPct}%` }}
-                  />
-                  <div
-                    className="absolute bg-black/60 pointer-events-none"
-                    style={{
-                      top: `${cropTopPct}%`,
-                      bottom: `${cropBottomPct}%`,
-                      left: 0,
-                      width: `${cropLeftPct}%`,
-                    }}
-                  />
-                  <div
-                    className="absolute bg-black/60 pointer-events-none"
-                    style={{
-                      top: `${cropTopPct}%`,
-                      bottom: `${cropBottomPct}%`,
-                      right: 0,
-                      width: `${cropRightPct}%`,
-                    }}
-                  />
-
-                  {/* The Interactive Crop Box */}
-                  <div
-                    onMouseDown={(e) => handleCropBoxMouseDown(e, 'move')}
-                    style={{
-                      left: `${cropLeftPct}%`,
-                      top: `${cropTopPct}%`,
-                      width: `${cropWidthPct}%`,
-                      height: `${cropHeightPct}%`,
-                    }}
-                    className="absolute border-2 border-white shadow-[0_0_0_1px_rgba(0,0,0,0.5)] cursor-move select-none"
-                  >
-                    {/* Rule of Thirds Grid */}
-                    <div className="absolute top-0 bottom-0 left-1/3 w-px bg-white/40 pointer-events-none" />
-                    <div className="absolute top-0 bottom-0 left-2/3 w-px bg-white/40 pointer-events-none" />
-                    <div className="absolute left-0 right-0 top-1/3 h-px bg-white/40 pointer-events-none" />
-                    <div className="absolute left-0 right-0 top-2/3 h-px bg-white/40 pointer-events-none" />
-
-                    {/* Circular Cut Guide when shape is 'circle' or ratio is 1:1 */}
-                    {(shape === 'circle' || cropRatioPreset === '1:1') && (
-                      <div className="absolute inset-0 rounded-full border-2 border-dashed border-amber-300 pointer-events-none shadow-[0_0_8px_rgba(0,0,0,0.3)]" />
-                    )}
-
-                    {/* Dimensions Pill inside Crop Box */}
-                    <div className="absolute bottom-1 left-1 bg-black/75 backdrop-blur-xs text-white text-[9px] font-mono font-bold px-1.5 py-0.5 rounded pointer-events-none">
-                      {Math.round(cropBox.w)} × {Math.round(cropBox.h)} px
-                    </div>
-
-                    {/* 4 Corner Handles */}
-                    <div
-                      onMouseDown={(e) => handleCropBoxMouseDown(e, 'nw')}
-                      className="absolute -top-1.5 -left-1.5 w-3.5 h-3.5 bg-white border-2 border-blue-600 rounded-xs cursor-nwse-resize shadow-md"
-                    />
-                    <div
-                      onMouseDown={(e) => handleCropBoxMouseDown(e, 'ne')}
-                      className="absolute -top-1.5 -right-1.5 w-3.5 h-3.5 bg-white border-2 border-blue-600 rounded-xs cursor-nesw-resize shadow-md"
-                    />
-                    <div
-                      onMouseDown={(e) => handleCropBoxMouseDown(e, 'sw')}
-                      className="absolute -bottom-1.5 -left-1.5 w-3.5 h-3.5 bg-white border-2 border-blue-600 rounded-xs cursor-nesw-resize shadow-md"
-                    />
-                    <div
-                      onMouseDown={(e) => handleCropBoxMouseDown(e, 'se')}
-                      className="absolute -bottom-1.5 -right-1.5 w-3.5 h-3.5 bg-white border-2 border-blue-600 rounded-xs cursor-nwse-resize shadow-md"
-                    />
-
-                    {/* 4 Edge Handles */}
-                    <div
-                      onMouseDown={(e) => handleCropBoxMouseDown(e, 'n')}
-                      className="absolute -top-1.5 left-1/2 -translate-x-1/2 w-6 h-2 bg-white border-2 border-blue-600 rounded-xs cursor-ns-resize shadow-md"
-                    />
-                    <div
-                      onMouseDown={(e) => handleCropBoxMouseDown(e, 's')}
-                      className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-6 h-2 bg-white border-2 border-blue-600 rounded-xs cursor-ns-resize shadow-md"
-                    />
-                    <div
-                      onMouseDown={(e) => handleCropBoxMouseDown(e, 'w')}
-                      className="absolute -left-1.5 top-1/2 -translate-y-1/2 w-2 h-6 bg-white border-2 border-blue-600 rounded-xs cursor-ew-resize shadow-md"
-                    />
-                    <div
-                      onMouseDown={(e) => handleCropBoxMouseDown(e, 'e')}
-                      className="absolute -right-1.5 top-1/2 -translate-y-1/2 w-2 h-6 bg-white border-2 border-blue-600 rounded-xs cursor-ew-resize shadow-md"
-                    />
-                  </div>
-                </div>
-
-                {/* Crop Action Buttons under workspace */}
-                <div className="mt-3 flex items-center gap-2">
+                {scale > 1 && (
                   <button
                     type="button"
-                    onClick={handleApplyCrop}
-                    disabled={isCroppingAction}
-                    className="flex items-center gap-1.5 px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer disabled:opacity-50"
+                    onClick={() => handleScaleChange(1)}
+                    className="text-[11px] font-bold text-blue-500 hover:text-blue-400 px-2 py-1 rounded-md border border-blue-500/30 cursor-pointer"
                   >
-                    {isCroppingAction ? (
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    ) : (
-                      <Scissors className="w-3.5 h-3.5" />
-                    )}
-                    <span>Cắt ảnh ngay</span>
+                    100%
                   </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setCropSubMode('frame')}
-                    className="px-3 py-1.5 bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 rounded-xl text-xs font-bold transition cursor-pointer"
-                  >
-                    Quay lại
-                  </button>
-                </div>
+                )}
               </div>
-            )}
+
+              {/* Center Pan & Rotate Buttons */}
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleResetCenter}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition cursor-pointer ${
+                    canvasTheme === 'dark'
+                      ? 'bg-slate-800 border-slate-700 hover:bg-slate-700 text-slate-200'
+                      : 'bg-white border-slate-200 hover:bg-slate-100 text-slate-700 shadow-2xs'
+                  }`}
+                  title="Canh giữa ảnh và đặt lại thu phóng 100%"
+                >
+                  <Move className="w-3.5 h-3.5 text-blue-500" />
+                  <span>Về giữa</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleRotate}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition cursor-pointer ${
+                    canvasTheme === 'dark'
+                      ? 'bg-slate-800 border-slate-700 hover:bg-slate-700 text-slate-200'
+                      : 'bg-white border-slate-200 hover:bg-slate-100 text-slate-700 shadow-2xs'
+                  }`}
+                  title="Xoay ảnh 90 độ theo chiều kim đồng hồ"
+                >
+                  <RotateCw className="w-3.5 h-3.5 text-blue-600" />
+                  <span>Xoay 90°</span>
+                </button>
+              </div>
+            </div>
           </div>
 
-          {/* Right Column: Tab Controls */}
-          <div className="md:col-span-5 p-5 overflow-y-auto max-h-[520px] bg-white flex flex-col justify-between">
-            {activeTab === 'crop' ? (
-              <div className="space-y-4">
-                {/* Mode: Interactive Crop Tool Controls */}
-                {cropSubMode === 'cropTool' ? (
-                  <div className="space-y-4">
-                    {/* Aspect Ratio Selector */}
-                    <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200/80 space-y-2.5">
-                      <label className="text-xs font-bold text-slate-800 flex items-center justify-between">
-                        <span>Tỷ lệ cắt (Aspect Ratio):</span>
-                        <span className="text-[10px] text-blue-600 font-semibold uppercase">
-                          {cropRatioPreset}
-                        </span>
+          {/* RIGHT COLUMN: Highly Organized, Structured Controls Panel */}
+          <aside className="w-full lg:w-[420px] xl:w-[460px] flex flex-col bg-white border-t lg:border-t-0 min-h-0 shrink-0">
+            {/* Tab Title Banner */}
+            <div className="px-5 py-3 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                {activeTab === 'size' && (
+                  <>
+                    <div className="p-1.5 rounded-lg bg-blue-100 text-blue-700">
+                      <Ruler className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-bold text-slate-900">Khổ in & Hình dạng</h4>
+                      <p className="text-[10px] text-slate-500">Chỉnh kích thước, hình khuôn và căn góc in</p>
+                    </div>
+                  </>
+                )}
+                {activeTab === 'crop' && (
+                  <>
+                    <div className="p-1.5 rounded-lg bg-blue-100 text-blue-700">
+                      <Scissors className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-bold text-slate-900">Cắt xén ảnh tương tác</h4>
+                      <p className="text-[10px] text-slate-500">Kéo khung chọn vùng cắt xén tự do hoặc theo tỷ lệ</p>
+                    </div>
+                  </>
+                )}
+                {activeTab === 'enhance' && (
+                  <>
+                    <div className="p-1.5 rounded-lg bg-amber-100 text-amber-700">
+                      <Sparkles className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-bold text-slate-900">Làm nét HD & Nâng DPI (AI)</h4>
+                      <p className="text-[10px] text-slate-500">Khử mờ, tăng độ nét viền và siêu phân giải AI</p>
+                    </div>
+                  </>
+                )}
+                {activeTab === 'adjust' && (
+                  <>
+                    <div className="p-1.5 rounded-lg bg-purple-100 text-purple-700">
+                      <Palette className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-bold text-slate-900">Chỉnh màu sắc & Ánh sáng</h4>
+                      <p className="text-[10px] text-slate-500">Cân bằng trắng, độ sáng, tương phản & rực màu</p>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* Sub-tag indicator */}
+              <span className="text-[10.5px] font-bold text-slate-600 bg-white px-2 py-0.5 rounded-full border border-slate-200">
+                {activeTab === 'size' && '1 / 4'}
+                {activeTab === 'crop' && '2 / 4'}
+                {activeTab === 'enhance' && '3 / 4'}
+                {activeTab === 'adjust' && '4 / 4'}
+              </span>
+            </div>
+
+            {/* TAB CONTENT: Scrollable controls container */}
+            <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4">
+              {/* TAB 1: KÍCH THƯỚC & KHUNG IN (Size) */}
+              {activeTab === 'size' && (
+                <div className="space-y-4">
+                  {/* 1. Khuôn hình dạng (Shape) */}
+                  <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200/90 space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                        <span>Hình dạng khung in:</span>
                       </label>
-
-                      <div className="grid grid-cols-3 gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => handleRatioPresetChange('free')}
-                          className={`py-1.5 px-2 rounded-lg text-xs font-bold border transition cursor-pointer ${
-                            cropRatioPreset === 'free'
-                              ? 'bg-blue-600 border-blue-600 text-white shadow-2xs'
-                              : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
-                          }`}
-                        >
-                          Tự do
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => handleRatioPresetChange('1:1')}
-                          className={`py-1.5 px-2 rounded-lg text-xs font-bold border transition cursor-pointer ${
-                            cropRatioPreset === '1:1'
-                              ? 'bg-blue-600 border-blue-600 text-white shadow-2xs'
-                              : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
-                          }`}
-                        >
-                          1:1 (Tròn/Vuông)
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => handleRatioPresetChange('target')}
-                          className={`py-1.5 px-2 rounded-lg text-xs font-bold border transition cursor-pointer ${
-                            cropRatioPreset === 'target'
-                              ? 'bg-blue-600 border-blue-600 text-white shadow-2xs'
-                              : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
-                          }`}
-                        >
-                          Khổ in
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => handleRatioPresetChange('3:4')}
-                          className={`py-1.5 px-2 rounded-lg text-xs font-bold border transition cursor-pointer ${
-                            cropRatioPreset === '3:4'
-                              ? 'bg-blue-600 border-blue-600 text-white shadow-2xs'
-                              : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
-                          }`}
-                        >
-                          3:4
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => handleRatioPresetChange('4:3')}
-                          className={`py-1.5 px-2 rounded-lg text-xs font-bold border transition cursor-pointer ${
-                            cropRatioPreset === '4:3'
-                              ? 'bg-blue-600 border-blue-600 text-white shadow-2xs'
-                              : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
-                          }`}
-                        >
-                          4:3
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => handleRatioPresetChange('9:16')}
-                          className={`py-1.5 px-2 rounded-lg text-xs font-bold border transition cursor-pointer ${
-                            cropRatioPreset === '9:16'
-                              ? 'bg-blue-600 border-blue-600 text-white shadow-2xs'
-                              : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
-                          }`}
-                        >
-                          9:16
-                        </button>
-                      </div>
-
-                      <p className="text-[10px] text-slate-500 pt-1">
-                        * Khóa tỷ lệ 1:1 chuẩn xác cho các ấn phẩm sticker tròn, huy hiệu.
-                      </p>
+                      <span className="text-[10px] text-blue-700 font-bold bg-blue-50 px-2 py-0.5 rounded-full border border-blue-200 font-mono">
+                        {shape === 'circle'
+                          ? `Tròn Ø ${(curTargetWidth / 10).toFixed(1)} cm`
+                          : shape === 'heart'
+                          ? `Trái tim ${(curTargetWidth / 10).toFixed(1)} cm`
+                          : `Chữ nhật`}
+                      </span>
                     </div>
 
-                    {/* Apply & Reset Box */}
-                    <div className="space-y-2">
+                    <div className="grid grid-cols-3 gap-2">
                       <button
                         type="button"
-                        onClick={handleApplyCrop}
-                        disabled={isCroppingAction}
-                        className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition shadow-xs flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                        onClick={() => handleShapeChange('rect')}
+                        className={`py-2 rounded-xl text-xs font-bold border transition cursor-pointer flex flex-col items-center gap-1 ${
+                          shape === 'rect'
+                            ? 'bg-blue-600 border-blue-600 text-white shadow-xs'
+                            : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
+                        }`}
                       >
-                        {isCroppingAction ? (
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                        ) : (
-                          <Scissors className="w-4 h-4" />
-                        )}
-                        <span>Áp dụng cắt vùng đã chọn</span>
+                        <div className="w-4 h-3 rounded-xs border border-current" />
+                        <span>Chữ nhật</span>
                       </button>
 
                       <button
                         type="button"
-                        onClick={handleResetToRawOriginal}
-                        className="w-full py-2 bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer"
+                        onClick={() => handleShapeChange('circle')}
+                        className={`py-2 rounded-xl text-xs font-bold border transition cursor-pointer flex flex-col items-center gap-1 ${
+                          shape === 'circle'
+                            ? 'bg-blue-600 border-blue-600 text-white shadow-xs'
+                            : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
+                        }`}
                       >
-                        <RotateCcw className="w-3.5 h-3.5 text-slate-500" />
-                        <span>Khôi phục ảnh gốc ban đầu</span>
+                        <div className="w-3.5 h-3.5 rounded-full border border-current" />
+                        <span>Tròn (1:1)</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleShapeChange('heart')}
+                        className={`py-2 rounded-xl text-xs font-bold border transition cursor-pointer flex flex-col items-center gap-1 ${
+                          shape === 'heart'
+                            ? 'bg-blue-600 border-blue-600 text-white shadow-xs'
+                            : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
+                        }`}
+                      >
+                        <span className="text-xs leading-none">♥</span>
+                        <span>Trái tim</span>
                       </button>
                     </div>
                   </div>
-                ) : (
-                  /* Mode: Framed View Controls */
-                  <div className="space-y-4">
-                    {/* HD Enhancement Bar with Real-time Sharpness Slider */}
-                    <div className="bg-amber-50/80 border border-amber-200/80 p-3 rounded-2xl space-y-2.5">
-                      <div className="flex items-center justify-between">
+
+                  {/* 2. Kích thước in tùy chỉnh (Custom Dimensions) */}
+                  <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200/90 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-slate-900">Kích thước in tùy chỉnh:</span>
+                      {/* Unit selector cm / mm */}
+                      <div className="flex items-center bg-slate-200/80 p-0.5 rounded-lg border border-slate-300/60">
+                        <button
+                          type="button"
+                          onClick={() => handleUnitToggle('cm')}
+                          className={`px-2 py-0.5 text-[11px] font-bold rounded-md transition cursor-pointer ${
+                            sizeUnit === 'cm'
+                              ? 'bg-white text-blue-700 shadow-2xs'
+                              : 'text-slate-600 hover:text-slate-900'
+                          }`}
+                        >
+                          cm
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleUnitToggle('mm')}
+                          className={`px-2 py-0.5 text-[11px] font-bold rounded-md transition cursor-pointer ${
+                            sizeUnit === 'mm'
+                              ? 'bg-white text-blue-700 shadow-2xs'
+                              : 'text-slate-600 hover:text-slate-900'
+                          }`}
+                        >
+                          mm
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Inputs: Width, Swap button, Height */}
+                    {shape === 'rect' ? (
+                      <div className="space-y-3">
                         <div className="flex items-center gap-2">
-                          <div className="p-1.5 rounded-xl bg-amber-500 text-white shadow-2xs">
-                            <Sparkles className="w-4 h-4" />
+                          {/* Width Input */}
+                          <div className="flex-1 space-y-1">
+                            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
+                              Rộng ({sizeUnit})
+                            </span>
+                            <div className="relative">
+                              <input
+                                type="text"
+                                inputMode="decimal"
+                                value={customWidthInput}
+                                onChange={(e) => handleCustomWidthChange(e.target.value)}
+                                className="w-full pl-3 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono shadow-2xs"
+                                placeholder={sizeUnit === 'cm' ? '4.0' : '40'}
+                              />
+                              <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[11px] text-slate-400 font-medium pointer-events-none">
+                                {sizeUnit}
+                              </span>
+                            </div>
                           </div>
-                          <div>
-                            <div className="text-xs font-bold text-amber-950">Phục hồi nét & Khử mờ</div>
-                            <div className="text-[10px] text-amber-700">
-                              Tăng độ nét viền, tương phản & màu in chuẩn
+
+                          {/* Swap Width ⇄ Height Button */}
+                          <div className="flex flex-col items-center pt-4">
+                            <button
+                              type="button"
+                              onClick={handleSwapDimensions}
+                              title="Hoán đổi Rộng ⇄ Dài (Cao thành Rộng, Rộng thành Cao)"
+                              className="px-2.5 py-2 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 transition-all hover:scale-105 active:scale-95 shadow-2xs flex items-center gap-1 cursor-pointer text-xs font-bold"
+                            >
+                              <ArrowLeftRight className="w-3.5 h-3.5 text-blue-600" />
+                              <span>Đổi</span>
+                            </button>
+                          </div>
+
+                          {/* Height Input */}
+                          <div className="flex-1 space-y-1">
+                            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
+                              Cao / Dài ({sizeUnit})
+                            </span>
+                            <div className="relative">
+                              <input
+                                type="text"
+                                inputMode="decimal"
+                                value={customHeightInput}
+                                onChange={(e) => handleCustomHeightChange(e.target.value)}
+                                className="w-full pl-3 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono shadow-2xs"
+                                placeholder={sizeUnit === 'cm' ? '6.0' : '60'}
+                              />
+                              <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[11px] text-slate-400 font-medium pointer-events-none">
+                                {sizeUnit}
+                              </span>
                             </div>
                           </div>
                         </div>
-                        {isEnhanced && (
-                          <span className="text-[10px] font-bold text-amber-800 bg-amber-200/80 border border-amber-300 px-1.5 py-0.5 rounded">
-                            {enhanceStrength}%
+
+                        {/* Quick rectangular presets */}
+                        <div className="space-y-1.5 pt-1">
+                          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
+                            Khổ in ảnh chuẩn:
                           </span>
-                        )}
+                          <div className="flex flex-wrap gap-1.5">
+                            {[
+                              { label: '2x3', w: 20, h: 30 },
+                              { label: '3x4', w: 30, h: 40 },
+                              { label: '3x8', w: 30, h: 80 },
+                              { label: '4x6', w: 40, h: 60 },
+                              { label: '6x9', w: 60, h: 90 },
+                              { label: '9x12', w: 90, h: 120 },
+                              { label: '10x15', w: 100, h: 150 },
+                              { label: '13x18', w: 130, h: 180 },
+                            ].map((p) => {
+                              const isSelected =
+                                (curTargetWidth === p.w && curTargetHeight === p.h) ||
+                                (curTargetWidth === p.h && curTargetHeight === p.w);
+                              return (
+                                <button
+                                  key={p.label}
+                                  type="button"
+                                  onClick={() => handleSelectRectPreset(p.w, p.h)}
+                                  className={`px-2.5 py-1 rounded-lg text-xs font-bold border transition cursor-pointer ${
+                                    isSelected
+                                      ? 'bg-blue-600 text-white border-blue-600 shadow-2xs'
+                                      : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                                  }`}
+                                >
+                                  {p.label} cm
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
                       </div>
-
-                      <button
-                        type="button"
-                        onClick={handleToggleEnhance}
-                        disabled={isEnhancing}
-                        className={`w-full flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-bold transition shadow-xs cursor-pointer ${
-                          isEnhanced
-                            ? 'bg-amber-600 hover:bg-amber-700 text-white'
-                            : 'bg-white border border-amber-300 text-amber-900 hover:bg-amber-100'
-                        }`}
-                      >
-                        {isEnhancing ? (
-                          <>
-                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                            <span>Đang xử lý thời gian thực...</span>
-                          </>
-                        ) : isEnhanced ? (
-                          <>
-                            <Check className="w-3.5 h-3.5 text-emerald-300" />
-                            <span>Đã bật làm nét HD ({enhanceStrength}%)</span>
-                          </>
-                        ) : (
-                          <>
-                            <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-                            <span>Bật làm nét HD</span>
-                          </>
-                        )}
-                      </button>
-
-                      {/* Mức độ làm nét - Real-time Sharpness Level Slider */}
-                      <div className="bg-white border border-amber-200 rounded-xl p-2.5 space-y-2">
-                        <div className="flex items-center justify-between text-xs">
-                          <span className="flex items-center gap-1 text-amber-950 font-bold">
-                            <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-                            <span>Mức độ làm nét:</span>
+                    ) : (
+                      /* Circular / Heart diameter input & presets */
+                      <div className="space-y-3">
+                        <div className="space-y-1">
+                          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
+                            {shape === 'circle' ? `Đường kính Ø (${sizeUnit})` : `Kích thước (${sizeUnit})`}
                           </span>
-                          <div className="flex items-center gap-1.5">
-                            {isEnhancing && (
-                              <span className="inline-flex items-center gap-1 text-[10px] text-amber-700 font-semibold animate-pulse">
-                                <Loader2 className="w-3 h-3 animate-spin" /> Đang cập nhật...
-                              </span>
-                            )}
-                            <span className="font-bold text-amber-800 bg-amber-100 border border-amber-300 px-1.5 py-0.5 rounded text-[11px] font-mono">
-                              {enhanceStrength}%
+                          <div className="relative">
+                            <input
+                              type="text"
+                              inputMode="decimal"
+                              value={customWidthInput}
+                              onChange={(e) => handleDiameterInputChange(e.target.value)}
+                              className="w-full pl-3 pr-8 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono shadow-2xs"
+                              placeholder={sizeUnit === 'cm' ? '4.0' : '40'}
+                            />
+                            <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[11px] text-slate-400 font-medium pointer-events-none">
+                              {sizeUnit}
                             </span>
                           </div>
                         </div>
 
-                        <input
-                          type="range"
-                          min="10"
-                          max="100"
-                          step="5"
-                          value={enhanceStrength}
-                          onChange={(e) => handleEnhanceStrengthChange(Number(e.target.value))}
-                          className="w-full h-1.5 bg-amber-200 rounded-lg appearance-none cursor-pointer accent-amber-600"
-                        />
-
-                        {/* Quick Presets */}
-                        <div className="grid grid-cols-4 gap-1 pt-0.5">
-                          {[
-                            { label: 'Nhẹ', val: 30 },
-                            { label: 'Chuẩn', val: 55 },
-                            { label: 'Rõ nét', val: 75 },
-                            { label: 'Tối đa', val: 100 },
-                          ].map((p) => (
-                            <button
-                              key={p.val}
-                              type="button"
-                              onClick={() => handleEnhanceStrengthChange(p.val)}
-                              className={`py-1 text-[10px] font-bold rounded-lg transition cursor-pointer text-center ${
-                                enhanceStrength === p.val && isEnhanced
-                                  ? 'bg-amber-600 text-white shadow-2xs'
-                                  : 'bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200/80'
-                              }`}
-                            >
-                              {p.label}
-                            </button>
-                          ))}
-                        </div>
-
-                        <div className="text-[9.5px] text-amber-800/80 flex items-center justify-between pt-0.5">
-                          <span className="flex items-center gap-1">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                            Cập nhật thời gian thực
+                        <div className="space-y-1.5 pt-1">
+                          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
+                            Kích thước phổ biến:
                           </span>
-                          <span>Kéo để xem trước tức thì</span>
+                          <div className="flex flex-wrap gap-1.5">
+                            {[25, 30, 40, 48, 50, 60, 75].map((d) => (
+                              <button
+                                key={d}
+                                type="button"
+                                onClick={() => handleSelectCirclePreset(d)}
+                                className={`px-2.5 py-1 rounded-lg text-xs font-bold border transition cursor-pointer ${
+                                  curTargetWidth === d
+                                    ? 'bg-blue-600 text-white border-blue-600 shadow-2xs'
+                                    : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                                }`}
+                              >
+                                {d / 10} cm
+                              </button>
+                            ))}
+                          </div>
                         </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 3. Phân tích chất lượng in (Print DPI Analysis) */}
+                  <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200/90 space-y-2">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-bold text-slate-800">Độ phân giải in (DPI):</span>
+                      <span
+                        className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                          dpiInfo.quality === 'high'
+                            ? 'bg-emerald-100 text-emerald-800'
+                            : dpiInfo.quality === 'good'
+                            ? 'bg-blue-100 text-blue-800'
+                            : 'bg-rose-100 text-rose-800'
+                        }`}
+                      >
+                        {dpiInfo.label} ({dpiInfo.dpi} DPI)
+                      </span>
+                    </div>
+
+                    <div className="text-[11px] text-slate-600 leading-relaxed">
+                      {dpiInfo.quality === 'high' ? (
+                        <p className="text-emerald-700">
+                          ✓ Ảnh đạt độ phân giải tiêu chuẩn xưởng in (trên 250 DPI). Bản in sẽ cực kỳ sắc nét.
+                        </p>
+                      ) : dpiInfo.quality === 'good' ? (
+                        <p className="text-blue-700">
+                          ✓ Độ phân giải tốt cho in ấn khổ thường. Có thể bật thêm tính năng <strong>Làm nét HD</strong> để viền sắc hơn.
+                        </p>
+                      ) : (
+                        <p className="text-rose-700">
+                          ⚠ Ảnh có độ phân giải hơi thấp khi in ở khổ này ({dpiInfo.dpi} DPI). Hãy chuyển sang tab <strong>Làm nét & AI</strong> để nâng chất lượng.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Quick Action: Open Interactive Crop Tool */}
+                  <div
+                    onClick={() => setActiveTab('crop')}
+                    className="bg-blue-50/80 hover:bg-blue-100 border border-blue-200 p-3.5 rounded-2xl cursor-pointer transition flex items-center justify-between shadow-2xs"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <div className="p-2 bg-blue-600 text-white rounded-xl shadow-2xs">
+                        <Scissors className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <div className="text-xs font-bold text-blue-950">Công cụ cắt xén ảnh (Interactive Crop)</div>
+                        <div className="text-[11px] text-blue-700">Kéo 8 điểm neo cắt bỏ viền ảnh thừa dễ dàng</div>
+                      </div>
+                    </div>
+                    <span className="text-xs font-bold text-blue-600 bg-white px-2 py-1 rounded-lg border border-blue-200">
+                      Mở &rarr;
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* TAB 2: CẮT XÉN ẢNH (Crop Tool) */}
+              {activeTab === 'crop' && (
+                <div className="space-y-4">
+                  {/* Tỷ lệ cắt khóa (Aspect Ratio Presets) */}
+                  <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200/90 space-y-2.5">
+                    <label className="text-xs font-bold text-slate-800 flex items-center justify-between">
+                      <span>Tỷ lệ cắt khóa (Aspect Ratio):</span>
+                      <span className="text-[10px] text-blue-600 font-bold uppercase bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+                        {cropRatioPreset}
+                      </span>
+                    </label>
+
+                    <div className="grid grid-cols-3 gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => handleRatioPresetChange('free')}
+                        className={`py-2 px-2 rounded-xl text-xs font-bold border transition cursor-pointer ${
+                          cropRatioPreset === 'free'
+                            ? 'bg-blue-600 border-blue-600 text-white shadow-2xs'
+                            : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
+                        }`}
+                      >
+                        Tự do
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleRatioPresetChange('1:1')}
+                        className={`py-2 px-2 rounded-xl text-xs font-bold border transition cursor-pointer ${
+                          cropRatioPreset === '1:1'
+                            ? 'bg-blue-600 border-blue-600 text-white shadow-2xs'
+                            : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
+                        }`}
+                      >
+                        1:1 (Tròn/Vuông)
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleRatioPresetChange('target')}
+                        className={`py-2 px-2 rounded-xl text-xs font-bold border transition cursor-pointer ${
+                          cropRatioPreset === 'target'
+                            ? 'bg-blue-600 border-blue-600 text-white shadow-2xs'
+                            : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
+                        }`}
+                      >
+                        Theo khổ in
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleRatioPresetChange('3:4')}
+                        className={`py-2 px-2 rounded-xl text-xs font-bold border transition cursor-pointer ${
+                          cropRatioPreset === '3:4'
+                            ? 'bg-blue-600 border-blue-600 text-white shadow-2xs'
+                            : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
+                        }`}
+                      >
+                        3:4 (Ảnh đứng)
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleRatioPresetChange('4:3')}
+                        className={`py-2 px-2 rounded-xl text-xs font-bold border transition cursor-pointer ${
+                          cropRatioPreset === '4:3'
+                            ? 'bg-blue-600 border-blue-600 text-white shadow-2xs'
+                            : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
+                        }`}
+                      >
+                        4:3 (Ảnh ngang)
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleRatioPresetChange('9:16')}
+                        className={`py-2 px-2 rounded-xl text-xs font-bold border transition cursor-pointer ${
+                          cropRatioPreset === '9:16'
+                            ? 'bg-blue-600 border-blue-600 text-white shadow-2xs'
+                            : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
+                        }`}
+                      >
+                        9:16 (Story)
+                      </button>
+                    </div>
+
+                    <p className="text-[10.5px] text-slate-500 pt-1">
+                      * Mẹo: Chọn <strong>1:1</strong> nếu bạn chuẩn bị in huy hiệu hoặc tem nhãn hình tròn.
+                    </p>
+                  </div>
+
+                  {/* Thông số vùng cắt */}
+                  <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200/90 space-y-2">
+                    <span className="text-xs font-bold text-slate-800 block">Kích thước vùng cắt hiện tại:</span>
+                    <div className="flex items-center justify-between text-xs bg-white p-2.5 rounded-xl border border-slate-200 font-mono">
+                      <span className="text-slate-500">Độ phân giải:</span>
+                      <strong className="text-blue-700 font-bold">
+                        {Math.round(cropBox.w)} × {Math.round(cropBox.h)} px
+                      </strong>
+                    </div>
+                  </div>
+
+                  {/* Action Buttons */}
+                  <div className="space-y-2.5 pt-2">
+                    <button
+                      type="button"
+                      onClick={handleApplyCrop}
+                      disabled={isCroppingAction}
+                      className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition shadow-md flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                    >
+                      {isCroppingAction ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Scissors className="w-4 h-4" />
+                      )}
+                      <span>Áp dụng cắt vùng đã chọn</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleResetToRawOriginal}
+                      className="w-full py-2.5 bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer"
+                    >
+                      <RotateCcw className="w-3.5 h-3.5 text-slate-500" />
+                      <span>Khôi phục lại ảnh gốc ban đầu</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* TAB 3: LÀM NÉT & AI (Enhance) */}
+              {activeTab === 'enhance' && (
+                <div className="space-y-4">
+                  {/* HD Enhancement Bar with Real-time Sharpness Slider */}
+                  <div className="bg-amber-50/90 border border-amber-200 p-4 rounded-2xl space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2.5">
+                        <div className="p-2 rounded-xl bg-amber-500 text-white shadow-2xs">
+                          <Sparkles className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <div className="text-xs font-bold text-amber-950">Phục hồi nét & Khử mờ</div>
+                          <div className="text-[10.5px] text-amber-800">
+                            Tăng độ nét viền, tương phản & màu sắc in
+                          </div>
+                        </div>
+                      </div>
+                      {isEnhanced && (
+                        <span className="text-[10px] font-bold text-amber-900 bg-amber-200 border border-amber-300 px-2 py-0.5 rounded-md">
+                          {enhanceStrength}%
+                        </span>
+                      )}
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={handleToggleEnhance}
+                      disabled={isEnhancing}
+                      className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-bold transition shadow-xs cursor-pointer ${
+                        isEnhanced
+                          ? 'bg-amber-600 hover:bg-amber-700 text-white'
+                          : 'bg-white border border-amber-300 text-amber-900 hover:bg-amber-100'
+                      }`}
+                    >
+                      {isEnhancing ? (
+                        <>
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          <span>Đang xử lý thời gian thực...</span>
+                        </>
+                      ) : isEnhanced ? (
+                        <>
+                          <Check className="w-3.5 h-3.5 text-emerald-300" />
+                          <span>Đã bật làm nét HD ({enhanceStrength}%)</span>
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                          <span>Bật làm nét HD</span>
+                        </>
+                      )}
+                    </button>
+
+                    {/* Mức độ làm nét - Real-time Sharpness Level Slider */}
+                    <div className="bg-white border border-amber-200 rounded-xl p-3 space-y-2.5">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="flex items-center gap-1.5 text-amber-950 font-bold">
+                          <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                          <span>Mức độ làm nét:</span>
+                        </span>
+                        <div className="flex items-center gap-1.5">
+                          {isEnhancing && (
+                            <span className="inline-flex items-center gap-1 text-[10px] text-amber-700 font-semibold animate-pulse">
+                              <Loader2 className="w-3 h-3 animate-spin" /> Đang cập nhật...
+                            </span>
+                          )}
+                          <span className="font-bold text-amber-900 bg-amber-100 border border-amber-300 px-2 py-0.5 rounded text-xs font-mono">
+                            {enhanceStrength}%
+                          </span>
+                        </div>
+                      </div>
+
+                      <input
+                        type="range"
+                        min="10"
+                        max="100"
+                        step="5"
+                        value={enhanceStrength}
+                        onChange={(e) => handleEnhanceStrengthChange(Number(e.target.value))}
+                        className="w-full h-1.5 bg-amber-200 rounded-lg appearance-none cursor-pointer accent-amber-600"
+                      />
+
+                      {/* Quick Presets */}
+                      <div className="grid grid-cols-4 gap-1.5 pt-1">
+                        {[
+                          { label: 'Nhẹ', val: 30 },
+                          { label: 'Chuẩn', val: 55 },
+                          { label: 'Rõ nét', val: 75 },
+                          { label: 'Tối đa', val: 100 },
+                        ].map((p) => (
+                          <button
+                            key={p.val}
+                            type="button"
+                            onClick={() => handleEnhanceStrengthChange(p.val)}
+                            className={`py-1 text-[11px] font-bold rounded-lg transition cursor-pointer text-center ${
+                              enhanceStrength === p.val && isEnhanced
+                                ? 'bg-amber-600 text-white shadow-2xs'
+                                : 'bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200'
+                            }`}
+                          >
+                            {p.label}
+                          </button>
+                        ))}
+                      </div>
+
+                      <div className="text-[10px] text-amber-800/80 flex items-center justify-between pt-1">
+                        <span className="flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                          Cập nhật thời gian thực
+                        </span>
+                        <span>Xem trước tức thì trên ảnh</span>
                       </div>
                     </div>
 
-                    {/* Shape Selection & Custom Dimensions */}
-                    <div className="space-y-3 bg-slate-50 p-3.5 rounded-2xl border border-slate-200/80 shadow-2xs">
-                      <div className="flex items-center justify-between">
-                        <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                          <span>Khuôn hình dạng:</span>
-                        </label>
-                        <span className="text-[10px] text-blue-700 font-bold bg-blue-50 px-2 py-0.5 rounded-full border border-blue-200 font-mono">
-                          {shape === 'circle'
-                            ? `Ø ${(curTargetWidth / 10).toFixed(1)} cm (1:1)`
-                            : shape === 'heart'
-                            ? `${(curTargetWidth / 10).toFixed(1)} cm (1:1)`
-                            : `${(curTargetWidth / 10).toFixed(1)} × ${(curTargetHeight / 10).toFixed(1)} cm`}
+                    {/* Độ phân giải & Phóng to DPI bằng AI */}
+                    <div className="bg-white border border-amber-200 rounded-xl p-3 space-y-2.5">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="flex items-center gap-1.5 text-amber-950 font-bold">
+                          <Zap className="w-3.5 h-3.5 text-amber-500" />
+                          <span>Độ phân giải / Nâng DPI (AI):</span>
+                        </span>
+                        <span className="text-[10.5px] font-bold px-2 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-300">
+                          {upscaleFactor > 1 ? `AI ${upscaleFactor}x (DPI ×${upscaleFactor})` : 'Gốc 1x'}
                         </span>
                       </div>
 
-                      {/* 3 Shape buttons */}
                       <div className="grid grid-cols-3 gap-2">
                         <button
                           type="button"
-                          onClick={() => handleShapeChange('rect')}
-                          className={`py-2 rounded-xl text-xs font-bold border transition cursor-pointer ${
-                            shape === 'rect'
-                              ? 'bg-blue-600 border-blue-600 text-white shadow-xs'
-                              : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
+                          onClick={() => {
+                            setUpscaleFactor(1);
+                            if (isEnhanced) applyEnhanceWithStrength(enhanceStrength, true, 1);
+                          }}
+                          className={`py-2 rounded-xl text-xs font-bold border transition cursor-pointer flex flex-col items-center ${
+                            upscaleFactor === 1
+                              ? 'bg-amber-600 border-amber-600 text-white shadow-xs'
+                              : 'bg-amber-50/50 hover:bg-amber-100/70 border-amber-200 text-slate-700'
                           }`}
                         >
-                          Chữ nhật
+                          <span>Chuẩn 1x</span>
+                          <span className={`text-[9.5px] ${upscaleFactor === 1 ? 'text-amber-100' : 'text-slate-500'}`}>
+                            Chỉ làm nét
+                          </span>
                         </button>
+
                         <button
                           type="button"
-                          onClick={() => handleShapeChange('circle')}
-                          className={`py-2 rounded-xl text-xs font-bold border transition cursor-pointer ${
-                            shape === 'circle'
+                          onClick={() => {
+                            setUpscaleFactor(2);
+                            applyEnhanceWithStrength(enhanceStrength, true, 2);
+                          }}
+                          className={`py-2 rounded-xl text-xs font-bold border transition cursor-pointer flex flex-col items-center ${
+                            upscaleFactor === 2
                               ? 'bg-blue-600 border-blue-600 text-white shadow-xs'
-                              : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
+                              : 'bg-blue-50/50 hover:bg-blue-100/70 border-blue-200 text-slate-700'
                           }`}
                         >
-                          Tròn (1:1)
+                          <span>AI Phóng 2x</span>
+                          <span className={`text-[9.5px] ${upscaleFactor === 2 ? 'text-blue-100' : 'text-blue-600'}`}>
+                            DPI ×2 nét
+                          </span>
                         </button>
+
                         <button
                           type="button"
-                          onClick={() => handleShapeChange('heart')}
-                          className={`py-2 rounded-xl text-xs font-bold border transition cursor-pointer ${
-                            shape === 'heart'
-                              ? 'bg-blue-600 border-blue-600 text-white shadow-xs'
-                              : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
+                          onClick={() => {
+                            setUpscaleFactor(4);
+                            applyEnhanceWithStrength(enhanceStrength, true, 4);
+                          }}
+                          className={`py-2 rounded-xl text-xs font-bold border transition cursor-pointer flex flex-col items-center ${
+                            upscaleFactor === 4
+                              ? 'bg-purple-600 border-purple-600 text-white shadow-xs'
+                              : 'bg-purple-50/50 hover:bg-purple-100/70 border-purple-200 text-slate-700'
                           }`}
                         >
-                          Trái tim (1:1)
+                          <span>AI Phóng 4x</span>
+                          <span className={`text-[9.5px] ${upscaleFactor === 4 ? 'text-purple-100' : 'text-purple-600'}`}>
+                            DPI ×4 cực nét
+                          </span>
                         </button>
                       </div>
-
-                      {/* Custom Size Section for Rectangular Shape */}
-                      {shape === 'rect' && (
-                        <div className="pt-2.5 border-t border-slate-200/80 space-y-2.5">
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs font-bold text-slate-700">Kích thước in tùy chỉnh:</span>
-                            {/* Unit selector cm / mm */}
-                            <div className="flex items-center bg-slate-200/70 p-0.5 rounded-lg border border-slate-300/60">
-                              <button
-                                type="button"
-                                onClick={() => handleUnitToggle('cm')}
-                                className={`px-2 py-0.5 text-[11px] font-bold rounded-md transition cursor-pointer ${
-                                  sizeUnit === 'cm'
-                                    ? 'bg-white text-blue-700 shadow-2xs'
-                                    : 'text-slate-600 hover:text-slate-900'
-                                }`}
-                              >
-                                cm
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleUnitToggle('mm')}
-                                className={`px-2 py-0.5 text-[11px] font-bold rounded-md transition cursor-pointer ${
-                                  sizeUnit === 'mm'
-                                    ? 'bg-white text-blue-700 shadow-2xs'
-                                    : 'text-slate-600 hover:text-slate-900'
-                                }`}
-                              >
-                                mm
-                              </button>
-                            </div>
-                          </div>
-
-                          {/* Inputs: Width, Swap button, Height */}
-                          <div className="flex items-center gap-2">
-                            {/* Width Input */}
-                            <div className="flex-1 space-y-1">
-                              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
-                                Rộng ({sizeUnit})
-                              </span>
-                              <div className="relative">
-                                <input
-                                  type="text"
-                                  inputMode="decimal"
-                                  value={customWidthInput}
-                                  onChange={(e) => handleCustomWidthChange(e.target.value)}
-                                  className="w-full pl-2.5 pr-8 py-1.5 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
-                                  placeholder={sizeUnit === 'cm' ? '4.0' : '40'}
-                                />
-                                <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-slate-400 font-medium pointer-events-none">
-                                  {sizeUnit}
-                                </span>
-                              </div>
-                            </div>
-
-                            {/* Swap Width ⇄ Height Button */}
-                            <div className="flex flex-col items-center pt-4">
-                              <button
-                                type="button"
-                                onClick={handleSwapDimensions}
-                                title="Hoán đổi Rộng ⇄ Dài (Cao thành Rộng, Rộng thành Cao)"
-                                className="px-2.5 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 transition-all hover:scale-105 active:scale-95 shadow-2xs flex items-center gap-1 cursor-pointer text-[11px] font-bold"
-                              >
-                                <ArrowLeftRight className="w-3.5 h-3.5 text-blue-600" />
-                                <span className="text-[10.5px]">Đổi</span>
-                              </button>
-                            </div>
-
-                            {/* Height Input */}
-                            <div className="flex-1 space-y-1">
-                              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
-                                Cao / Dài ({sizeUnit})
-                              </span>
-                              <div className="relative">
-                                <input
-                                  type="text"
-                                  inputMode="decimal"
-                                  value={customHeightInput}
-                                  onChange={(e) => handleCustomHeightChange(e.target.value)}
-                                  className="w-full pl-2.5 pr-8 py-1.5 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
-                                  placeholder={sizeUnit === 'cm' ? '6.0' : '60'}
-                                />
-                                <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-slate-400 font-medium pointer-events-none">
-                                  {sizeUnit}
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Quick rectangular presets */}
-                          <div className="space-y-1 pt-1">
-                            <span className="text-[10px] font-semibold text-slate-500 block">Kích thước chuẩn:</span>
-                            <div className="flex flex-wrap gap-1">
-                              {[
-                                { label: '2x3', w: 20, h: 30 },
-                                { label: '3x4', w: 30, h: 40 },
-                                { label: '4x6', w: 40, h: 60 },
-                                { label: '6x9', w: 60, h: 90 },
-                                { label: '9x12', w: 90, h: 120 },
-                                { label: '10x15', w: 100, h: 150 },
-                                { label: '13x18', w: 130, h: 180 },
-                              ].map((p) => {
-                                const isSelected =
-                                  (curTargetWidth === p.w && curTargetHeight === p.h) ||
-                                  (curTargetWidth === p.h && curTargetHeight === p.w);
-                                return (
-                                  <button
-                                    key={p.label}
-                                    type="button"
-                                    onClick={() => handleSelectRectPreset(p.w, p.h)}
-                                    className={`px-2 py-0.5 rounded-lg text-[11px] font-bold border transition cursor-pointer ${
-                                      isSelected
-                                        ? 'bg-blue-600 text-white border-blue-600 shadow-2xs'
-                                        : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
-                                    }`}
-                                  >
-                                    {p.label} cm
-                                  </button>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Custom Diameter Section for Circle Shape */}
-                      {shape === 'circle' && (
-                        <div className="pt-2.5 border-t border-slate-200/80 space-y-2.5">
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs font-bold text-slate-700">Đường kính in (Ø):</span>
-                            {/* Unit selector cm / mm */}
-                            <div className="flex items-center bg-slate-200/70 p-0.5 rounded-lg border border-slate-300/60">
-                              <button
-                                type="button"
-                                onClick={() => handleUnitToggle('cm')}
-                                className={`px-2 py-0.5 text-[11px] font-bold rounded-md transition cursor-pointer ${
-                                  sizeUnit === 'cm'
-                                    ? 'bg-white text-blue-700 shadow-2xs'
-                                    : 'text-slate-600 hover:text-slate-900'
-                                }`}
-                              >
-                                cm
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleUnitToggle('mm')}
-                                className={`px-2 py-0.5 text-[11px] font-bold rounded-md transition cursor-pointer ${
-                                  sizeUnit === 'mm'
-                                    ? 'bg-white text-blue-700 shadow-2xs'
-                                    : 'text-slate-600 hover:text-slate-900'
-                                }`}
-                              >
-                                mm
-                              </button>
-                            </div>
-                          </div>
-
-                          {/* Custom diameter input */}
-                          <div className="space-y-1">
-                            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
-                              Nhập đường kính Ø ({sizeUnit})
-                            </span>
-                            <div className="relative">
-                              <input
-                                type="text"
-                                inputMode="decimal"
-                                value={customWidthInput}
-                                onChange={(e) => handleDiameterInputChange(e.target.value)}
-                                className="w-full pl-2.5 pr-8 py-1.5 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
-                                placeholder={sizeUnit === 'cm' ? '3.0' : '30'}
-                              />
-                              <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-slate-400 font-medium pointer-events-none">
-                                {sizeUnit}
-                              </span>
-                            </div>
-                          </div>
-
-                          {/* Quick circle diameter presets */}
-                          <div className="space-y-1 pt-1">
-                            <span className="text-[10px] font-semibold text-slate-500 block">Đường kính phổ biến:</span>
-                            <div className="flex flex-wrap gap-1">
-                              {[25, 30, 40, 48, 50, 60, 75].map((d) => (
-                                <button
-                                  key={d}
-                                  type="button"
-                                  onClick={() => handleSelectCirclePreset(d)}
-                                  className={`px-2 py-0.5 rounded-lg text-[11px] font-bold border transition cursor-pointer ${
-                                    curTargetWidth === d
-                                      ? 'bg-blue-600 text-white border-blue-600 shadow-2xs'
-                                      : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
-                                  }`}
-                                >
-                                  {d / 10} cm
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Custom Size Section for Heart Shape */}
-                      {shape === 'heart' && (
-                        <div className="pt-2.5 border-t border-slate-200/80 space-y-2.5">
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs font-bold text-slate-700">Kích thước trái tim:</span>
-                            {/* Unit selector cm / mm */}
-                            <div className="flex items-center bg-slate-200/70 p-0.5 rounded-lg border border-slate-300/60">
-                              <button
-                                type="button"
-                                onClick={() => handleUnitToggle('cm')}
-                                className={`px-2 py-0.5 text-[11px] font-bold rounded-md transition cursor-pointer ${
-                                  sizeUnit === 'cm'
-                                    ? 'bg-white text-blue-700 shadow-2xs'
-                                    : 'text-slate-600 hover:text-slate-900'
-                                }`}
-                              >
-                                cm
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleUnitToggle('mm')}
-                                className={`px-2 py-0.5 text-[11px] font-bold rounded-md transition cursor-pointer ${
-                                  sizeUnit === 'mm'
-                                    ? 'bg-white text-blue-700 shadow-2xs'
-                                    : 'text-slate-600 hover:text-slate-900'
-                                }`}
-                              >
-                                mm
-                              </button>
-                            </div>
-                          </div>
-
-                          {/* Custom size input */}
-                          <div className="space-y-1">
-                            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
-                              Kích thước ({sizeUnit})
-                            </span>
-                            <div className="relative">
-                              <input
-                                type="text"
-                                inputMode="decimal"
-                                value={customWidthInput}
-                                onChange={(e) => handleDiameterInputChange(e.target.value)}
-                                className="w-full pl-2.5 pr-8 py-1.5 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
-                                placeholder={sizeUnit === 'cm' ? '4.0' : '40'}
-                              />
-                              <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-slate-400 font-medium pointer-events-none">
-                                {sizeUnit}
-                              </span>
-                            </div>
-                          </div>
-
-                          {/* Quick heart presets */}
-                          <div className="space-y-1 pt-1">
-                            <span className="text-[10px] font-semibold text-slate-500 block">Kích thước phổ biến:</span>
-                            <div className="flex flex-wrap gap-1">
-                              {[30, 40, 50, 60, 75].map((d) => (
-                                <button
-                                  key={d}
-                                  type="button"
-                                  onClick={() => handleSelectCirclePreset(d)}
-                                  className={`px-2 py-0.5 rounded-lg text-[11px] font-bold border transition cursor-pointer ${
-                                    curTargetWidth === d
-                                      ? 'bg-blue-600 text-white border-blue-600 shadow-2xs'
-                                      : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
-                                  }`}
-                                >
-                                  {d / 10} cm
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Open Crop Tool Button Promo Card */}
-                    <div
-                      onClick={() => setCropSubMode('cropTool')}
-                      className="bg-blue-50 hover:bg-blue-100/80 border border-blue-200 p-3 rounded-2xl cursor-pointer transition flex items-center justify-between shadow-2xs"
-                    >
-                      <div className="flex items-center gap-2">
-                        <div className="p-1.5 bg-blue-600 text-white rounded-lg shadow-2xs">
-                          <Scissors className="w-4 h-4" />
-                        </div>
-                        <div>
-                          <div className="text-xs font-bold text-blue-950">Công cụ cắt ảnh (Crop)</div>
-                          <div className="text-[10px] text-blue-700">Kéo 8 điểm neo cắt tự do hoặc theo tỷ lệ</div>
-                        </div>
-                      </div>
-                      <span className="text-xs font-bold text-blue-600">Mở &rarr;</span>
-                    </div>
-
-                    {/* Rotation */}
-                    <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200/80 flex items-center justify-between">
-                      <span className="text-xs font-bold text-slate-700">Xoay hướng ảnh:</span>
-                      <button
-                        type="button"
-                        onClick={handleRotate}
-                        className="flex items-center gap-1 text-xs font-bold text-slate-700 bg-white border border-slate-200 hover:bg-slate-100 px-3 py-1.5 rounded-xl transition shadow-2xs cursor-pointer"
-                      >
-                        <RotateCw className="w-3.5 h-3.5 text-blue-600" />
-                        <span>Xoay 90°</span>
-                      </button>
-                    </div>
-
-                    {/* Switch to Adjust Tab Promo Banner */}
-                    <div
-                      onClick={() => setActiveTab('adjust')}
-                      className="bg-purple-50 hover:bg-purple-100/80 border border-purple-200 p-3 rounded-2xl cursor-pointer transition flex items-center justify-between"
-                    >
-                      <div className="flex items-center gap-2">
-                        <Sliders className="w-4 h-4 text-purple-600" />
-                        <div>
-                          <div className="text-xs font-bold text-purple-950">Chỉnh màu & Ánh sáng</div>
-                          <div className="text-[10px] text-purple-700">Cân bằng trắng, tương phản, đảo màu...</div>
-                        </div>
-                      </div>
-                      <span className="text-xs font-bold text-purple-600">Mở &rarr;</span>
                     </div>
                   </div>
-                )}
-              </div>
-            ) : (
-              /* Tab 2: Full Color & Light Adjustments */
-              <PhotoAdjustmentsPanel
-                adjustments={adjustments}
-                onChange={setAdjustments}
-                onAutoAdjust={handleAutoAdjust}
-                isAutoAdjusting={isAutoAdjusting}
-              />
-            )}
-          </div>
+                </div>
+              )}
+
+              {/* TAB 4: MÀU SẮC & ÁNH SÁNG (Adjust) */}
+              {activeTab === 'adjust' && (
+                <div className="space-y-4">
+                  <PhotoAdjustmentsPanel
+                    adjustments={adjustments}
+                    onChange={setAdjustments}
+                    onAutoAdjust={handleAutoAdjust}
+                    isAutoAdjusting={isAutoAdjusting}
+                  />
+                </div>
+              )}
+            </div>
+          </aside>
         </div>
 
-        {/* Footer */}
-        <div className="px-5 py-3.5 bg-slate-50 border-t border-slate-200 flex justify-between items-center">
-          <div className="text-[11px] text-slate-500">
-            {activeTab === 'crop' && cropSubMode === 'cropTool' && (
-              <span>Kéo các điểm neo để điều chỉnh khung cắt &bull; Bấm &quot;Cắt ảnh ngay&quot; để áp dụng</span>
+        {/* BOTTOM FOOTER: Status Tips & Primary Save Actions */}
+        <footer className="px-5 py-3 bg-slate-50 border-t border-slate-200 flex flex-wrap justify-between items-center gap-3 shrink-0 select-none">
+          <div className="text-xs text-slate-500 flex items-center gap-2">
+            <HelpCircle className="w-4 h-4 text-slate-400 shrink-0" />
+            {activeTab === 'size' && (
+              <span>Mẹo: Kéo chuột trực tiếp trên ảnh để dịch tâm, lăn chuột để phóng to.</span>
+            )}
+            {activeTab === 'crop' && (
+              <span>Kéo các điểm neo để chọn vùng cắt &bull; Bấm &quot;Áp dụng cắt&quot; để cắt ảnh.</span>
+            )}
+            {activeTab === 'enhance' && (
+              <span>Kéo thanh trượt làm nét để xem trước thời gian thực trên khung ảnh.</span>
             )}
             {activeTab === 'adjust' && (
-              <span>Thay đổi thanh trượt để xem trực tiếp trên khung xem trước</span>
+              <span>Thay đổi thanh trượt để cân bằng màu & ánh sáng tức thì.</span>
             )}
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2.5">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-100 transition cursor-pointer"
+              className="px-4 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-100 transition cursor-pointer shadow-2xs"
             >
               Hủy bỏ
             </button>
@@ -1864,7 +2205,7 @@ export const CropModal: React.FC<CropModalProps> = ({
               type="button"
               onClick={handleSave}
               disabled={isApplyingAdjustmentPreview || isCroppingAction}
-              className="flex items-center gap-1.5 px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer disabled:opacity-60"
+              className="flex items-center gap-2 px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition shadow-md cursor-pointer disabled:opacity-60"
             >
               {isApplyingAdjustmentPreview ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
@@ -1874,7 +2215,7 @@ export const CropModal: React.FC<CropModalProps> = ({
               <span>Lưu thay đổi</span>
             </button>
           </div>
-        </div>
+        </footer>
       </div>
     </div>
   );

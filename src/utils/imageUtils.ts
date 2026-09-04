@@ -188,6 +188,52 @@ export function calculateCrop(
   return { cropX, cropY, cropW, cropH };
 }
 
+/**
+ * Automatically adjusts target dimensions to match the image orientation:
+ * - If image is Landscape (width > height) and target is Portrait (height > width):
+ *   swaps target dimensions to Landscape (e.g. 30x80 -> 80x30).
+ * - If image is Portrait (height > width) and target is Landscape (width > height):
+ *   swaps target dimensions to Portrait (e.g. 80x30 -> 30x80).
+ * - For square images or circular/heart shapes: keeps original target dimensions.
+ */
+export function getOrientedDimensions(
+  imgWidth: number,
+  imgHeight: number,
+  targetWidth: number,
+  targetHeight: number,
+  autoOrient = true,
+  shape: string = 'rect'
+): { targetWidth: number; targetHeight: number; wasSwapped: boolean } {
+  if (!autoOrient || shape === 'circle' || shape === 'heart' || targetWidth === targetHeight) {
+    return { targetWidth, targetHeight, wasSwapped: false };
+  }
+
+  const isImgLandscape = imgWidth > imgHeight;
+  const isImgPortrait = imgHeight > imgWidth;
+  const isTargetLandscape = targetWidth > targetHeight;
+  const isTargetPortrait = targetHeight > targetWidth;
+
+  if (isImgLandscape && isTargetPortrait) {
+    // Image is wide, target is tall -> switch to wide target
+    return {
+      targetWidth: Math.max(targetWidth, targetHeight),
+      targetHeight: Math.min(targetWidth, targetHeight),
+      wasSwapped: true,
+    };
+  }
+
+  if (isImgPortrait && isTargetLandscape) {
+    // Image is tall, target is wide -> switch to tall target
+    return {
+      targetWidth: Math.min(targetWidth, targetHeight),
+      targetHeight: Math.max(targetWidth, targetHeight),
+      wasSwapped: true,
+    };
+  }
+
+  return { targetWidth, targetHeight, wasSwapped: false };
+}
+
 export async function exportPagesToImage(
   pages: PackedPage[],
   settings: LayoutSettings,

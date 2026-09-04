@@ -1,6 +1,9 @@
-# 🖨️ Dâu Dâu AutoPack Print - Công cụ Dàn Trang In Ảnh A4 Tự Động & Tối Ưu Bố Cục
+# 🖨️ Dâu Dâu AutoPack Print - Công cụ Dàn Trang In Ảnh A4 & Tách Sticker PNG Tự Động
 
-Ứng dụng web hỗ trợ dàn trang in ảnh khổ A4 tự động thông minh, tối ưu diện tích giấy in, tùy biến kích thước hàng loạt, cân chỉnh màu sắc & làm nét ảnh, hỗ trợ in trực tiếp và xuất file PDF chuẩn in ấn 300 DPI.
+Ứng dụng web chuyên nghiệp hỗ trợ dàn trang in ảnh khổ A4 tự động thông minh, tối ưu diện tích giấy in, tùy biến kích thước hàng loạt, cân chỉnh màu sắc & làm nét ảnh, bóc tách nhãn dán sticker PNG trong suốt tự động, hỗ trợ in trực tiếp và xuất file PDF chuẩn in ấn 300 DPI.
+
+> 🔒 **Quyền riêng tư & Bảo mật dữ liệu (100% Client-Side):**
+> Ứng dụng xử lý đồ họa, tính toán bố cục, lưu trữ phiên làm việc và xuất file hoàn toàn trên trình duyệt (RAM, Canvas, IndexedDB) của khách hàng. **Hosting không lưu trữ bất kỳ hình ảnh hay dữ liệu cá nhân nào của người dùng.**
 
 ---
 
@@ -8,108 +11,123 @@
 
 ```text
 autopack-print/
+├── server.js                        # File khởi động máy chủ Node.js (cPanel / Tenten Hosting)
+├── package.json                     # Quản lý gói phụ thuộc & scripts start/build
+├── vite.config.ts                   # Cấu hình Vite & Tailwind CSS
+├── tsconfig.json                    # Cấu hình TypeScript
+├── index.html                       # HTML Entrypoint của ứng dụng
+├── .env.example                     # Mẫu biến môi trường
+├── .gitignore                       # Danh sách loại trừ Git
 ├── src/
 │   ├── components/
+│   │   ├── ToolSelectorHub.tsx      # Hub lựa chọn trung tâm (Dàn trang A4 hoặc Tách Sticker PNG)
 │   │   ├── A4PreviewArea.tsx        # Vùng xem trước A4, thước đo mm, lưới căn lề, kéo chỉnh tâm ảnh
-│   │   ├── ActivationModal.tsx      # Giao diện xác thực quyền truy cập
-│   │   ├── BatchToolsSidebar.tsx    # Thao tác hàng loạt: Kích thước, Xoay 90°, Số lượng, Làm nét, Cân màu
-│   │   ├── CropModal.tsx            # Hộp thoại cắt cúp, xoay, lật, bộ lọc màu & chỉnh sáng chi tiết
-│   │   ├── CustomSizeModal.tsx      # Hộp thoại tạo & lưu kích thước in tùy chỉnh
-│   │   ├── ImageListSidebar.tsx     # Danh sách ảnh đã tải lên, thay đổi số lượng, đánh giá độ nét
-│   │   ├── RestoreSessionModal.tsx  # Khôi phục dự án sau khi tải lại trang
+│   │   ├── PngSplitterWorkspace.tsx # Bàn làm việc tách nhãn dán PNG tự động từ bảng sticker
+│   │   ├── PngSplitterModal.tsx     # Hộp thoại mở nhanh công cụ tách PNG từ thanh công cụ
+│   │   ├── BatchToolsSidebar.tsx    # Thao tác hàng loạt: Kích thước, Xoay 90°, Làm nét, Cân màu
+│   │   ├── CropModal.tsx            # Cắt cúp, xoay, lật, lọc màu, chỉnh sáng chi tiết
+│   │   ├── PhotoAdjustmentsPanel.tsx# Bảng thanh trượt điều chỉnh nhiệt độ màu, độ sáng, tương phản
+│   │   ├── CustomSizeModal.tsx      # Tạo và lưu kích thước in tùy chỉnh theo cm / mm
+│   │   ├── ImageListSidebar.tsx     # Quản lý danh sách ảnh, thay đổi số lượng in, kiểm tra DPI
+│   │   ├── RestoreSessionModal.tsx  # Khôi phục dự án tự động lưu sau khi tải lại trang
+│   │   ├── SaveProjectModal.tsx     # Quản lý lưu và tải tệp dự án định dạng .daudau
+│   │   ├── ClearConfirmModal.tsx    # Hộp thoại xác nhận làm mới không gian làm việc
 │   │   ├── SettingsSidebar.tsx      # Tùy chỉnh lề in, ghép khít (Nesting), nét đứt cắt, xuất PDF
+│   │   ├── ActivationModal.tsx      # Giao diện xác thực quyền truy cập
+│   │   ├── Uploader.tsx             # Vùng tải lên ảnh hỗ trợ kéo thả và clipboard
 │   │   └── Toast.tsx                # Thông báo tương tác người dùng
 │   ├── workers/
-│   │   ├── pixelWorker.ts           # Web Worker chạy nền xử lý làm nét & cân chỉnh màu
-│   │   └── workerBridge.ts          # Cầu nối xử lý đa luồng
+│   │   ├── pixelWorker.ts           # Web Worker chạy nền xử lý đa luồng làm nét & cân màu
+│   │   └── workerBridge.ts          # Cầu nối điều phối tác vụ Worker
 │   ├── utils/
-│   │   ├── pdfExport.ts             # Xuất file PDF nhiều trang chuẩn in ấn (300 DPI)
-│   │   ├── projectStorage.ts        # Lưu trữ dự án và tự động lưu phiên làm việc
+│   │   ├── pngSheetSplitter.ts      # Thuật toán quét kênh Alpha tách rời từng sticker trong suốt
+│   │   ├── packing.ts               # Thuật toán sắp xếp ảnh tối ưu trang in (Bin Packing)
+│   │   ├── pdfExport.ts             # Xuất file PDF nhiều trang độ nét cao chuẩn in ấn (300 DPI)
+│   │   ├── projectStorage.ts        # Lưu trữ dự án và tự động lưu phiên làm việc (IndexedDB)
 │   │   ├── imageUtils.ts            # Xử lý kết xuất Canvas và tối ưu bộ nhớ
-│   │   ├── imageEnhancer.ts         # Công cụ tăng cường độ nét ảnh
-│   │   ├── imageAdjustmentEngine.ts # Bộ lọc màu và độ sáng
-│   │   └── packing.ts               # Thuật toán sắp xếp ảnh tối ưu trang in
+│   │   ├── imageEnhancer.ts         # Công cụ tăng cường độ nét ảnh (Unsharp Masking)
+│   │   ├── imageAdjustmentEngine.ts # Bộ xử lý màu sắc, cân bằng trắng và độ sáng
+│   │   └── presetMatcher.ts         # Nhận diện tự động kích thước phù hợp nhất
 │   ├── types.ts                     # Định nghĩa kiểu dữ liệu TypeScript
-│   ├── App.tsx                      # Component chính điều phối giao diện
-│   ├── main.tsx                     # Điểm khởi chạy ứng dụng
+│   ├── App.tsx                      # Component chính điều phối không gian làm việc
+│   ├── main.tsx                     # Điểm khởi chạy React
 │   └── index.css                    # Định dạng giao diện & quy chuẩn in ấn
-├── .env.example                     # Mẫu biến môi trường
-├── .gitignore                       # Danh sách tệp loại trừ Git
-├── package.json                     # Quản lý gói phụ thuộc
-├── vite.config.ts                   # Cấu hình Vite
-└── README.md                        # Tài liệu hướng dẫn
+└── README.md                        # Tài liệu hướng dẫn sử dụng & triển khai
 ```
 
 ---
 
 ## ✨ Các chức năng chính
 
-### 1. 📥 Tải & Quản lý danh sách ảnh
-- Hỗ trợ chọn file từ máy tính, kéo thả (Drag & Drop) hoặc dán trực tiếp từ Clipboard (`Ctrl + V`).
-- Tự động đánh giá chất lượng in ấn theo độ phân giải (DPI).
-- Tùy chỉnh số lượng bản in cho từng bức ảnh hoặc sắp xếp lại thứ tự nhanh chóng.
+### 1. 🖨️ Dàn trang in ảnh A4 thông minh
+- **Sắp xếp tự động (Smart Packing):** Tối ưu hóa không gian giấy in A4, tiết kiệm tối đa giấy in ảnh.
+- **Xem trước chuẩn xác:** Thước đo milimet trực quan, lưới căn lề, hiển thị viền cắt nét đứt (Cut lines).
+- **Chỉnh tâm ảnh trực tiếp:** Kéo rê chuột trên ảnh xem trước để đổi góc nhìn cúp ảnh mà không cần mở lại hộp thoại.
+- **Tùy chỉnh lề & khoảng cách:** Điều chỉnh lề giấy in (Margin) và khoảng cách giữa các ảnh (Gap) theo nhu cầu.
 
-### 2. 📐 Kích thước & Hình dạng đa dạng
-- **Kích thước chuẩn**: 5x7 cm, 6x8 cm, 6x9 cm, 9x12 cm, 10x15 cm (4R), 13x18 cm (5R), 15x21 cm (A5), photocard (5.4x8.6 cm), ảnh vuông (6x6 cm, 8x8 cm, 10x10 cm), ảnh thẻ (3x4 cm, 4x6 cm, passport 3.5x4.5 cm).
-- **Hình dạng đặc biệt**: Chữ nhật, bo góc, hình tròn, hình trái tim.
-- **Kích thước tùy chỉnh**: Tự do nhập kích thước theo đơn vị cm / mm và lưu lại mẫu kích thước cá nhân.
+### 2. ✂️ Bộ công cụ tách nhãn dán PNG tự động (PNG Sticker Sheet Splitter)
+- Tự động phân tích kênh Alpha (độ trong suốt) của bảng sticker PNG lớn.
+- Thuật toán kết nối điểm ảnh (Connected Component Labeling) nhận diện từng sticker riêng biệt.
+- Tự do tùy chỉnh ngưỡng trong suốt (Alpha Threshold), kích thước tối thiểu và phần đệm lề (Padding).
+- Xem trước khung viền từng sticker và đưa trực tiếp vào bàn in A4 hoặc xuất file zip từng sticker.
 
-### 3. ⚡ Thao tác xử lý hàng loạt (Batch Tools)
-- Đổi kích thước toàn bộ ảnh chỉ với 1 thao tác.
-- Xoay 90° tất cả các bức ảnh.
+### 3. ⚡ Xử lý hàng loạt (Batch Tools)
+- Đổi kích thước toàn bộ ảnh chỉ với 1 cú nhấp chuột.
+- Xoay đồng loạt 90° cho toàn bộ danh sách.
 - Đồng bộ số lượng bản in cho tất cả ảnh.
-- Tự động cân bằng sáng và tăng độ sắc nét cho toàn bộ danh sách.
+- Tự động làm nét hàng loạt (Auto Sharpen) và cân bằng sáng đa luồng qua Web Worker.
 
-### 4. 🖼️ Vùng xem trước A4 & Trải nghiệm in ấn
-- Bố cục thông minh tự động dàn trang tối ưu diện tích giấy.
-- Thước đo milimet trực quan và lưới căn lề.
-- Kéo chỉnh tâm ảnh trực tiếp trên trang xem trước.
-- Tùy chỉnh lề giấy in (Margin) và khoảng cách giữa các ảnh (Gap).
-- Tùy chọn hiển thị đường nét đứt cắt giấy (Cut lines).
+### 4. 🎨 Bộ chỉnh sửa ảnh chuyên nghiệp
+- Cắt cúp khung hình tự do hoặc cố định theo tỷ lệ ảnh in chuẩn.
+- Đầy đủ thao tác: Xoay 90°, lật ngang, lật dọc, phóng to/thu nhỏ.
+- Thanh trượt chi tiết: Nhiệt độ màu, Độ sáng, Độ tương phản, Vùng sáng (Highlights), Vùng tối (Shadows).
 
-### 5. 🎨 Bộ chỉnh sửa ảnh chi tiết
-- Cắt cúp khung hình tự do hoặc cố định theo tỷ lệ in.
-- Xoay, lật ảnh ngang/dọc và phóng to/thu nhỏ.
-- Cân chỉnh nhiệt độ màu, độ sáng, tương phản, vùng sáng (Highlights) và vùng tối (Shadows).
+### 5. 📄 Xuất file & In ấn chuẩn in 300 DPI
+- **In trực tiếp A4 (`Ctrl + P`):** Tối ưu stylesheet cho máy in văn phòng và máy in ảnh chuyên dụng.
+- **Xuất PDF đa trang chất lượng cao:** File PDF đạt chuẩn 300 DPI sắc nét.
+- **Xuất ảnh định dạng PNG/JPEG:** Lưu trữ các trang in A4 thành ảnh độ nét cao.
 
-### 6. 🖨️ In ấn & Xuất file chuẩn in ấn
-- **In trực tiếp A4 (`Ctrl + P`)**: Căn chỉnh lề in chính xác theo tiêu chuẩn trình duyệt.
-- **Xuất ảnh chất lượng cao**: Lưu từng trang A4 thành file ảnh PNG / JPEG độ phân giải cao 300 DPI.
-- **Xuất file PDF nhiều trang**: Tạo tệp PDF chứa đầy đủ các trang in sẵn sàng cho máy in.
-
-### 7. 💾 Lưu trữ & Phục hồi phiên làm việc
-- Tự động lưu ngầm trạng thái làm việc để tránh mất dữ liệu.
-- Cảnh báo trước khi rời trang nếu đang có dự án dở dang.
-- Hỗ trợ lưu và mở lại tệp dự án định dạng `.daudau` mang theo khi cần.
-
-### 8. 🔒 Xác thực quyền truy cập
-- Giao diện khóa bảo vệ trang làm việc, hỗ trợ ghi nhớ trạng thái đăng nhập an toàn trên trình duyệt.
+### 6. 💾 Tự động lưu & Khôi phục phiên làm việc
+- Tự động lưu phiên làm việc ngầm vào **IndexedDB** của trình duyệt.
+- Hỗ trợ lưu trữ và mở lại dự án định dạng `.daudau` mang sang máy tính khác dễ dàng.
 
 ---
 
-## ⌨️ Phím tắt tiện ích
+## 🌐 HƯỚNG DẪN TRIỂN KHAI 1-CLICK TRÊN TENTEN HOSTING (TRIỂN KHAI NHANH)
 
-| Phím tắt | Chức năng |
-| :--- | :--- |
-| `Ctrl + S` / `Cmd + S` | Lưu tệp dự án `.daudau` |
-| `Ctrl + P` / `Cmd + P` | Mở hộp thoại in ấn tiêu chuẩn |
-| `Ctrl + V` / `Cmd + V` | Dán ảnh từ Clipboard |
-| `Ctrl + Z` / `Cmd + Z` | Hoàn tác thao tác (Undo) |
-| `Ctrl + Y` / `Ctrl + Shift + Z` | Làm lại thao tác (Redo) |
-| `Kéo rê trên ảnh` | Di chuyển tâm ảnh |
-| `Nhấp đúp vào ảnh` | Mở trình chỉnh sửa cắt cúp |
+Dự án đã được cấu hình tối ưu 100% cho tính năng **"Triển khai nhanh"** của Hosting Tenten. Hệ thống Tenten sẽ tự động hóa toàn bộ quá trình: kéo code, cài đặt thư viện, tự động build và kích hoạt máy chủ mà **không cần bạn phải gõ bất kỳ câu lệnh nào**.
+
+### Các bước thực hiện:
+
+1. **Bước 1: Đẩy mã nguồn lên GitHub**
+   - Đẩy toàn bộ mã nguồn dự án lên một kho lưu trữ GitHub của bạn.
+
+2. **Bước 2: Mở bảng "Triển khai nhanh" trên Tenten**
+   - Đăng nhập vào trang quản trị Hosting Tenten.
+   - Chọn mục **Triển khai nhanh** (Quick Deploy):
+     - **Nguồn mã nguồn:** Chọn **Git Repo**.
+     - **Đường dẫn Git:** Dán đường dẫn repository của bạn (ví dụ: `https://github.com/username/autopack-print.git`).
+     - **Tên miền (Domain):** Chọn tên miền của bạn (ví dụ: `daudau.pro.vn`).
+     - **Phiên bản Node.js:** Chọn **Node.js v24 (LTS)** (hoặc v20, v18).
+     - Nhấn nút: **Triển khai dự án ngay**.
+
+3. **Bước 3: Hoàn tất!**
+   - Hosting Tenten sẽ tự động clone mã nguồn từ GitHub.
+   - Quá trình `npm install` sẽ tự động kích hoạt lệnh build (`postinstall: "vite build"`).
+   - Tệp `server.js` tích hợp sẵn cơ chế **Auto-Build Fallback** — nếu chưa có thư mục `dist/`, server sẽ tự động chạy build ngầm ngay khi khởi động.
+   - Cổng mạng `PORT` tự động nhận diện theo môi trường động của Tenten (`process.env.PORT || 3000`).
+   - Bạn chỉ cần chờ vài chục giây và truy cập thẳng tên miền `daudau.pro.vn` để sử dụng!
 
 ---
 
-## 🛠️ Công nghệ sử dụng
-
-- **Frontend**: React, TypeScript, Vite
-- **Styling**: Tailwind CSS
-- **Thư viện chính**: jsPDF, JSZip, lucide-react
+### 🔄 Cập nhật dự án khi có thay đổi (Auto Update)
+Mỗi khi bạn cập nhật code và đẩy lên GitHub:
+- Trên bảng quản trị Tenten, bạn chỉ cần nhấn **Cập nhật / Pull & Deploy**.
+- Hệ thống Tenten sẽ tự động kéo bản mới nhất, tự động biên dịch lại và khởi động lại web tức thì.
 
 ---
 
-## 🚀 Hướng dẫn cài đặt & Chạy cục bộ
+## 💻 Chạy thử nghiệm trên máy tính cá nhân (Local Development)
 
 ```bash
 # 1. Cài đặt các gói phụ thuộc
@@ -120,10 +138,13 @@ npm run dev
 
 # 3. Đóng gói mã nguồn (Production Build)
 npm run build
+
+# 4. Chạy thử máy chủ sản xuất (Production Test)
+npm start
 ```
 
 ---
 
 ## 📄 Giấy phép (License)
 
-Phát hành theo giấy phép **MIT License**.
+Dự án được phát hành theo giấy phép **MIT License**.

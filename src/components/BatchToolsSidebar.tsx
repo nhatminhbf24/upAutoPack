@@ -13,10 +13,12 @@ import {
   Ruler,
   Plus,
   Scissors,
+  ArrowUpDown,
+  ArrowLeftRight,
 } from 'lucide-react';
 import { PhotoItem, DEFAULT_SIZE_PRESETS, DEFAULT_ADJUSTMENTS, SizePreset } from '../types';
-import { rotateImageBase64, calculateCrop, createOptimizedPreview } from '../utils/imageUtils';
-import { enhanceImageQuality } from '../utils/imageEnhancer';
+import { rotateImageBase64, calculateCrop, createOptimizedPreview, getOrientedDimensions } from '../utils/imageUtils';
+import { enhanceImageQuality, getRecommendedUpscaleFactor } from '../utils/imageEnhancer';
 import { calculateAutoAdjustments, applyAdjustmentsToImage } from '../utils/imageAdjustmentEngine';
 
 interface BatchToolsSidebarProps {
@@ -24,6 +26,10 @@ interface BatchToolsSidebarProps {
   onUpdatePhoto: (id: string, updates: Partial<PhotoItem>) => void;
   onToast: (type: 'success' | 'error' | 'info', text: string) => void;
   smartCrop: boolean;
+  activePresetId: string;
+  onChangeActivePresetId: (id: string) => void;
+  autoMatchOrientation: boolean;
+  onToggleAutoMatchOrientation: (enabled: boolean) => void;
   customPresets?: SizePreset[];
   onOpenCustomSizeModal?: () => void;
   onOpenPngSplitter?: () => void;
@@ -36,19 +42,23 @@ export const BatchToolsSidebar: React.FC<BatchToolsSidebarProps> = ({
   onUpdatePhoto,
   onToast,
   smartCrop,
+  activePresetId,
+  onChangeActivePresetId,
+  autoMatchOrientation,
+  onToggleAutoMatchOrientation,
   customPresets = [],
   onOpenCustomSizeModal,
   onOpenPngSplitter,
   isCollapsed = false,
   onToggleCollapse,
 }) => {
-  const [batchPresetId, setBatchPresetId] = useState<string>('60x90_rect');
   const [batchQuantity, setBatchQuantity] = useState<number>(1);
   const [enhanceStrength, setEnhanceStrength] = useState<number>(50);
   const [isEnhancingAll, setIsEnhancingAll] = useState<boolean>(false);
   const [isRevertingAll, setIsRevertingAll] = useState<boolean>(false);
   const [isAutoAdjustingAll, setIsAutoAdjustingAll] = useState<boolean>(false);
   const [isRevertingColorsAll, setIsRevertingColorsAll] = useState<boolean>(false);
+  const [autoUpscaleDpi, setAutoUpscaleDpi] = useState<boolean>(true);
 
   const allPresets = [...customPresets, ...DEFAULT_SIZE_PRESETS];
   // Group presets by category
@@ -124,19 +134,56 @@ export const BatchToolsSidebar: React.FC<BatchToolsSidebarProps> = ({
   };
 
   // 1. Batch Size Preset Change
-  const handleApplyPresetToAll = (presetOverride?: SizePreset) => {
+  const handleApplyPresetToAll = (
+    presetOverride?: SizePreset,
+    forceOrientation?: 'auto' | 'portrait' | 'landscape'
+  ) => {
     if (photos.length === 0) {
       onToast('error', 'Chưa có ảnh nào để áp dụng kích thước!');
       return;
     }
-    const preset = presetOverride || allPresets.find((p) => p.id === batchPresetId);
+    const preset = presetOverride || allPresets.find((p) => p.id === activePresetId) || DEFAULT_SIZE_PRESETS[0];
     if (!preset) return;
 
+    let portraitCount = 0;
+    let landscapeCount = 0;
+
     photos.forEach((photo) => {
-      const crop = calculateCrop(photo.imgWidth, photo.imgHeight, preset.width, preset.height, smartCrop);
+      let finalW = preset.width;
+      let finalH = preset.height;
+
+      if (preset.shape === 'rect') {
+        const orientationMode = forceOrientation || (autoMatchOrientation ? 'auto' : 'none');
+        if (orientationMode === 'auto') {
+          const oriented = getOrientedDimensions(
+            photo.imgWidth,
+            photo.imgHeight,
+            preset.width,
+            preset.height,
+            true,
+            preset.shape
+          );
+          finalW = oriented.targetWidth;
+          finalH = oriented.targetHeight;
+        } else if (orientationMode === 'portrait') {
+          finalW = Math.min(preset.width, preset.height);
+          finalH = Math.max(preset.width, preset.height);
+        } else if (orientationMode === 'landscape') {
+          finalW = Math.max(preset.width, preset.height);
+          finalH = Math.min(preset.width, preset.height);
+        }
+      }
+
+      if (finalH >= finalW) {
+        portraitCount++;
+      } else {
+        landscapeCount++;
+      }
+
+      const crop = calculateCrop(photo.imgWidth, photo.imgHeight, finalW, finalH, smartCrop);
       onUpdatePhoto(photo.id, {
-        targetWidth: preset.width,
-        targetHeight: preset.height,
+        targetWidth: finalW,
+        targetHeight: finalH,
         shape: preset.shape,
         cropX: crop.cropX,
         cropY: crop.cropY,
@@ -146,7 +193,12 @@ export const BatchToolsSidebar: React.FC<BatchToolsSidebarProps> = ({
       });
     });
 
-    onToast('success', `Đã đồng bộ tất cả sang kích thước: ${preset.label}`);
+    const isBoth = portraitCount > 0 && landscapeCount > 0;
+    const detailMsg = isBoth
+      ? ` (${portraitCount} ảnh dọc, ${landscapeCount} ảnh ngang)`
+      : ` (${photos.length} ảnh)`;
+
+    onToast('success', `Đã đồng bộ ${photos.length} ảnh sang khổ ${preset.label}${detailMsg}`);
   };
 
   // 2. Batch Quantity
@@ -171,14 +223,14 @@ export const BatchToolsSidebar: React.FC<BatchToolsSidebarProps> = ({
     onToast('info', `Đã ${delta > 0 ? 'tăng' : 'giảm'} 1 bản in cho tất cả ảnh`);
   };
 
-  // 3. Batch Enhance All (Smart Sharpen & Contrast)
+  // 3. Batch Enhance All (Smart Sharpen, Contrast & Super-Resolution Upscale)
   const handleEnhanceAll = async () => {
     if (photos.length === 0 || isEnhancingAll) {
       if (photos.length === 0) onToast('error', 'Chưa có ảnh nào để làm nét!');
       return;
     }
     setIsEnhancingAll(true);
-    onToast('info', `Đang phục hồi độ nét (${enhanceStrength}%) cho ${photos.length} ảnh...`);
+    onToast('info', `Đang tối ưu độ nét & nâng DPI cho ${photos.length} ảnh...`);
 
     const sharpenVal = (enhanceStrength / 100) * 0.85 + 0.1;
     const contrastVal = (enhanceStrength / 100) * 0.16 + 0.04;
@@ -188,20 +240,50 @@ export const BatchToolsSidebar: React.FC<BatchToolsSidebarProps> = ({
       const photo = photos[i];
       try {
         const sourceForEnhancing = photo.rawOriginalSrc || photo.originalSrc;
+        const rawW = photo.rawOriginalWidth || photo.imgWidth;
+        const rawH = photo.rawOriginalHeight || photo.imgHeight;
+        const rawCrop = photo.rawOriginalCrop || {
+          cropX: photo.cropX,
+          cropY: photo.cropY,
+          cropW: photo.cropW,
+          cropH: photo.cropH,
+        };
+
+        const factor = autoUpscaleDpi
+          ? getRecommendedUpscaleFactor(rawW, rawH, photo.targetWidth, photo.targetHeight)
+          : 1;
+
         const result = await enhanceImageQuality(sourceForEnhancing, {
           sharpenAmount: sharpenVal,
           contrastAmount: contrastVal,
           brightnessAmount: 0.04,
           vibranceAmount: 0.18,
+          upscaleFactor: factor,
         });
 
         const previewSrc = await createOptimizedPreview(result.enhancedSrc, 800, 0.85);
+
+        // Scale crop coordinates proportionally
+        const newCropX = Math.round(rawCrop.cropX * factor);
+        const newCropY = Math.round(rawCrop.cropY * factor);
+        const newCropW = Math.round(rawCrop.cropW * factor);
+        const newCropH = Math.round(rawCrop.cropH * factor);
 
         onUpdatePhoto(photo.id, {
           originalSrc: result.enhancedSrc,
           previewSrc: previewSrc,
           rawOriginalSrc: sourceForEnhancing,
+          rawOriginalWidth: rawW,
+          rawOriginalHeight: rawH,
+          rawOriginalCrop: rawCrop,
           isEnhanced: true,
+          upscaleFactor: factor,
+          imgWidth: result.newWidth,
+          imgHeight: result.newHeight,
+          cropX: newCropX,
+          cropY: newCropY,
+          cropW: newCropW,
+          cropH: newCropH,
         });
         successCount++;
       } catch (e) {
@@ -213,7 +295,7 @@ export const BatchToolsSidebar: React.FC<BatchToolsSidebarProps> = ({
     }
 
     setIsEnhancingAll(false);
-    onToast('success', `Đã nâng cao chất lượng (${enhanceStrength}%) cho ${successCount} ảnh!`);
+    onToast('success', `Đã nâng cao chất lượng & DPI cho ${successCount} ảnh!`);
   };
 
   // 4. Batch Revert All to Raw Original
@@ -225,11 +307,26 @@ export const BatchToolsSidebar: React.FC<BatchToolsSidebarProps> = ({
     for (let i = 0; i < photos.length; i++) {
       const photo = photos[i];
       if (photo.isEnhanced && photo.rawOriginalSrc) {
+        const origW = photo.rawOriginalWidth || photo.imgWidth;
+        const origH = photo.rawOriginalHeight || photo.imgHeight;
+        const origCrop = photo.rawOriginalCrop || {
+          cropX: photo.cropX,
+          cropY: photo.cropY,
+          cropW: photo.cropW,
+          cropH: photo.cropH,
+        };
         const previewSrc = await createOptimizedPreview(photo.rawOriginalSrc, 800, 0.85);
         onUpdatePhoto(photo.id, {
           originalSrc: photo.rawOriginalSrc,
           previewSrc: previewSrc,
           isEnhanced: false,
+          upscaleFactor: 1,
+          imgWidth: origW,
+          imgHeight: origH,
+          cropX: origCrop.cropX,
+          cropY: origCrop.cropY,
+          cropW: origCrop.cropW,
+          cropH: origCrop.cropH,
         });
         revertCount++;
       }
@@ -340,13 +437,13 @@ export const BatchToolsSidebar: React.FC<BatchToolsSidebarProps> = ({
 
             <div className="space-y-1.5">
               <select
-                value={batchPresetId}
+                value={activePresetId}
                 onChange={(e) => {
                   if (e.target.value === '__custom_new__') {
                     if (onOpenCustomSizeModal) onOpenCustomSizeModal();
                     return;
                   }
-                  setBatchPresetId(e.target.value);
+                  onChangeActivePresetId(e.target.value);
                 }}
                 className="w-full bg-white border border-sky-300 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-800 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-400 transition"
               >
@@ -385,6 +482,25 @@ export const BatchToolsSidebar: React.FC<BatchToolsSidebarProps> = ({
                   <span>+ Nhập kích thước tùy chỉnh</span>
                 </button>
               )}
+
+              {/* Tùy chọn tự khớp chiều ảnh */}
+              <label className="flex items-start gap-2 bg-white/80 p-2 rounded-lg border border-sky-200 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={autoMatchOrientation}
+                  onChange={(e) => onToggleAutoMatchOrientation(e.target.checked)}
+                  className="mt-0.5 w-3.5 h-3.5 text-blue-600 rounded border-slate-300 focus:ring-blue-500 cursor-pointer"
+                />
+                <div className="flex-1">
+                  <div className="text-[11px] font-bold text-slate-800 flex items-center gap-1">
+                    <span>Tự khớp chiều theo ảnh</span>
+                    <span className="text-[9px] bg-blue-100 text-blue-700 px-1 rounded font-bold">Khuyên dùng</span>
+                  </div>
+                  <div className="text-[10px] text-slate-500 leading-tight">
+                    Ảnh ngang ↔ Khổ ngang, Ảnh dọc ↔ Khổ dọc. Tránh bị cắt xén nội dung.
+                  </div>
+                </div>
+              </label>
             </div>
 
             {/* Vibrant Blue/Indigo Action Button */}
@@ -398,6 +514,30 @@ export const BatchToolsSidebar: React.FC<BatchToolsSidebarProps> = ({
               <Check className="w-3.5 h-3.5 text-emerald-300" />
               <span>Áp dụng kích thước cho tất cả</span>
             </button>
+
+            {/* Tùy chọn ép cứng Dọc hoặc Ngang khi cần */}
+            <div className="grid grid-cols-2 gap-1.5 pt-0.5">
+              <button
+                type="button"
+                onClick={() => handleApplyPresetToAll(undefined, 'portrait')}
+                disabled={photos.length === 0}
+                className="flex items-center justify-center gap-1 py-1.5 px-2 bg-white hover:bg-slate-100 disabled:opacity-50 border border-sky-200 text-sky-900 rounded-lg text-[10.5px] font-bold transition shadow-2xs cursor-pointer"
+                title="Ép toàn bộ ảnh sang khổ Đứng (Dọc)"
+              >
+                <ArrowUpDown className="w-3 h-3 text-sky-600" />
+                <span>Ép tất cả Dọc</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleApplyPresetToAll(undefined, 'landscape')}
+                disabled={photos.length === 0}
+                className="flex items-center justify-center gap-1 py-1.5 px-2 bg-white hover:bg-slate-100 disabled:opacity-50 border border-sky-200 text-sky-900 rounded-lg text-[10.5px] font-bold transition shadow-2xs cursor-pointer"
+                title="Ép toàn bộ ảnh sang khổ Nằm (Ngang)"
+              >
+                <ArrowLeftRight className="w-3 h-3 text-sky-600" />
+                <span>Ép tất cả Ngang</span>
+              </button>
+            </div>
           </div>
 
           {/* CỤM 2: XOAY & ĐỊNH HƯỚNG (Pastel Indigo) - ĐƯỢC ĐƯA LÊN TRÊN SỐ LƯỢNG */}
@@ -414,12 +554,12 @@ export const BatchToolsSidebar: React.FC<BatchToolsSidebarProps> = ({
             </button>
           </div>
 
-          {/* CỤM 3: SỐ LƯỢNG IN HÀNG LOẠT (Pastel Emerald) */}
+          {/* CỤM 3: NHÂN BẢN HÀNG LOẠT (Pastel Emerald) */}
           <div className="bg-emerald-50/70 rounded-xl p-3.5 border border-emerald-200/90 shadow-2xs space-y-2.5 transition hover:border-emerald-300">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-1.5 text-emerald-950 font-bold">
                 <Layers className="w-3.5 h-3.5 text-emerald-600" />
-                <span className="text-[11px] uppercase tracking-wide">Số lượng in hàng loạt:</span>
+                <span className="text-[11px] uppercase tracking-wide">NHÂN BẢN HÀNG LOẠT</span>
               </div>
               <span className="text-[10px] text-emerald-700 font-bold bg-emerald-100/90 border border-emerald-200 px-1.5 py-0.5 rounded">
                 Bản sao
@@ -461,31 +601,8 @@ export const BatchToolsSidebar: React.FC<BatchToolsSidebarProps> = ({
                 className="flex-1 flex items-center justify-center gap-1 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white px-2.5 py-2 rounded-lg text-xs font-bold shadow-xs transition active:scale-95 whitespace-nowrap cursor-pointer"
               >
                 <Copy className="w-3.5 h-3.5" />
-                <span>Áp dụng SL tất cả</span>
+                <span>Áp dụng tất cả</span>
               </button>
-            </div>
-
-            {/* Quick Preset Pills */}
-            <div className="flex items-center gap-1 pt-0.5">
-              <span className="text-[10px] text-emerald-800/80 font-bold uppercase pr-0.5">Nhanh:</span>
-              {[1, 2, 3, 4, 5].map((num) => (
-                <button
-                  key={num}
-                  type="button"
-                  onClick={() => {
-                    setBatchQuantity(num);
-                    handleApplyQuantityToAll(num);
-                  }}
-                  disabled={photos.length === 0}
-                  className={`flex-1 py-1 rounded-md text-[11px] font-bold border transition active:scale-95 ${
-                    batchQuantity === num
-                      ? 'bg-emerald-600 border-emerald-600 text-white shadow-2xs'
-                      : 'bg-white hover:bg-emerald-100 border-emerald-200 text-emerald-800'
-                  }`}
-                >
-                  {num}
-                </button>
-              ))}
             </div>
 
             {/* Incremental Adjustment Buttons (+1 all / -1 all) */}
@@ -510,66 +627,102 @@ export const BatchToolsSidebar: React.FC<BatchToolsSidebarProps> = ({
           </div>
 
           {/* CỤM 4: TỰ ĐỘNG CÂN CHỈNH MÀU SẮC & ÁNH SÁNG (Pastel Purple) */}
-          <div className="bg-purple-50/70 rounded-xl p-3 border border-purple-200/90 shadow-2xs space-y-2 transition hover:border-purple-300">
-            <button
-              type="button"
-              id="btn-auto-adjust-all"
-              onClick={handleAutoAdjustAll}
-              disabled={isAutoAdjustingAll || photos.length === 0}
-              className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-purple-600 via-indigo-600 to-purple-700 hover:from-purple-700 hover:to-indigo-800 disabled:opacity-50 text-white px-3 py-2.5 rounded-xl text-xs font-bold shadow-sm shadow-purple-500/20 transition active:scale-95 cursor-pointer"
-            >
-              {isAutoAdjustingAll ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin text-white" />
-                  <span>Đang cân chỉnh {photos.length} ảnh...</span>
-                </>
-              ) : (
-                <>
-                  <Sparkles className="w-4 h-4 text-purple-200" />
-                  <span>Tự động cân chỉnh màu TẤT CẢ</span>
-                </>
-              )}
-            </button>
+          <div className="bg-purple-50/70 rounded-xl p-3 border border-purple-200/90 shadow-2xs transition hover:border-purple-300">
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                id="btn-auto-adjust-all"
+                onClick={handleAutoAdjustAll}
+                disabled={isAutoAdjustingAll || photos.length === 0}
+                className="flex-1 flex items-center justify-center gap-2 bg-gradient-to-r from-purple-600 via-indigo-600 to-purple-700 hover:from-purple-700 hover:to-indigo-800 disabled:opacity-50 text-white px-3 py-2.5 rounded-xl text-xs font-bold shadow-sm shadow-purple-500/20 transition active:scale-95 cursor-pointer"
+              >
+                {isAutoAdjustingAll ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin text-white" />
+                    <span>Đang cân chỉnh {photos.length} ảnh...</span>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-4 h-4 text-purple-200" />
+                    <span>Cân chỉnh màu Tất Cả</span>
+                  </>
+                )}
+              </button>
 
-            {/* Nút: Khôi phục màu gốc TẤT CẢ */}
-            <button
-              type="button"
-              id="btn-revert-colors-all"
-              onClick={handleRevertColorsAll}
-              disabled={isRevertingColorsAll || photos.length === 0}
-              className="w-full flex items-center justify-center gap-1.5 bg-white hover:bg-purple-100/80 disabled:opacity-50 text-purple-800 px-3 py-2 rounded-xl text-xs font-bold border border-purple-200 transition active:scale-95 cursor-pointer"
-            >
-              <RotateCcw className="w-3.5 h-3.5 text-purple-600" />
-              <span>Khôi phục màu gốc TẤT CẢ</span>
-            </button>
+              {/* Nút icon xoay: Khôi phục màu gốc tất cả */}
+              <button
+                type="button"
+                id="btn-revert-colors-all"
+                onClick={handleRevertColorsAll}
+                disabled={isRevertingColorsAll || photos.length === 0}
+                className="w-10 h-10 flex items-center justify-center bg-white hover:bg-purple-100 disabled:opacity-40 disabled:hover:bg-white text-purple-700 rounded-xl border border-purple-200 transition active:scale-95 cursor-pointer shadow-2xs shrink-0"
+                title="Khôi phục màu gốc tất cả"
+              >
+                {isRevertingColorsAll ? (
+                  <Loader2 className="w-4 h-4 animate-spin text-purple-600" />
+                ) : (
+                  <RotateCcw className="w-4 h-4 text-purple-600" />
+                )}
+              </button>
+            </div>
           </div>
 
           {/* CỤM 5: CHẤT LƯỢNG & ĐỘ NÉT (LÀM NÉT & PHỤC HỒI) (Pastel Amber) */}
           <div className="bg-amber-50/70 rounded-xl p-3 border border-amber-200/90 shadow-2xs space-y-2.5 transition hover:border-amber-300">
-            {/* Main Enhance Button */}
-            <button
-              type="button"
-              id="btn-enhance-all-hd"
-              onClick={handleEnhanceAll}
-              disabled={isEnhancingAll || photos.length === 0}
-              className="w-full flex items-center justify-center gap-1.5 bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 hover:from-amber-600 hover:to-orange-600 disabled:opacity-50 text-white px-3 py-2.5 rounded-xl text-xs font-bold shadow-sm shadow-amber-500/20 transition active:scale-95 cursor-pointer"
-            >
-              {isEnhancingAll ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin text-white" />
-                  <span>Đang tăng chất lượng {photos.length} ảnh...</span>
-                </>
-              ) : (
-                <>
-                  <Sparkles className="w-4 h-4 text-amber-200" />
-                  <span>Tăng chất lượng TẤT CẢ</span>
-                </>
-              )}
-            </button>
+            {/* Main Enhance Button + Revert Icon Button on 1 row */}
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                id="btn-enhance-all-hd"
+                onClick={handleEnhanceAll}
+                disabled={isEnhancingAll || photos.length === 0}
+                className="flex-1 flex items-center justify-center gap-1.5 bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 hover:from-amber-600 hover:to-orange-600 disabled:opacity-50 text-white px-3 py-2.5 rounded-xl text-xs font-bold shadow-sm shadow-amber-500/20 transition active:scale-95 cursor-pointer"
+              >
+                {isEnhancingAll ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin text-white" />
+                    <span>Đang tăng chất lượng {photos.length} ảnh...</span>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-4 h-4 text-amber-200" />
+                    <span>Tăng chất lượng Tất Cả</span>
+                  </>
+                )}
+              </button>
+
+              {/* Nút icon xoay: Khôi phục ảnh gốc tất cả */}
+              <button
+                type="button"
+                id="btn-revert-all-original"
+                onClick={handleRevertAllToOriginal}
+                disabled={isRevertingAll || photos.length === 0 || enhancedCount === 0}
+                className="w-10 h-10 flex items-center justify-center bg-white hover:bg-amber-100 disabled:opacity-40 disabled:hover:bg-white text-amber-900 border border-amber-200 rounded-xl transition active:scale-95 cursor-pointer shadow-2xs shrink-0"
+                title={enhancedCount > 0 ? `Khôi phục ảnh gốc (${enhancedCount} ảnh đã làm nét)` : 'Khôi phục ảnh gốc tất cả'}
+              >
+                {isRevertingAll ? (
+                  <Loader2 className="w-4 h-4 animate-spin text-amber-700" />
+                ) : (
+                  <RotateCcw className="w-4 h-4 text-amber-700" />
+                )}
+              </button>
+            </div>
 
             {/* Sharpness & Quality Intensity Slider Box */}
-            <div className="bg-white border border-amber-200 rounded-lg p-2.5 space-y-1.5">
-              <div className="flex items-center justify-between text-[11px] font-semibold text-slate-700">
+            <div className="bg-white border border-amber-200 rounded-lg p-2.5 space-y-2">
+              <label className="flex items-center gap-2 text-[11px] font-medium text-slate-700 bg-amber-100/60 p-2 rounded-lg cursor-pointer select-none border border-amber-200/80">
+                <input
+                  type="checkbox"
+                  checked={autoUpscaleDpi}
+                  onChange={(e) => setAutoUpscaleDpi(e.target.checked)}
+                  className="rounded border-amber-300 text-amber-600 focus:ring-amber-500 w-4 h-4 cursor-pointer"
+                />
+                <span className="leading-tight">
+                  <strong className="text-amber-950 font-bold">Nâng DPI x2/x4 AI</strong> cho ảnh mờ
+                </span>
+              </label>
+
+              <div className="flex items-center justify-between text-[11px] font-semibold text-slate-700 pt-0.5">
                 <span className="flex items-center gap-1 text-amber-900 font-bold">
                   <Sparkles className="w-3.5 h-3.5 text-amber-500" />
                   <span>Mức độ làm nét:</span>
@@ -595,19 +748,6 @@ export const BatchToolsSidebar: React.FC<BatchToolsSidebarProps> = ({
                 <span>Cực nét (100%)</span>
               </div>
             </div>
-
-            {/* Revert to Original All Button */}
-            <button
-              type="button"
-              id="btn-revert-all-original"
-              onClick={handleRevertAllToOriginal}
-              disabled={isRevertingAll || photos.length === 0 || enhancedCount === 0}
-              className="w-full flex items-center justify-center gap-1.5 bg-white hover:bg-amber-100/70 disabled:opacity-40 disabled:hover:bg-white text-amber-900 border border-amber-200 px-3 py-1.5 rounded-lg text-xs font-bold transition active:scale-95 cursor-pointer"
-              title="Khôi phục lại toàn bộ ảnh gốc ban đầu"
-            >
-              <Undo2 className="w-3.5 h-3.5 text-amber-700" />
-              <span>Khôi phục ảnh gốc TẤT CẢ {enhancedCount > 0 ? `(${enhancedCount})` : ''}</span>
-            </button>
           </div>
         </div>
       )}
