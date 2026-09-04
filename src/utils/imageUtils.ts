@@ -63,18 +63,18 @@ export async function createOptimizedPreview(
     const targetW = Math.max(1, Math.round(w * scale));
     const targetH = Math.max(1, Math.round(h * scale));
 
+    const isPng = src.startsWith('data:image/png') || src.includes('.png');
     const canvas = document.createElement('canvas');
     canvas.width = targetW;
     canvas.height = targetH;
-    const ctx = canvas.getContext('2d', { alpha: false });
+    const ctx = canvas.getContext('2d', isPng ? undefined : { alpha: false });
     if (!ctx) return src;
 
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = 'medium';
     ctx.drawImage(img, 0, 0, targetW, targetH);
 
-    // Prefer webp for smaller memory footprint, fallback to jpeg
-    return canvas.toDataURL('image/jpeg', quality);
+    return isPng ? canvas.toDataURL('image/png') : canvas.toDataURL('image/jpeg', quality);
   } catch (e) {
     console.warn('Failed to create optimized preview, falling back to original', e);
     return src;
@@ -100,10 +100,54 @@ export async function rotateImageBase64(src: string, angle = 90): Promise<string
     ctx.rotate((angle * Math.PI) / 180);
     ctx.drawImage(img, -img.naturalWidth / 2, -img.naturalHeight / 2);
 
-    return canvas.toDataURL('image/jpeg', 0.95);
+    const isPng = src.startsWith('data:image/png') || src.includes('.png');
+    return isPng ? canvas.toDataURL('image/png') : canvas.toDataURL('image/jpeg', 0.95);
   } catch (err) {
     console.error('Error rotating image:', err);
     return src;
+  }
+}
+
+/**
+ * Crops a defined sub-rectangle from a base64 or URL image and returns a new base64 image with its new dimensions.
+ */
+export async function cropImageToCanvas(
+  src: string,
+  cropArea: { x: number; y: number; w: number; h: number }
+): Promise<{ croppedSrc: string; width: number; height: number }> {
+  try {
+    const img = await loadImage(src);
+    const naturalW = img.naturalWidth || img.width;
+    const naturalH = img.naturalHeight || img.height;
+
+    // Clamp coordinates safely within source image bounds
+    const sx = Math.max(0, Math.min(Math.round(cropArea.x), naturalW - 1));
+    const sy = Math.max(0, Math.min(Math.round(cropArea.y), naturalH - 1));
+    const sw = Math.max(1, Math.min(Math.round(cropArea.w), naturalW - sx));
+    const sh = Math.max(1, Math.min(Math.round(cropArea.h), naturalH - sy));
+
+    const canvas = document.createElement('canvas');
+    canvas.width = sw;
+    canvas.height = sh;
+
+    const isPng = src.startsWith('data:image/png') || src.includes('.png');
+    const ctx = canvas.getContext('2d', isPng ? undefined : { alpha: false });
+    if (!ctx) throw new Error('Failed to get canvas 2d context');
+
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+
+    ctx.drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
+
+    const croppedSrc = isPng ? canvas.toDataURL('image/png') : canvas.toDataURL('image/jpeg', 0.95);
+    return {
+      croppedSrc,
+      width: sw,
+      height: sh,
+    };
+  } catch (err) {
+    console.error('Error cropping image:', err);
+    throw err;
   }
 }
 

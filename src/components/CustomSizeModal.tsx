@@ -11,6 +11,7 @@ import {
   Sparkles,
   Layers,
   Info,
+  ArrowUpDown,
 } from 'lucide-react';
 import { SizePreset, ShapeType, PhotoItem } from '../types';
 
@@ -86,6 +87,15 @@ export const CustomSizeModal: React.FC<CustomSizeModalProps> = ({
     if (newShape === 'circle' || newShape === 'heart') {
       setHeightInput(widthInput);
     }
+  };
+
+  // Swap width and height (Cao thành Rộng, Rộng thành Cao)
+  const handleSwapDimensions = () => {
+    if (shape === 'circle' || shape === 'heart') return;
+    const oldW = widthInput;
+    const oldH = heightInput;
+    setWidthInput(oldH);
+    setHeightInput(oldW);
   };
 
   const handleUnitToggle = (newUnit: 'cm' | 'mm') => {
@@ -318,7 +328,7 @@ export const CustomSizeModal: React.FC<CustomSizeModalProps> = ({
               {/* Dimensions Inputs + Live Visual Preview */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-center bg-slate-50/70 p-3.5 rounded-xl border border-slate-200">
                 {/* Inputs */}
-                <div className="space-y-3">
+                <div className="space-y-2.5">
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1">
                       {shape === 'circle' ? `Đường kính (${unit})` : `Chiều rộng (${unit})`}
@@ -336,6 +346,23 @@ export const CustomSizeModal: React.FC<CustomSizeModalProps> = ({
                         {unit}
                       </span>
                     </div>
+                  </div>
+
+                  {/* Nút Hoán đổi Cao ⇄ Rộng */}
+                  <div className="flex items-center justify-center -my-0.5">
+                    <div className="h-px bg-slate-200 flex-1" />
+                    <button
+                      type="button"
+                      id="btn-swap-dimensions"
+                      onClick={handleSwapDimensions}
+                      disabled={shape === 'circle' || shape === 'heart'}
+                      title="Hoán đổi kích thước: Rộng ⇄ Cao"
+                      className="mx-2 px-3 py-1 bg-white hover:bg-pink-50 text-slate-600 hover:text-pink-600 border border-slate-200 hover:border-pink-300 rounded-full shadow-2xs text-[11px] font-bold flex items-center gap-1.5 transition-all cursor-pointer group disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      <ArrowUpDown className="w-3.5 h-3.5 text-pink-600 transition-transform duration-200 group-hover:rotate-180" />
+                      <span>Đổi chiều (Rộng ⇄ Cao)</span>
+                    </button>
+                    <div className="h-px bg-slate-200 flex-1" />
                   </div>
 
                   <div>
@@ -363,9 +390,23 @@ export const CustomSizeModal: React.FC<CustomSizeModalProps> = ({
 
                   {/* Live Preview Box */}
                   <div className="flex flex-col items-center justify-center p-3 bg-white rounded-lg border border-slate-200/80 shadow-2xs h-full min-h-[160px]">
-                    <span className="text-[10px] font-bold text-slate-400 uppercase mb-2">
-                      Xem trước tỷ lệ thực
-                    </span>
+                    <div className="flex items-center justify-between w-full mb-2">
+                      <span className="text-[10px] font-bold text-slate-400 uppercase">
+                        Xem trước tỷ lệ thực
+                      </span>
+                      {shape !== 'circle' && shape !== 'heart' && (
+                        <button
+                          type="button"
+                          id="btn-quick-swap-preview"
+                          onClick={handleSwapDimensions}
+                          title="Hoán đổi chiều: Rộng ⇄ Cao"
+                          className="text-[10px] font-bold text-pink-600 hover:text-pink-700 bg-pink-50 hover:bg-pink-100 px-2 py-0.5 rounded flex items-center gap-1 transition cursor-pointer"
+                        >
+                          <ArrowUpDown className="w-3 h-3" />
+                          <span>Đổi chiều</span>
+                        </button>
+                      )}
+                    </div>
                     <div className="flex items-center justify-center w-[130px] h-[130px] bg-slate-50/60 rounded border border-dashed border-slate-200 p-1">
                       {shape === 'heart' ? (
                         <div

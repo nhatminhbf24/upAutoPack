@@ -7,7 +7,6 @@ import {
   Check,
   Undo2,
   Loader2,
-  Sliders,
   Maximize2,
   Layers,
   Wand2,
@@ -511,14 +510,7 @@ export const BatchToolsSidebar: React.FC<BatchToolsSidebarProps> = ({
           </div>
 
           {/* CỤM 4: TỰ ĐỘNG CÂN CHỈNH MÀU SẮC & ÁNH SÁNG (Pastel Purple) */}
-          <div className="bg-purple-50/70 rounded-xl p-3.5 border border-purple-200/90 shadow-2xs space-y-2.5 transition hover:border-purple-300">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-1.5 text-purple-950 font-bold">
-                <Sliders className="w-3.5 h-3.5 text-purple-600" />
-                <span className="text-[11px] uppercase tracking-wide">Cân chỉnh màu sắc & sáng:</span>
-              </div>
-            </div>
-
+          <div className="bg-purple-50/70 rounded-xl p-3 border border-purple-200/90 shadow-2xs space-y-2 transition hover:border-purple-300">
             <button
               type="button"
               id="btn-auto-adjust-all"
@@ -553,17 +545,7 @@ export const BatchToolsSidebar: React.FC<BatchToolsSidebarProps> = ({
           </div>
 
           {/* CỤM 5: CHẤT LƯỢNG & ĐỘ NÉT (LÀM NÉT & PHỤC HỒI) (Pastel Amber) */}
-          <div className="bg-amber-50/70 rounded-xl p-3.5 border border-amber-200/90 shadow-2xs space-y-2.5 transition hover:border-amber-300">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-1.5 text-amber-950 font-bold">
-                <Sparkles className="w-3.5 h-3.5 text-amber-600" />
-                <span className="text-[11px] uppercase tracking-wide">Làm nét & Độ phân giải:</span>
-              </div>
-              <span className="text-[10px] text-amber-700 font-bold bg-amber-100/90 border border-amber-200 px-1.5 py-0.5 rounded">
-                AI / HD
-              </span>
-            </div>
-
+          <div className="bg-amber-50/70 rounded-xl p-3 border border-amber-200/90 shadow-2xs space-y-2.5 transition hover:border-amber-300">
             {/* Main Enhance Button */}
             <button
               type="button"

@@ -13,9 +13,10 @@ import {
   ChevronUp,
   ChevronDown,
   GripVertical,
+  AlertTriangle,
 } from 'lucide-react';
 import { PhotoItem, DEFAULT_SIZE_PRESETS, SizePreset } from '../types';
-import { rotateImageBase64, calculateCrop } from '../utils/imageUtils';
+import { rotateImageBase64, calculateCrop, createOptimizedPreview } from '../utils/imageUtils';
 import { enhanceImageQuality, calculatePrintDPI } from '../utils/imageEnhancer';
 
 interface ImageListSidebarProps {
@@ -48,6 +49,8 @@ export const ImageListSidebar: React.FC<ImageListSidebarProps> = ({
   onToggleCollapse,
 }) => {
   const [enhancingId, setEnhancingId] = useState<string | null>(null);
+  const [rotatingId, setRotatingId] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   const totalCopies = photos.reduce((acc, p) => acc + (p.qty || 1), 0);
 
@@ -62,8 +65,10 @@ export const ImageListSidebar: React.FC<ImageListSidebarProps> = ({
     try {
       if (photo.isEnhanced && photo.rawOriginalSrc) {
         // Revert to raw original
+        const previewSrc = await createOptimizedPreview(photo.rawOriginalSrc, 800, 0.85);
         onUpdatePhoto(photo.id, {
           originalSrc: photo.rawOriginalSrc,
+          previewSrc: previewSrc,
           isEnhanced: false,
         });
         onToast('info', 'Đã khôi phục ảnh gốc ban đầu');
@@ -77,8 +82,10 @@ export const ImageListSidebar: React.FC<ImageListSidebarProps> = ({
           vibranceAmount: 0.18,
         });
 
+        const previewSrc = await createOptimizedPreview(result.enhancedSrc, 800, 0.85);
         onUpdatePhoto(photo.id, {
           originalSrc: result.enhancedSrc,
+          previewSrc: previewSrc,
           rawOriginalSrc: sourceForEnhancing,
           isEnhanced: true,
         });
@@ -93,23 +100,36 @@ export const ImageListSidebar: React.FC<ImageListSidebarProps> = ({
   };
 
   const handleRotateSingle = async (photo: PhotoItem) => {
-    const rotatedSrc = await rotateImageBase64(photo.originalSrc, 90);
-    const rawRotated = photo.rawOriginalSrc ? await rotateImageBase64(photo.rawOriginalSrc, 90) : undefined;
-    const newWidth = photo.imgHeight;
-    const newHeight = photo.imgWidth;
-    const crop = calculateCrop(newWidth, newHeight, photo.targetWidth, photo.targetHeight, smartCrop);
+    if (rotatingId === photo.id) return;
+    setRotatingId(photo.id);
 
-    onUpdatePhoto(photo.id, {
-      originalSrc: rotatedSrc,
-      rawOriginalSrc: rawRotated,
-      imgWidth: newWidth,
-      imgHeight: newHeight,
-      cropX: crop.cropX,
-      cropY: crop.cropY,
-      cropW: crop.cropW,
-      cropH: crop.cropH,
-      scale: 1,
-    });
+    try {
+      const rotatedSrc = await rotateImageBase64(photo.originalSrc, 90);
+      const rawRotated = photo.rawOriginalSrc ? await rotateImageBase64(photo.rawOriginalSrc, 90) : undefined;
+      const previewSrc = await createOptimizedPreview(rotatedSrc, 800, 0.85);
+      const newWidth = photo.imgHeight;
+      const newHeight = photo.imgWidth;
+      const crop = calculateCrop(newWidth, newHeight, photo.targetWidth, photo.targetHeight, smartCrop);
+
+      onUpdatePhoto(photo.id, {
+        originalSrc: rotatedSrc,
+        previewSrc: previewSrc,
+        rawOriginalSrc: rawRotated,
+        imgWidth: newWidth,
+        imgHeight: newHeight,
+        cropX: crop.cropX,
+        cropY: crop.cropY,
+        cropW: crop.cropW,
+        cropH: crop.cropH,
+        scale: 1,
+      });
+      onToast('success', `Đã xoay ảnh ${photo.name} 90°`);
+    } catch (err) {
+      console.error('Error rotating single photo:', err);
+      onToast('error', 'Không thể xoay ảnh này');
+    } finally {
+      setRotatingId(null);
+    }
   };
 
   const handleSizePresetChange = (photo: PhotoItem, presetId: string) => {
@@ -205,6 +225,7 @@ export const ImageListSidebar: React.FC<ImageListSidebarProps> = ({
             /* Image Cards List */
             <div className="space-y-2.5">
               {photos.map((photo, index) => {
+                const isConfirmingDelete = confirmDeleteId === photo.id;
                 const currentPresetId = `${photo.targetWidth}x${photo.targetHeight}_${photo.shape}`;
                 const matchedPreset = allPresets.find(
                   (p) => p.width === photo.targetWidth && p.height === photo.targetHeight && p.shape === photo.shape
@@ -222,8 +243,10 @@ export const ImageListSidebar: React.FC<ImageListSidebarProps> = ({
                   <div
                     key={photo.id}
                     id={`photo-card-${photo.id}`}
-                    className={`bg-white border rounded-xl p-3 shadow-2xs hover:shadow-xs transition group flex flex-col gap-2.5 ${
-                      photo.isEnhanced
+                    className={`bg-white border rounded-xl p-3 shadow-2xs hover:shadow-xs transition-all group flex flex-col gap-2.5 ${
+                      isConfirmingDelete
+                        ? 'border-rose-400 ring-2 ring-rose-200/80 bg-rose-50/15'
+                        : photo.isEnhanced
                         ? 'border-amber-300 ring-1 ring-amber-100/80 bg-amber-50/20'
                         : 'border-slate-200/90 hover:border-blue-300'
                     }`}
@@ -433,23 +456,64 @@ export const ImageListSidebar: React.FC<ImageListSidebarProps> = ({
                         <button
                           type="button"
                           onClick={() => handleRotateSingle(photo)}
-                          className="p-1.5 rounded-md bg-white border border-slate-200 text-slate-700 hover:text-blue-600 hover:border-blue-300 transition shadow-2xs cursor-pointer"
+                          disabled={rotatingId === photo.id}
+                          className="p-1.5 rounded-md bg-white border border-slate-200 text-slate-700 hover:text-blue-600 hover:border-blue-300 transition shadow-2xs cursor-pointer disabled:opacity-50"
                           title="Xoay ảnh 90°"
                         >
-                          <RotateCw className="w-3.5 h-3.5" />
+                          {rotatingId === photo.id ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-600" />
+                          ) : (
+                            <RotateCw className="w-3.5 h-3.5" />
+                          )}
                         </button>
 
-                        {/* Delete */}
+                        {/* Delete button (Toggle Confirmation) */}
                         <button
                           type="button"
-                          onClick={() => onRemovePhoto(photo.id)}
-                          className="p-1.5 rounded-md bg-white border border-transparent text-slate-400 hover:text-rose-600 hover:bg-rose-50 hover:border-rose-200 transition cursor-pointer"
-                          title="Xóa ảnh này"
+                          onClick={() => setConfirmDeleteId(isConfirmingDelete ? null : photo.id)}
+                          className={`p-1.5 rounded-md border transition cursor-pointer ${
+                            isConfirmingDelete
+                              ? 'bg-rose-100 border-rose-300 text-rose-700 shadow-2xs'
+                              : 'bg-white border-transparent text-slate-400 hover:text-rose-600 hover:bg-rose-50 hover:border-rose-200'
+                          }`}
+                          title={isConfirmingDelete ? 'Hủy xóa ảnh' : 'Xóa ảnh này'}
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       </div>
                     </div>
+
+                    {/* Inline Delete Confirmation Row */}
+                    {isConfirmingDelete && (
+                      <div className="flex items-center justify-between gap-1.5 p-2 bg-rose-50/95 border border-rose-200 rounded-lg text-xs animate-in fade-in duration-150 shadow-2xs">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <AlertTriangle className="w-3.5 h-3.5 text-rose-600 shrink-0" />
+                          <span className="text-[11px] font-bold text-rose-800 truncate">
+                            Xóa ảnh #{index + 1}?
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => setConfirmDeleteId(null)}
+                            className="px-2.5 py-1 text-[11px] font-semibold text-slate-700 hover:text-slate-900 bg-white hover:bg-slate-100 border border-slate-300 rounded-md transition shadow-2xs cursor-pointer"
+                          >
+                            Trở lại
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              onRemovePhoto(photo.id);
+                              setConfirmDeleteId(null);
+                            }}
+                            className="px-2.5 py-1 text-[11px] font-bold text-white bg-rose-600 hover:bg-rose-700 active:scale-95 rounded-md transition shadow-2xs cursor-pointer flex items-center gap-1"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                            <span>Xác nhận xóa</span>
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 );
               })}

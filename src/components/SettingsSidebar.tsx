@@ -169,12 +169,7 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
           </div>
 
           {/* 2. General Settings (Cài đặt lề & khoảng cách) (Pastel Slate/Indigo) */}
-          <div className="bg-indigo-50/50 rounded-xl p-3.5 border border-indigo-200/80 shadow-2xs space-y-3">
-            <div className="flex items-center gap-1.5 text-indigo-950 font-bold">
-              <Settings2 className="w-4 h-4 text-indigo-600" />
-              <h2 className="text-xs uppercase tracking-wide">Cài đặt lề & khoảng cách</h2>
-            </div>
-
+          <div className="bg-indigo-50/50 rounded-xl p-3 border border-indigo-200/80 shadow-2xs space-y-2.5">
             <div className="grid grid-cols-2 gap-2">
               <div className="bg-white p-2.5 rounded-lg border border-indigo-200 shadow-2xs">
                 <label className="block text-[10px] text-indigo-900 font-bold uppercase mb-1">

@@ -5,6 +5,7 @@ import {
   Maximize2,
   Minimize2,
   RotateCcw,
+  RotateCw,
   Sparkles,
   Info,
   Move,
@@ -16,9 +17,11 @@ import {
   Ruler,
   HelpCircle,
   CheckCircle2,
+  Loader2,
 } from 'lucide-react';
 import { PackedPage, LayoutSettings, PhotoItem, ShapeType, PlacedPhotoItem } from '../types';
 import { A4_WIDTH_MM, A4_HEIGHT_MM } from '../utils/packing';
+import { rotateImageBase64, calculateCrop, createOptimizedPreview } from '../utils/imageUtils';
 
 interface A4PreviewAreaProps {
   pages: PackedPage[];
@@ -63,6 +66,38 @@ export const A4PreviewArea: React.FC<A4PreviewAreaProps> = ({
   // Inter-item Drag & Drop Swap State
   const [draggedPhotoId, setDraggedPhotoId] = useState<string | null>(null);
   const [dragOverPhotoId, setDragOverPhotoId] = useState<string | null>(null);
+  const [rotatingPhotoId, setRotatingPhotoId] = useState<string | null>(null);
+
+  const handleRotateItem = async (photo: PlacedPhotoItem) => {
+    if (rotatingPhotoId === photo.id) return;
+    setRotatingPhotoId(photo.id);
+
+    try {
+      const rotatedSrc = await rotateImageBase64(photo.originalSrc, 90);
+      const rawRotated = photo.rawOriginalSrc ? await rotateImageBase64(photo.rawOriginalSrc, 90) : undefined;
+      const previewSrc = await createOptimizedPreview(rotatedSrc, 800, 0.85);
+      const newWidth = photo.imgHeight;
+      const newHeight = photo.imgWidth;
+      const crop = calculateCrop(newWidth, newHeight, photo.targetWidth, photo.targetHeight, settings.smartCrop);
+
+      onUpdatePhoto(photo.id, {
+        originalSrc: rotatedSrc,
+        previewSrc: previewSrc,
+        rawOriginalSrc: rawRotated,
+        imgWidth: newWidth,
+        imgHeight: newHeight,
+        cropX: crop.cropX,
+        cropY: crop.cropY,
+        cropW: crop.cropW,
+        cropH: crop.cropH,
+        scale: 1,
+      });
+    } catch (err) {
+      console.error('Error rotating item in preview:', err);
+    } finally {
+      setRotatingPhotoId(null);
+    }
+  };
 
   // In-Page Interactive Cropping / Pan State
   const [panningPhotoId, setPanningPhotoId] = useState<string | null>(null);
@@ -548,6 +583,12 @@ export const A4PreviewArea: React.FC<A4PreviewAreaProps> = ({
 
                     const isCircle = item.shape === 'circle';
                     const isHeart = item.shape === 'heart';
+                    const isSquareShape = isCircle || isHeart;
+                    const diam = isSquareShape ? Math.min(item.w, item.h) : 0;
+                    const renderW = isSquareShape ? diam : item.w;
+                    const renderH = isSquareShape ? diam : item.h;
+                    const renderX = isSquareShape ? item.x + (item.w - diam) / 2 : item.x;
+                    const renderY = isSquareShape ? item.y + (item.h - diam) / 2 : item.y;
                     const isDraggingThis = draggedPhotoId === item.id;
                     const isDragOverThis = dragOverPhotoId === item.id;
 
@@ -566,10 +607,10 @@ export const A4PreviewArea: React.FC<A4PreviewAreaProps> = ({
                         title="Kéo thả để đổi vị trí ảnh • Kéo chuột trên ảnh để dịch tâm • Nhấp đúp để chỉnh chi tiết"
                         style={{
                           position: 'absolute',
-                          left: `${item.x}mm`,
-                          top: `${item.y}mm`,
-                          width: `${item.w}mm`,
-                          height: `${item.h}mm`,
+                          left: `${renderX}mm`,
+                          top: `${renderY}mm`,
+                          width: `${renderW}mm`,
+                          height: `${renderH}mm`,
                         }}
                         className={`overflow-hidden select-none cursor-grab active:cursor-grabbing group/box transition-all ${
                           isCircle ? 'shape-circle' : isHeart ? 'shape-heart' : ''
@@ -603,6 +644,24 @@ export const A4PreviewArea: React.FC<A4PreviewAreaProps> = ({
                         >
                           <GripHorizontal className="w-3 h-3 text-slate-200" />
                         </div>
+
+                        {/* Quick Rotate Button (Top Right, visible on hover) */}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleRotateItem(item);
+                          }}
+                          disabled={rotatingPhotoId === item.id}
+                          className="no-print opacity-0 group-hover/box:opacity-100 transition-opacity absolute top-1 right-1 bg-slate-900/80 hover:bg-blue-600 backdrop-blur-xs text-white p-1 rounded cursor-pointer z-20 flex items-center shadow-xs disabled:opacity-50"
+                          title="Xoay ảnh này 90°"
+                        >
+                          {rotatingPhotoId === item.id ? (
+                            <Loader2 className="w-3 h-3 animate-spin text-white" />
+                          ) : (
+                            <RotateCw className="w-3 h-3 text-slate-200 hover:text-white" />
+                          )}
+                        </button>
 
                         {/* Hover Info Tag (Bottom Right, Hidden in Print) */}
                         <div className="no-print opacity-0 group-hover/box:opacity-100 transition-opacity absolute bottom-1 right-1 bg-black/65 backdrop-blur-xs text-white text-[9px] font-mono px-1 py-0.5 rounded pointer-events-none flex items-center gap-0.5 z-20">
