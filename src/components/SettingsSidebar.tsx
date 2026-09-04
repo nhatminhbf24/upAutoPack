@@ -203,11 +203,11 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
               </div>
             </div>
 
-            {/* 1. Tối ưu ghép khít */}
+            {/* 1. Tự động sắp xếp ảnh */}
             <label className="flex items-center justify-between p-2.5 bg-white rounded-lg border border-emerald-300 cursor-pointer hover:bg-emerald-50/60 transition select-none shadow-2xs">
               <div className="flex items-center gap-2">
                 <LayoutGrid className="w-4 h-4 text-emerald-600" />
-                <span className="text-xs font-bold text-emerald-950">Tối ưu ghép khít (Nesting)</span>
+                <span className="text-xs font-bold text-emerald-950">Tự động sắp xếp ảnh</span>
               </div>
               <input
                 type="checkbox"

@@ -81,7 +81,29 @@ export const CropModal: React.FC<CropModalProps> = ({
   }, [initialTab, photo.id]);
 
   const [isMaximized, setIsMaximized] = useState<boolean>(false);
-  const [canvasTheme, setCanvasTheme] = useState<'dark' | 'light'>('dark');
+  const [canvasTheme, setCanvasTheme] = useState<'dark' | 'light'>(() => {
+    try {
+      const saved = localStorage.getItem('daudau_crop_canvas_theme');
+      if (saved === 'dark' || saved === 'light') {
+        return saved;
+      }
+    } catch {
+      // ignore
+    }
+    return 'light';
+  });
+
+  const handleToggleCanvasTheme = () => {
+    setCanvasTheme((prev) => {
+      const nextTheme = prev === 'dark' ? 'light' : 'dark';
+      try {
+        localStorage.setItem('daudau_crop_canvas_theme', nextTheme);
+      } catch {
+        // ignore
+      }
+      return nextTheme;
+    });
+  };
 
   const [scale, setScale] = useState(photo.scale || 1);
   const [cropX, setCropX] = useState(photo.cropX);
@@ -1126,7 +1148,7 @@ export const CropModal: React.FC<CropModalProps> = ({
             {/* Canvas Theme Toggle */}
             <button
               type="button"
-              onClick={() => setCanvasTheme((prev) => (prev === 'dark' ? 'light' : 'dark'))}
+              onClick={handleToggleCanvasTheme}
               className="p-1.5 rounded-xl bg-white border border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition cursor-pointer shadow-2xs"
               title={canvasTheme === 'dark' ? 'Chuyển sang nền canvas sáng' : 'Chuyển sang nền canvas tối (phòng tối studio)'}
             >
