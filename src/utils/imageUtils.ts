@@ -1,6 +1,7 @@
 import JSZip from 'jszip';
 import { PhotoItem, PackedPage, LayoutSettings } from '../types';
 import { MM_TO_PX_300DPI, A4_WIDTH_MM, A4_HEIGHT_MM } from './packing';
+import { renderTextTagOnCanvas } from './textTagUtils';
 
 export function readFileAsDataURL(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -483,6 +484,9 @@ export async function exportPagesToZip(
         console.error('Error drawing image on canvas for zip:', e);
       }
     }
+    
+    // Render Freeform Text Tag / Mã đơn ở lề trang A4
+    renderTextTagOnCanvas(ctx, settings, page.pageNumber, pages.length, isLandscape);
 
     const blob = await new Promise<Blob | null>((resolve) =>
       canvas!.toBlob(resolve, mimeType, 0.98)

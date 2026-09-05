@@ -538,23 +538,60 @@ export default function App() {
       return;
     }
 
-    const clonedPhotos: PhotoItem[] = targetPage.items.map((it, idx) => ({
-      ...it.photo,
-      id: `photo_${Date.now()}_clone_${idx}_${Math.random().toString(36).substring(2, 7)}`,
-      qty: 1,
-    }));
+    const clonedPhotos: PhotoItem[] = targetPage.items.map((it, idx) => {
+      // Tìm photo gốc trong photos hoặc trích xuất đầy đủ từ item đã đặt
+      const sourcePhoto = photos.find((p) => p.id === it.id);
+      const src = sourcePhoto || it;
+
+      return {
+        id: `photo_${Date.now()}_clone_${idx}_${Math.random().toString(36).substring(2, 7)}`,
+        name: src.name ? `${src.name} (Mặt sau)` : `Ảnh mặt sau ${idx + 1}`,
+        originalSrc: src.originalSrc,
+        previewSrc: src.previewSrc,
+        rawOriginalSrc: src.rawOriginalSrc,
+        rawOriginalWidth: src.rawOriginalWidth,
+        rawOriginalHeight: src.rawOriginalHeight,
+        rawOriginalCrop: src.rawOriginalCrop ? { ...src.rawOriginalCrop } : undefined,
+        upscaleFactor: src.upscaleFactor,
+        isEnhanced: src.isEnhanced,
+        adjustments: src.adjustments ? { ...src.adjustments } : undefined,
+        imgWidth: src.imgWidth,
+        imgHeight: src.imgHeight,
+        targetWidth: src.targetWidth,
+        targetHeight: src.targetHeight,
+        shape: src.shape,
+        qty: 1,
+        scale: src.scale ?? 1,
+        cropX: src.cropX ?? 0,
+        cropY: src.cropY ?? 0,
+        cropW: src.cropW ?? src.imgWidth,
+        cropH: src.cropH ?? src.imgHeight,
+        rotation: src.rotation ?? 0,
+        orderTag: src.orderTag,
+      };
+    });
 
     if (!settings.duplexMode) {
       setSettings((prev) => ({ ...prev, duplexMode: true }));
     }
 
-    setPhotos((prev) => [...prev, ...clonedPhotos]);
+    setPhotos((prev) => {
+      // Chèn các ảnh bản sao ngay sau các ảnh của trang được nhân bản để tạo trang mặt sau liền kề
+      const lastItem = targetPage.items[targetPage.items.length - 1];
+      const lastIndex = prev.findIndex((p) => p.id === lastItem.id);
+      if (lastIndex !== -1) {
+        const next = [...prev];
+        next.splice(lastIndex + 1, 0, ...clonedPhotos);
+        return next;
+      }
+      return [...prev, ...clonedPhotos];
+    });
 
     addToast(
       'success',
       `Đã nhân bản ${clonedPhotos.length} ảnh Trang ${pageNumber} làm mặt sau (tự động bật In 2 mặt đối xứng)!`
     );
-  }, [packedPages, settings.duplexMode, setSettings, setPhotos, addToast]);
+  }, [packedPages, photos, settings.duplexMode, setSettings, setPhotos, addToast]);
 
   const handleClonePage1AsBackside = useCallback(() => {
     handleClonePageAsBackside(1);
@@ -823,7 +860,7 @@ export default function App() {
             canRedo={canRedo}
             historyCount={historyCount}
             onBackToHub={() => setActiveView('hub')}
-            onClonePageAsBackside={handleClonePageAsBackside}
+            onUpdateSettings={handleUpdateSettings}
           />
 
           {/* Modal for Fine-Tuned Crop / Pan / Framing / Color Adjustments */}

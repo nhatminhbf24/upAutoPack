@@ -60,16 +60,32 @@ export interface PhotoItem {
   orderTag?: string; // Nhãn mã đơn hoặc tên khách riêng cho ảnh này (ví dụ: #DH01, Khách Tuấn)
 }
 
+export interface FreeformTextTag {
+  enabled: boolean;
+  text: string;
+  includeDateTime: boolean;
+  includePageNumber: boolean;
+  fontSizePt: number; // Cỡ chữ (6 - 18 pt)
+  rotation: 0 | 90 | 180 | 270; // Góc xoay (0 = Ngang, 90 = Dọc mép giấy)
+  xMm: number; // Tọa độ X trên trang A4 (mm)
+  yMm: number; // Tọa độ Y trên trang A4 (mm)
+  color?: string; // Mã màu chữ (mặc định #334155)
+}
+
+export type CutMarkFeature = 'solid' | 'dashed' | 'corner_marks' | 'full_trim_guides';
+
 export interface LayoutSettings {
   margin: number; // mm
   gap: number; // mm
   cutLines: boolean;
-  cutStyle?: 'solid' | 'dashed' | 'corner_marks' | 'full_trim_guides'; // Kiểu dấu cắt: viền liền, nét đứt, dấu góc (Corner Crop Marks), hoặc gióng tràn mép giấy (Full Trim Guides)
+  cutStyle?: CutMarkFeature; // Kiểu dấu cắt: viền liền, nét đứt, dấu góc (Corner Crop Marks), hoặc gióng tràn mép giấy (Full Trim Guides)
+  cutStyles?: CutMarkFeature[]; // Cho phép chọn nhiều chức năng cắt đồng thời (Gióng mép A4, Dấu góc, Nét đứt, Nét liền)
   bleed?: number; // Tràn lề bù xén (0, 1, 2 mm) để tránh viền trắng khi cắt
-  printSlug?: boolean; // In thông tin đơn hàng / mã đơn ở lề trang giấy A4
+  printSlug?: boolean; // In thông tin đơn hàng / mã đơn ở lề trang giấy A4 (tương thích ngược)
   slugPosition?: 'bottom' | 'top'; // Vị trí in mã đơn: 'bottom' (Chân trang - khuyên dùng vì rộng rãi) hoặc 'top' (Đầu trang)
   printMicroSlugs?: boolean; // In mã đơn mini ngoài mép viền xén từng ảnh (xén dao xong sẽ bay mất, không phạm vào ảnh)
   orderSlug?: string; // Tên khách hoặc mã đơn hàng chung (ví dụ: #DH1024 - Khách: Nguyễn Văn A)
+  textTag?: FreeformTextTag; // Dòng chữ / mã đơn tự do (kéo thả, xoay dọc/ngang, cỡ chữ tùy chỉnh, ngày giờ tự động)
   duplexMode?: boolean; // Chế độ in 2 mặt: Tự động lật đối xứng trang chẵn (Mirror X) để khớp mặt sau
   smartCrop: boolean;
   autoNesting?: boolean; // Tự động xoay ngang/dọc ghép khít tối đa tiết kiệm giấy A4

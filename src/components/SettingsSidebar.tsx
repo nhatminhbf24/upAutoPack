@@ -18,10 +18,13 @@ import {
   Crosshair,
   Ruler,
   Copy,
+  Type,
+  Clock,
 } from 'lucide-react';
-import { LayoutSettings, SizePreset } from '../types';
+import { LayoutSettings, SizePreset, FreeformTextTag, CutMarkFeature } from '../types';
 import { Uploader } from './Uploader';
 import { PhotoItem } from '../types';
+import { A4_WIDTH_MM, A4_HEIGHT_MM } from '../utils/packing';
 
 interface SettingsSidebarProps {
   settings: LayoutSettings;
@@ -76,19 +79,6 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
 }) => {
   const projectInputRef = useRef<HTMLInputElement | null>(null);
 
-  // Thống kê các nhãn mã đơn đã gán trên các ảnh
-  const orderTagsSummary = React.useMemo(() => {
-    if (!photos || photos.length === 0) return [];
-    const tagMap = new Map<string, number>();
-    photos.forEach((p) => {
-      const tag = p.orderTag?.trim();
-      if (tag) {
-        tagMap.set(tag, (tagMap.get(tag) || 0) + (p.qty || 1));
-      }
-    });
-    return Array.from(tagMap.entries()).map(([tag, count]) => ({ tag, count }));
-  }, [photos]);
-
   const handleProjectFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file && onImportProject) {
@@ -97,6 +87,35 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
     if (e.target) {
       e.target.value = '';
     }
+  };
+
+  const isLandscape = settings.paperOrientation === 'landscape';
+  const pageW_mm = isLandscape ? A4_HEIGHT_MM : A4_WIDTH_MM;
+  const pageH_mm = isLandscape ? A4_WIDTH_MM : A4_HEIGHT_MM;
+
+  const isTagEnabled = Boolean(settings.textTag?.enabled || settings.printSlug);
+  const textTag: FreeformTextTag = settings.textTag || {
+    enabled: isTagEnabled,
+    text: settings.orderSlug || '',
+    includeDateTime: true,
+    includePageNumber: true,
+    fontSizePt: 8,
+    rotation: 0,
+    xMm: Math.max(4, settings.margin || 5),
+    yMm: (settings.slugPosition || 'bottom') === 'top' ? 4 : Math.max(10, pageH_mm - 5.5),
+    color: '#334155',
+  };
+
+  const isBleedEnabled = Boolean(settings.bleed && settings.bleed > 0);
+  const currentBleed = isBleedEnabled ? (settings.bleed as number) : 1;
+
+  const handleUpdateTag = (updates: Partial<FreeformTextTag>) => {
+    const updated: FreeformTextTag = { ...textTag, ...updates };
+    onUpdateSettings({
+      textTag: updated,
+      printSlug: updated.enabled,
+      orderSlug: updated.text,
+    });
   };
 
   return (
@@ -177,12 +196,7 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
           </div>
 
           {/* 1. Uploader Box (Tải ảnh vào trang) (Pastel Rose) */}
-          <div className="bg-rose-50/60 rounded-xl p-3.5 border border-rose-200/80 shadow-2xs space-y-2.5">
-            <div className="flex items-center gap-1.5 text-rose-950 font-bold">
-              <FileImage className="w-4 h-4 text-rose-600" />
-              <h2 className="text-xs uppercase tracking-wide">Tải ảnh vào trang</h2>
-            </div>
-
+          <div className="bg-rose-50/60 rounded-xl p-3 border border-rose-200/80 shadow-2xs">
             <Uploader
               onAddPhotos={onAddPhotos}
               onToast={onToast}
@@ -255,91 +269,189 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
                 />
               </label>
 
-              {settings.cutLines && (
-                <div className="pt-1.5 border-t border-slate-100 flex items-center gap-1.5 text-[10px]">
-                  <span className="text-slate-500 font-medium shrink-0">Kiểu:</span>
-                  <div className="grid grid-cols-2 gap-1 flex-1">
-                    <button
-                      type="button"
-                      onClick={() => onUpdateSettings({ cutStyle: 'full_trim_guides' })}
-                      className={`py-1.5 px-1 rounded text-center font-bold transition flex items-center justify-center gap-1 cursor-pointer ${
-                        settings.cutStyle === 'full_trim_guides'
-                          ? 'bg-blue-600 text-white shadow-2xs'
-                          : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                      }`}
-                      title="Đường gióng thước tràn mép giấy A4 (Full Trim Guides) - Vạch gióng ra tận biên giấy giúp đặt thước nhôm dài hoặc cắt bàn gạt thẳng tắp 100%"
-                    >
-                      <Ruler className="w-3 h-3" />
-                      <span>Gióng mép A4</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => onUpdateSettings({ cutStyle: 'corner_marks' })}
-                      className={`py-1.5 px-1 rounded text-center font-bold transition flex items-center justify-center gap-1 cursor-pointer ${
-                        (settings.cutStyle || 'dashed') === 'corner_marks'
-                          ? 'bg-blue-600 text-white shadow-2xs'
-                          : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                      }`}
-                      title="Dấu góc chữ thập chuẩn nhà in (Corner Crop Marks) - Không làm dính nét mực vào mép ảnh khi cắt"
-                    >
-                      <Crosshair className="w-3 h-3" />
-                      <span>Dấu góc</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => onUpdateSettings({ cutStyle: 'dashed' })}
-                      className={`py-1.5 px-1 rounded text-center font-bold transition cursor-pointer ${
-                        (settings.cutStyle || 'dashed') === 'dashed'
-                          ? 'bg-blue-600 text-white shadow-2xs'
-                          : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                      }`}
-                      title="Nét đứt mờ xung quanh"
-                    >
-                      Nét đứt
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => onUpdateSettings({ cutStyle: 'solid' })}
-                      className={`py-1.5 px-1 rounded text-center font-bold transition cursor-pointer ${
-                        settings.cutStyle === 'solid'
-                          ? 'bg-blue-600 text-white shadow-2xs'
-                          : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                      }`}
-                      title="Nét liền mảnh"
-                    >
-                      Nét liền
-                    </button>
+              {settings.cutLines && (() => {
+                const activeCutStyles: CutMarkFeature[] =
+                  settings.cutStyles && settings.cutStyles.length > 0
+                    ? settings.cutStyles
+                    : settings.cutStyle
+                    ? [settings.cutStyle]
+                    : ['dashed'];
+
+                const toggleFeature = (feat: CutMarkFeature) => {
+                  let next = [...activeCutStyles];
+                  if (next.includes(feat)) {
+                    // Bấm vào tính năng đang bật -> Tắt tính năng đó
+                    next = next.filter((f) => f !== feat);
+                  } else {
+                    // Bấm vào tính năng đang tắt -> Bật tính năng đó
+                    if (feat === 'solid') {
+                      // Nét liền và Nét đứt là 2 kiểu viền ảnh, nếu chọn nét liền thì bỏ nét đứt
+                      next = next.filter((f) => f !== 'dashed');
+                    } else if (feat === 'dashed') {
+                      next = next.filter((f) => f !== 'solid');
+                    }
+                    next.push(feat);
+                  }
+                  onUpdateSettings({
+                    cutStyles: next,
+                    cutStyle: next[0] || 'dashed',
+                  });
+                };
+
+                return (
+                  <div className="pt-1.5 border-t border-slate-100 flex items-center gap-1.5 text-[10px]">
+                    <span className="text-slate-500 font-medium shrink-0">Kiểu:</span>
+                    <div className="grid grid-cols-2 gap-1 flex-1">
+                      <button
+                        type="button"
+                        onClick={() => toggleFeature('full_trim_guides')}
+                        className={`py-1.5 px-1 rounded text-center font-bold transition flex items-center justify-center gap-1 cursor-pointer ${
+                          activeCutStyles.includes('full_trim_guides')
+                            ? 'bg-blue-600 text-white shadow-2xs'
+                            : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                        }`}
+                        title="Đường gióng thước tràn mép giấy A4 (Full Trim Guides) - Vạch gióng ra tận biên giấy giúp đặt thước nhôm dài hoặc cắt bàn gạt thẳng tắp 100%"
+                      >
+                        <Ruler className="w-3 h-3" />
+                        <span>Gióng mép A4</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => toggleFeature('corner_marks')}
+                        className={`py-1.5 px-1 rounded text-center font-bold transition flex items-center justify-center gap-1 cursor-pointer ${
+                          activeCutStyles.includes('corner_marks')
+                            ? 'bg-blue-600 text-white shadow-2xs'
+                            : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                        }`}
+                        title="Dấu góc chữ thập chuẩn nhà in (Corner Crop Marks) - Không làm dính nét mực vào mép ảnh khi cắt"
+                      >
+                        <Crosshair className="w-3 h-3" />
+                        <span>Dấu góc</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => toggleFeature('dashed')}
+                        className={`py-1.5 px-1 rounded text-center font-bold transition cursor-pointer ${
+                          activeCutStyles.includes('dashed')
+                            ? 'bg-blue-600 text-white shadow-2xs'
+                            : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                        }`}
+                        title="Nét đứt mờ xung quanh viền ảnh"
+                      >
+                        Nét đứt
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => toggleFeature('solid')}
+                        className={`py-1.5 px-1 rounded text-center font-bold transition cursor-pointer ${
+                          activeCutStyles.includes('solid')
+                            ? 'bg-blue-600 text-white shadow-2xs'
+                            : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                        }`}
+                        title="Nét liền mảnh xung quanh viền ảnh"
+                      >
+                        Nét liền
+                      </button>
+                    </div>
                   </div>
-                </div>
-              )}
+                );
+              })()}
             </div>
 
             {/* 3. Bù xén tràn lề (Bleed) */}
-            <div className="bg-white rounded-lg border border-indigo-200 p-2.5 shadow-2xs flex items-center justify-between gap-2">
-              <div className="flex items-center gap-1.5">
-                <Maximize className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
-                <div>
-                  <span className="text-xs font-bold text-slate-800 block leading-tight">Tràn lề bù xén (Bleed)</span>
-                  <span className="text-[10px] text-slate-500 block leading-tight">Tránh lộ viền trắng khi cắt</span>
+            <div
+              id="setting-bleed-card"
+              className="bg-white rounded-lg border border-indigo-200 p-2.5 space-y-2 shadow-2xs"
+            >
+              <label className="flex items-center justify-between cursor-pointer select-none">
+                <div className="flex items-center gap-2">
+                  <Maximize className="w-4 h-4 text-indigo-600 shrink-0" />
+                  <div>
+                    <span className="text-xs font-bold text-slate-800 block leading-tight">
+                      Tràn lề bù xén (Bleed)
+                    </span>
+                    <span className="text-[10px] text-slate-500 block leading-tight">
+                      Mở rộng viền ảnh tránh lẹm trắng khi cắt
+                    </span>
+                  </div>
                 </div>
-              </div>
+                <input
+                  id="checkbox-bleed"
+                  type="checkbox"
+                  checked={isBleedEnabled}
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    onUpdateSettings({ bleed: checked ? (settings.bleed && settings.bleed > 0 ? settings.bleed : 1) : 0 });
+                  }}
+                  className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500 cursor-pointer shrink-0 ml-2"
+                />
+              </label>
 
-              <div className="flex items-center gap-1 bg-indigo-50/60 p-0.5 rounded-md border border-indigo-200 text-xs font-bold">
-                {[0, 1, 2].map((mm) => (
-                  <button
-                    key={mm}
-                    type="button"
-                    onClick={() => onUpdateSettings({ bleed: mm })}
-                    className={`px-2 py-0.5 rounded transition cursor-pointer ${
-                      (settings.bleed || 0) === mm
-                        ? 'bg-indigo-600 text-white shadow-2xs'
-                        : 'text-indigo-900 hover:bg-indigo-100'
-                    }`}
-                  >
-                    {mm === 0 ? '0' : `+${mm}mm`}
-                  </button>
-                ))}
-              </div>
+              {isBleedEnabled && (
+                <div id="bleed-dropdown-content" className="pt-2 border-t border-slate-100 space-y-2">
+                  <div className="flex items-center justify-between text-[10px]">
+                    <span className="text-slate-500 font-bold uppercase tracking-wider">
+                      Mức bù tràn lề:
+                    </span>
+                    <span className="text-indigo-700 font-bold font-mono text-xs">
+                      +{currentBleed} mm / mép
+                    </span>
+                  </div>
+
+                  {/* Nút chọn nhanh */}
+                  <div className="grid grid-cols-3 gap-1.5">
+                    {[
+                      { value: 1, label: '+1 mm', desc: 'Chuẩn in' },
+                      { value: 1.5, label: '+1.5 mm', desc: 'Vừa vặn' },
+                      { value: 2, label: '+2 mm', desc: 'Mép rộng' },
+                    ].map((item) => (
+                      <button
+                        key={item.value}
+                        id={`btn-bleed-preset-${item.value}`}
+                        type="button"
+                        onClick={() => onUpdateSettings({ bleed: item.value })}
+                        className={`py-1.5 px-1 rounded-md text-center font-bold transition flex flex-col items-center justify-center cursor-pointer ${
+                          currentBleed === item.value
+                            ? 'bg-indigo-600 text-white shadow-2xs'
+                            : 'bg-indigo-50/70 text-indigo-900 hover:bg-indigo-100 border border-indigo-200/80'
+                        }`}
+                        title={`Tràn lề bù xén +${item.value}mm mỗi mép`}
+                      >
+                        <span className="text-xs font-bold leading-tight">{item.label}</span>
+                        <span
+                          className={`text-[9px] font-medium leading-tight ${
+                            currentBleed === item.value ? 'text-indigo-100' : 'text-indigo-600/80'
+                          }`}
+                        >
+                          {item.desc}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Thanh kéo / Tùy chỉnh */}
+                  <div className="flex items-center gap-2 bg-slate-50 px-2 py-1.5 rounded-md border border-slate-200">
+                    <span className="text-slate-600 font-medium shrink-0 text-[10.5px]">Tùy chỉnh:</span>
+                    <input
+                      id="range-bleed-custom"
+                      type="range"
+                      min="0.5"
+                      max="3"
+                      step="0.5"
+                      value={currentBleed}
+                      onChange={(e) => onUpdateSettings({ bleed: parseFloat(e.target.value) || 1 })}
+                      className="flex-1 accent-indigo-600 h-1.5 bg-slate-200 rounded-lg cursor-pointer"
+                    />
+                    <span className="text-xs font-mono font-bold text-indigo-700 w-12 text-right">
+                      +{currentBleed}mm
+                    </span>
+                  </div>
+
+                  <p className="text-[9.5px] text-slate-500 leading-tight bg-indigo-50/50 p-1.5 rounded border border-indigo-100/70">
+                    💡 Tự động mở rộng đều 4 cạnh khi in/xuất PDF 300 DPI, giữ nguyên đường xén và tâm ảnh.
+                  </p>
+                </div>
+              )}
             </div>
 
             {/* 4. In 2 mặt đối xứng (Duplex Alignment) */}
@@ -374,118 +486,187 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
               )}
             </div>
 
-            {/* 5. In mã đơn hàng ở lề giấy A4 (Order Slug Header/Footer) */}
-            <div className="bg-white rounded-lg border border-slate-300 p-2.5 space-y-2.5 shadow-2xs">
+            {/* 5. Thêm text tự do (In mã đơn / Dòng chữ lề giấy A4) */}
+            <div
+              id="setting-freeform-text-tag-card"
+              className="bg-white rounded-lg border border-slate-300 p-2.5 space-y-2.5 shadow-2xs transition-all duration-300"
+            >
               <label className="flex items-center justify-between cursor-pointer select-none">
                 <div className="flex items-center gap-2">
-                  <Tag className="w-3.5 h-3.5 text-slate-600 shrink-0" />
+                  <Type className="w-3.5 h-3.5 text-blue-600 shrink-0" />
                   <div>
-                    <span className="text-xs font-bold text-slate-800 block leading-tight">In mã đơn ở lề giấy</span>
-                    <span className="text-[10px] text-slate-500 block leading-tight">Tránh lẫn lộn xấp in của khách</span>
+                    <span className="text-xs font-bold text-slate-800 block leading-tight">Thêm text tự do</span>
+                    <span className="text-[10px] text-slate-500 block leading-tight">Kéo thả tự do, xoay dọc/ngang, ngày giờ</span>
                   </div>
                 </div>
                 <input
                   type="checkbox"
-                  checked={Boolean(settings.printSlug)}
-                  onChange={(e) => onUpdateSettings({ printSlug: e.target.checked })}
+                  checked={isTagEnabled}
+                  onChange={(e) => handleUpdateTag({ enabled: e.target.checked })}
                   className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500 cursor-pointer shrink-0 ml-2"
                 />
               </label>
 
-              {settings.printSlug && (
-                <div className="space-y-2 pt-1 border-t border-slate-100">
-                  {/* Vị trí in: Chân trang (Rộng rãi) vs Đầu trang */}
+              {isTagEnabled && (
+                <div className="space-y-2.5 pt-1.5 border-t border-slate-100">
+                  {/* Nhập mã đơn / ghi chú */}
                   <div className="space-y-1">
-                    <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center justify-between">
-                      <span>Vị trí in lề giấy:</span>
-                      <span className="text-emerald-700 font-bold">
-                        {(settings.slugPosition || 'bottom') === 'bottom' ? 'Chân trang rộng nhất' : 'Đầu trang'}
-                      </span>
-                    </div>
-                    <div className="grid grid-cols-2 gap-1">
-                      <button
-                        type="button"
-                        onClick={() => onUpdateSettings({ slugPosition: 'bottom' })}
-                        className={`py-1 px-2 rounded-md text-center text-[10.5px] font-bold transition cursor-pointer flex items-center justify-center gap-1 ${
-                          (settings.slugPosition || 'bottom') === 'bottom'
-                            ? 'bg-blue-600 text-white shadow-2xs'
-                            : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                        }`}
-                        title="Chân trang A4 là nơi giấy thừa rộng rãi nhất, không sợ bị đè lên ảnh"
-                      >
-                        <span>Chân trang</span>
-                        <span className="text-[9px] opacity-85 font-normal">(Khuyên dùng)</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => onUpdateSettings({ slugPosition: 'top' })}
-                        className={`py-1 px-2 rounded-md text-center text-[10.5px] font-bold transition cursor-pointer ${
-                          settings.slugPosition === 'top'
-                            ? 'bg-blue-600 text-white shadow-2xs'
-                            : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                        }`}
-                        title="In ở lề mép trên cùng của trang"
-                      >
-                        <span>Đầu trang</span>
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Nhập mã đơn / tên khách */}
-                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
+                      Nội dung in:
+                    </label>
                     <input
+                      id="input-tag-custom-text"
                       type="text"
-                      placeholder="Nhập tên khách / Mã đơn (vd: #DH1024 - Khách Hà)"
-                      value={settings.orderSlug || ''}
-                      onChange={(e) => onUpdateSettings({ orderSlug: e.target.value })}
-                      className="w-full bg-slate-50 border border-slate-300 rounded-md px-2.5 py-1 text-xs text-slate-800 outline-none focus:ring-1 focus:ring-blue-400 font-medium"
+                      placeholder="Mã đơn / Tên khách (vd: #DH1024 - Khách Hà)"
+                      value={textTag.text || ''}
+                      onChange={(e) => handleUpdateTag({ text: e.target.value })}
+                      className="w-full bg-slate-50 border border-slate-300 rounded-md px-2.5 py-1.5 text-xs text-slate-800 outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white font-medium transition-all"
                     />
-
-                    {/* Gợi ý nhanh từ các nhãn đơn đã gán trên ảnh */}
-                    {orderTagsSummary.length > 0 && (
-                      <div className="flex flex-wrap items-center gap-1 pt-0.5">
-                        <span className="text-[9.5px] text-slate-400 font-medium">Đơn trên ảnh:</span>
-                        {orderTagsSummary.map((item, idx) => (
-                          <button
-                            key={idx}
-                            type="button"
-                            onClick={() => {
-                              const current = settings.orderSlug?.trim() || '';
-                              const addition = `${item.tag} (${item.count} ảnh)`;
-                              if (!current) {
-                                onUpdateSettings({ orderSlug: addition });
-                              } else if (!current.includes(item.tag)) {
-                                onUpdateSettings({ orderSlug: `${current} | ${addition}` });
-                              }
-                            }}
-                            className="bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 rounded px-1.5 py-0.5 text-[9.5px] font-bold transition cursor-pointer flex items-center gap-1"
-                            title="Bấm để chèn nhanh đơn này vào thông tin lề giấy"
-                          >
-                            <span>{item.tag}</span>
-                            <span className="text-purple-400">({item.count})</span>
-                          </button>
-                        ))}
-                      </div>
-                    )}
                   </div>
 
-                  {/* Tùy chọn In mã đơn mini ngoài mép xén (Micro Trim Slug) */}
-                  <label className="flex items-start gap-2 p-1.5 bg-purple-50/70 border border-purple-200/80 rounded-md cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      checked={Boolean(settings.printMicroSlugs)}
-                      onChange={(e) => onUpdateSettings({ printMicroSlugs: e.target.checked })}
-                      className="w-3.5 h-3.5 text-purple-600 rounded focus:ring-purple-500 cursor-pointer mt-0.5 shrink-0"
-                    />
-                    <div>
-                      <span className="text-[11px] font-bold text-purple-950 block leading-tight">
-                        In mã đơn mini ngoài mép xén
+                  {/* Tự động chèn ngày giờ & số trang */}
+                  <div className="grid grid-cols-2 gap-1.5 bg-slate-50 p-1.5 rounded-md border border-slate-200/80">
+                    <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={textTag.includeDateTime}
+                        onChange={(e) => handleUpdateTag({ includeDateTime: e.target.checked })}
+                        className="w-3.5 h-3.5 text-blue-600 rounded cursor-pointer shrink-0"
+                      />
+                      <span className="text-[10.5px] font-medium text-slate-700 leading-tight">
+                        Kèm ngày giờ in
                       </span>
-                      <span className="text-[9.5px] text-purple-700 leading-tight block mt-0.5">
-                        Chữ 5pt nằm ngoài đường cắt. Xén dao xong sẽ rụng mất giấy thừa, thợ nhìn biết ngay ảnh của ai.
+                    </label>
+
+                    <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={textTag.includePageNumber}
+                        onChange={(e) => handleUpdateTag({ includePageNumber: e.target.checked })}
+                        className="w-3.5 h-3.5 text-blue-600 rounded cursor-pointer shrink-0"
+                      />
+                      <span className="text-[10.5px] font-medium text-slate-700 leading-tight">
+                        Kèm số trang
                       </span>
+                    </label>
+                  </div>
+
+                  {/* Góc xoay & Cỡ chữ */}
+                  <div className="grid grid-cols-2 gap-2">
+                    {/* Góc xoay */}
+                    <div className="space-y-1">
+                      <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                        Góc xoay:
+                      </div>
+                      <div className="grid grid-cols-2 gap-1">
+                        <button
+                          type="button"
+                          onClick={() => handleUpdateTag({ rotation: 0 })}
+                          className={`py-1 px-1.5 rounded text-center text-[10px] font-bold transition cursor-pointer ${
+                            (textTag.rotation || 0) === 0
+                              ? 'bg-blue-600 text-white shadow-2xs'
+                              : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                          }`}
+                        >
+                          Ngang (0°)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleUpdateTag({ rotation: 90 })}
+                          className={`py-1 px-1.5 rounded text-center text-[10px] font-bold transition cursor-pointer ${
+                            (textTag.rotation || 0) === 90
+                              ? 'bg-blue-600 text-white shadow-2xs'
+                              : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                          }`}
+                          title="Xoay dọc chữ áp sát mép giấy A4"
+                        >
+                          Dọc (90°)
+                        </button>
+                      </div>
                     </div>
-                  </label>
+
+                    {/* Cỡ chữ */}
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                        <span>Cỡ chữ:</span>
+                        <span className="text-blue-700 font-bold">{textTag.fontSizePt || 8} pt</span>
+                      </div>
+                      <input
+                        type="range"
+                        min={6}
+                        max={16}
+                        step={1}
+                        value={textTag.fontSizePt || 8}
+                        onChange={(e) => handleUpdateTag({ fontSizePt: Number(e.target.value) })}
+                        className="w-full accent-blue-600 cursor-pointer h-1.5 bg-slate-200 rounded-lg"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Vị trí đặt nhanh (Presets) */}
+                  <div className="space-y-1">
+                    <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                      Đặt nhanh vị trí:
+                    </div>
+                    <div className="grid grid-cols-4 gap-1">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          handleUpdateTag({
+                            xMm: Math.max(4, settings.margin || 5),
+                            yMm: Math.max(10, pageH_mm - 5.5),
+                            rotation: 0,
+                          })
+                        }
+                        className="py-1 px-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-[9.5px] font-bold text-center transition cursor-pointer"
+                        title="Đặt ở chân trang dưới cùng"
+                      >
+                        Chân trang
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          handleUpdateTag({
+                            xMm: Math.max(4, settings.margin || 5),
+                            yMm: 4,
+                            rotation: 0,
+                          })
+                        }
+                        className="py-1 px-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-[9.5px] font-bold text-center transition cursor-pointer"
+                        title="Đặt ở mép trên cùng"
+                      >
+                        Đầu trang
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          handleUpdateTag({
+                            xMm: 3.5,
+                            yMm: Math.max(10, pageH_mm - 8),
+                            rotation: 90,
+                          })
+                        }
+                        className="py-1 px-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-[9.5px] font-bold text-center transition cursor-pointer"
+                        title="Xoay dọc chạy dọc theo mép lề trái"
+                      >
+                        Mép trái
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          handleUpdateTag({
+                            xMm: pageW_mm - 3.5,
+                            yMm: Math.max(10, pageH_mm - 8),
+                            rotation: 90,
+                          })
+                        }
+                        className="py-1 px-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-[9.5px] font-bold text-center transition cursor-pointer"
+                        title="Xoay dọc chạy dọc theo mép lề phải"
+                      >
+                        Mép phải
+                      </button>
+                    </div>
+                  </div>
                 </div>
               )}
             </div>

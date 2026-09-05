@@ -2,6 +2,7 @@ import jsPDF from 'jspdf';
 import { PackedPage, LayoutSettings } from '../types';
 import { MM_TO_PX_300DPI, A4_WIDTH_MM, A4_HEIGHT_MM } from './packing';
 import { loadImage } from './imageUtils';
+import { renderTextTagOnCanvas } from './textTagUtils';
 
 /**
  * Export Multi-Page High Quality PDF (300 DPI Rendering per A4 page)
@@ -59,23 +60,22 @@ export async function exportPagesToPdf(
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = 'high';
 
-    // Print Slug (Thông tin đơn hàng ở lề giấy A4)
-    if (settings.printSlug) {
-      ctx.save();
-      ctx.fillStyle = '#64748b';
-      ctx.font = 'bold 26px sans-serif';
-      const orderText = settings.orderSlug?.trim() || 'Dâu Dâu AutoPack Print';
-      const dateText = new Date().toLocaleDateString('vi-VN');
-      const slugLine = `[Đơn: ${orderText}] • Trang ${page.pageNumber}/${pages.length} • Khổ A4 ${isLandscape ? 'Ngang' : 'Dọc'} • In ngày: ${dateText} • 300 DPI`;
-      ctx.fillText(slugLine, Math.round(10 * MM_TO_PX_300DPI), Math.round(5.5 * MM_TO_PX_300DPI));
-      ctx.restore();
-    }
+    // Freeform Text Tag / Thông tin mã đơn trên lề giấy A4
+    renderTextTagOnCanvas(ctx, settings, page.pageNumber, pages.length, isLandscape);
 
     const bleedMm = settings.bleed && settings.bleed > 0 ? settings.bleed : 0;
     const bleedPx = Math.round(bleedMm * MM_TO_PX_300DPI);
 
     // Full Trim Guides: Kẻ đường gióng thước tràn 4 mép giấy A4 chuẩn xưởng
-    if (settings.cutLines && settings.cutStyle === 'full_trim_guides' && page.items.length > 0) {
+    const activeCutStyles =
+      settings.cutStyles && settings.cutStyles.length > 0
+        ? settings.cutStyles
+        : settings.cutStyle
+        ? [settings.cutStyle]
+        : ['dashed'];
+    const hasFullTrim = settings.cutLines && activeCutStyles.includes('full_trim_guides');
+
+    if (hasFullTrim && page.items.length > 0) {
       const rawY: number[] = [];
       const rawX: number[] = [];
       page.items.forEach((it) => {
@@ -218,9 +218,18 @@ export async function exportPagesToPdf(
           ctx.strokeStyle = '#6b7280';
           ctx.lineWidth = 1.5;
 
-          const cutStyle = settings.cutStyle || 'dashed';
+          const activeCutStyles =
+            settings.cutStyles && settings.cutStyles.length > 0
+              ? settings.cutStyles
+              : settings.cutStyle
+              ? [settings.cutStyle]
+              : ['dashed'];
 
-          if (cutStyle === 'corner_marks' || cutStyle === 'full_trim_guides') {
+          const hasCornerMarks = activeCutStyles.includes('corner_marks');
+          const hasSolid = activeCutStyles.includes('solid');
+          const hasDashed = activeCutStyles.includes('dashed');
+
+          if (hasCornerMarks) {
             // Chữ thập / Dấu góc tiêu chuẩn in ấn (Corner Crop Marks)
             ctx.setLineDash([]);
             const arm = Math.round(3.5 * MM_TO_PX_300DPI); // 3.5mm
@@ -257,8 +266,10 @@ export async function exportPagesToPdf(
             ctx.moveTo(pxX + pxW, pxY + pxH + gap);
             ctx.lineTo(pxX + pxW, pxY + pxH + gap + arm);
             ctx.stroke();
-          } else {
-            if (cutStyle === 'solid') {
+          }
+
+          if (hasSolid || hasDashed) {
+            if (hasSolid) {
               ctx.setLineDash([]);
             } else {
               ctx.setLineDash([12, 8]);

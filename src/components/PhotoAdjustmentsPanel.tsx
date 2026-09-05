@@ -137,7 +137,7 @@ export const PhotoAdjustmentsPanel: React.FC<PhotoAdjustmentsPanelProps> = ({
               className="px-2 py-1.5 rounded-xl bg-white hover:bg-purple-50 border border-slate-200 text-slate-800 hover:text-purple-700 text-[11px] font-bold transition shadow-2xs flex flex-col items-center gap-0.5 cursor-pointer text-center leading-tight"
               title="Bù sáng in xưởng: Tăng sáng + bóng để in ra không bị tối hoặc xỉn màu"
             >
-              <span>🖨️ Bù sáng in</span>
+              <span>Bù sáng in</span>
               <span className="text-[9px] font-normal text-slate-400">Chống tối</span>
             </button>
 
@@ -157,7 +157,7 @@ export const PhotoAdjustmentsPanel: React.FC<PhotoAdjustmentsPanelProps> = ({
               className="px-2 py-1.5 rounded-xl bg-white hover:bg-rose-50 border border-slate-200 text-slate-800 hover:text-rose-700 text-[11px] font-bold transition shadow-2xs flex flex-col items-center gap-0.5 cursor-pointer text-center leading-tight"
               title="Tông da chân dung: Làm da hồng hào, tươi tắn khi in ảnh thần tượng / kỷ yếu"
             >
-              <span>🌸 Tông da</span>
+              <span>Tông da</span>
               <span className="text-[9px] font-normal text-slate-400">Hồng hào</span>
             </button>
 
@@ -177,7 +177,7 @@ export const PhotoAdjustmentsPanel: React.FC<PhotoAdjustmentsPanelProps> = ({
               className="px-2 py-1.5 rounded-xl bg-white hover:bg-sky-50 border border-slate-200 text-slate-800 hover:text-sky-700 text-[11px] font-bold transition shadow-2xs flex flex-col items-center gap-0.5 cursor-pointer text-center leading-tight"
               title="Trong trẻo / Sắc nét: Khử xỉn, tách bạch chi tiết rực rỡ"
             >
-              <span>💎 Trong trẻo</span>
+              <span>Trong trẻo</span>
               <span className="text-[9px] font-normal text-slate-400">Khử đục</span>
             </button>
           </div>

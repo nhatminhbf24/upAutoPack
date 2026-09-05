@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { UploadCloud, Image as ImageIcon, Sparkles, Plus, Loader2, Scissors } from 'lucide-react';
+import { UploadCloud, Image as ImageIcon, Sparkles, Plus, Loader2, FileImage } from 'lucide-react';
 import { PhotoItem, ShapeType, SizePreset } from '../types';
 import { readFileAsDataURL, getImageDimensions, calculateCrop, createOptimizedPreview, getOrientedDimensions } from '../utils/imageUtils';
 
@@ -238,7 +238,29 @@ export const Uploader: React.FC<UploaderProps> = ({
   };
 
   return (
-    <div id="uploader-section" className="space-y-2.5">
+    <div id="uploader-section" className="space-y-2">
+      {/* Header cùng dòng: TẢI ẢNH VÀO TRANG và Nút "Thử ngay với mẫu có sẵn" (chỉ hiện icon bên phải) */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-1.5 text-rose-950 font-bold">
+          <FileImage className="w-4 h-4 text-rose-600" />
+          <h2 className="text-xs uppercase tracking-wide">Tải ảnh vào trang</h2>
+        </div>
+        <button
+          type="button"
+          id="btn-load-sample"
+          onClick={loadSamplePhotos}
+          disabled={isProcessing}
+          className="w-7 h-7 flex items-center justify-center rounded-lg bg-white/95 hover:bg-amber-50 hover:border-amber-300 border border-rose-200 text-amber-500 hover:text-amber-600 transition shadow-2xs cursor-pointer active:scale-90 disabled:opacity-50"
+          title="Thử ngay với ảnh mẫu có sẵn"
+        >
+          {isProcessing ? (
+            <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-500" />
+          ) : (
+            <Sparkles className="w-4 h-4" />
+          )}
+        </button>
+      </div>
+
       {/* Hidden File Input */}
       <input
         ref={fileInputRef}
@@ -307,33 +329,6 @@ export const Uploader: React.FC<UploaderProps> = ({
         >
           <Plus className="w-3.5 h-3.5" />
           <span>Chọn tệp từ máy</span>
-        </button>
-      </div>
-
-      {/* Quick Sample & PNG Splitter Tool Buttons */}
-      <div className="space-y-1.5 pt-0.5">
-        {onOpenPngSplitter && (
-          <button
-            type="button"
-            id="btn-open-png-splitter"
-            onClick={onOpenPngSplitter}
-            className="w-full flex items-center justify-center gap-1.5 py-1.5 px-3 bg-gradient-to-r from-blue-50 to-indigo-50 hover:from-blue-100 hover:to-indigo-100 border border-blue-200 text-blue-700 rounded-lg text-[11px] font-bold transition shadow-2xs cursor-pointer active:scale-95"
-            title="Tách các chi tiết, sticker từ một tấm ảnh PNG trong suốt thành từng file ảnh riêng lẻ"
-          >
-            <Scissors className="w-3.5 h-3.5 text-blue-600" />
-            <span>Tách Sticker / Sheet PNG</span>
-          </button>
-        )}
-
-        <button
-          type="button"
-          id="btn-load-sample"
-          onClick={loadSamplePhotos}
-          disabled={isProcessing}
-          className="w-full flex items-center justify-center gap-1.5 py-1.5 px-3 bg-white hover:bg-gray-50 border border-gray-200 rounded-lg text-[11px] font-medium text-gray-600 hover:text-blue-600 transition shadow-2xs cursor-pointer"
-        >
-          <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-          <span>Thử ngay với ảnh mẫu có sẵn</span>
         </button>
       </div>
     </div>

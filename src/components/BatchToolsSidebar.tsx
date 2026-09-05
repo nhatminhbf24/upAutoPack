@@ -15,7 +15,6 @@ import {
   Scissors,
   ArrowUpDown,
   ArrowLeftRight,
-  Tag,
 } from 'lucide-react';
 import { PhotoItem, DEFAULT_SIZE_PRESETS, DEFAULT_ADJUSTMENTS, SizePreset } from '../types';
 import { rotateImageBase64, calculateCrop, createOptimizedPreview, getOrientedDimensions } from '../utils/imageUtils';
@@ -60,52 +59,6 @@ export const BatchToolsSidebar: React.FC<BatchToolsSidebarProps> = ({
   const [isAutoAdjustingAll, setIsAutoAdjustingAll] = useState<boolean>(false);
   const [isRevertingColorsAll, setIsRevertingColorsAll] = useState<boolean>(false);
   const [autoUpscaleDpi, setAutoUpscaleDpi] = useState<boolean>(true);
-  const [batchOrderTag, setBatchOrderTag] = useState<string>('');
-  const [tagRangeStart, setTagRangeStart] = useState<number>(1);
-  const [tagRangeEnd, setTagRangeEnd] = useState<number>(photos.length || 1);
-
-  // Cập nhật tagRangeEnd khi số lượng ảnh thay đổi
-  React.useEffect(() => {
-    setTagRangeEnd(photos.length || 1);
-  }, [photos.length]);
-
-  const handleApplyBatchOrderTag = (all: boolean) => {
-    const tag = batchOrderTag.trim();
-    if (!tag) {
-      onToast('error', 'Vui lòng nhập mã đơn hoặc tên khách!');
-      return;
-    }
-    if (photos.length === 0) {
-      onToast('error', 'Chưa có ảnh nào!');
-      return;
-    }
-
-    let updatedCount = 0;
-    if (all) {
-      photos.forEach((p) => {
-        onUpdatePhoto(p.id, { orderTag: tag });
-        updatedCount++;
-      });
-      onToast('success', `Đã gán mã đơn "${tag}" cho toàn bộ ${updatedCount} ảnh!`);
-    } else {
-      const start = Math.max(1, tagRangeStart) - 1;
-      const end = Math.min(photos.length, Math.max(start + 1, tagRangeEnd));
-      for (let i = start; i < end; i++) {
-        onUpdatePhoto(photos[i].id, { orderTag: tag });
-        updatedCount++;
-      }
-      onToast('success', `Đã gán mã đơn "${tag}" cho ảnh #${start + 1} đến #${end} (${updatedCount} ảnh)!`);
-    }
-  };
-
-  const handleClearAllOrderTags = () => {
-    photos.forEach((p) => {
-      if (p.orderTag) {
-        onUpdatePhoto(p.id, { orderTag: undefined });
-      }
-    });
-    onToast('info', 'Đã xóa tất cả nhãn mã đơn trên ảnh');
-  };
 
   const allPresets = [...customPresets, ...DEFAULT_SIZE_PRESETS];
   // Group presets by category
@@ -722,89 +675,6 @@ export const BatchToolsSidebar: React.FC<BatchToolsSidebarProps> = ({
             </div>
           </div>
 
-          {/* CỤM: GHÉP NHIỀU ĐƠN / GÁN MÃ ĐƠN HÀNG LOẠT (Pastel Purple) */}
-          <div className="bg-purple-50/80 rounded-xl p-3.5 border border-purple-200/90 shadow-2xs space-y-2.5 transition hover:border-purple-300">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-1.5 text-purple-950 font-bold">
-                <Tag className="w-3.5 h-3.5 text-purple-600" />
-                <span className="text-[11px] uppercase tracking-wide">Ghép nhiều đơn / Gán mã</span>
-              </div>
-              <span className="text-[10px] text-purple-700 font-bold bg-purple-100/90 border border-purple-200 px-1.5 py-0.5 rounded">
-                Gom đơn A4
-              </span>
-            </div>
-
-            {/* Input tên đơn */}
-            <div className="space-y-1">
-              <input
-                type="text"
-                placeholder="Nhập mã đơn (vd: #DH01, Khách Tuấn)..."
-                value={batchOrderTag}
-                onChange={(e) => setBatchOrderTag(e.target.value)}
-                className="w-full bg-white border border-purple-300 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-purple-950 placeholder:text-purple-300 outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-400 transition"
-              />
-            </div>
-
-            {/* Gán tất cả vs Gán theo khoảng ảnh */}
-            <div className="space-y-1.5">
-              <button
-                type="button"
-                onClick={() => handleApplyBatchOrderTag(true)}
-                disabled={photos.length === 0}
-                className="w-full py-1.5 px-2 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white rounded-lg text-xs font-bold transition active:scale-95 cursor-pointer shadow-2xs flex items-center justify-center gap-1"
-                title="Gán mã đơn này cho toàn bộ ảnh đang có"
-              >
-                <span>Gán mã cho TẤT CẢ {photos.length} ảnh</span>
-              </button>
-
-              {/* Dải ảnh: từ ảnh # đến ảnh # */}
-              <div className="bg-white/80 p-2 rounded-lg border border-purple-200/80 space-y-1.5">
-                <div className="flex items-center justify-between text-[10.5px] font-semibold text-purple-900">
-                  <span>Hoặc gán theo khoảng ảnh:</span>
-                  <span className="text-[10px] text-purple-500">Ghép đơn trên 1 trang</span>
-                </div>
-                <div className="flex items-center gap-1.5 text-xs">
-                  <span className="text-[11px] text-slate-500 font-medium">Từ #</span>
-                  <input
-                    type="number"
-                    min="1"
-                    max={photos.length || 1}
-                    value={tagRangeStart}
-                    onChange={(e) => setTagRangeStart(Math.max(1, parseInt(e.target.value) || 1))}
-                    className="w-12 text-center py-1 bg-purple-50 border border-purple-200 rounded font-bold text-purple-950 outline-none text-xs"
-                  />
-                  <span className="text-[11px] text-slate-500 font-medium">đến #</span>
-                  <input
-                    type="number"
-                    min="1"
-                    max={photos.length || 1}
-                    value={tagRangeEnd}
-                    onChange={(e) => setTagRangeEnd(Math.max(1, parseInt(e.target.value) || 1))}
-                    className="w-12 text-center py-1 bg-purple-50 border border-purple-200 rounded font-bold text-purple-950 outline-none text-xs"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => handleApplyBatchOrderTag(false)}
-                    disabled={photos.length === 0}
-                    className="flex-1 py-1 px-2 bg-purple-100 hover:bg-purple-200 text-purple-900 border border-purple-300 rounded font-bold text-[11px] transition cursor-pointer text-center"
-                  >
-                    Gán dải này
-                  </button>
-                </div>
-              </div>
-
-              {/* Xóa nhãn */}
-              <button
-                type="button"
-                onClick={handleClearAllOrderTags}
-                disabled={photos.length === 0}
-                className="w-full py-1 text-[10.5px] text-slate-500 hover:text-rose-600 transition cursor-pointer text-center font-medium"
-              >
-                Xóa sạch nhãn mã đơn trên tất cả ảnh
-              </button>
-            </div>
-          </div>
-
           {/* CỤM 4: TỰ ĐỘNG CÂN CHỈNH MÀU SẮC & ÁNH SÁNG (Pastel Purple) */}
           <div className="bg-purple-50/70 rounded-xl p-3 border border-purple-200/90 shadow-2xs transition hover:border-purple-300">
             <div className="flex items-center gap-1.5">
@@ -854,7 +724,7 @@ export const BatchToolsSidebar: React.FC<BatchToolsSidebarProps> = ({
                 className="px-1.5 py-1.5 rounded-lg bg-white hover:bg-purple-100 border border-purple-200 text-purple-900 text-[10px] font-bold transition shadow-2xs text-center cursor-pointer disabled:opacity-50"
                 title="Bù sáng in xưởng hàng loạt: Sáng hơn + sâu bóng + tươi da"
               >
-                🖨️ Bù sáng in
+                Bù sáng in
               </button>
               <button
                 type="button"
@@ -863,7 +733,7 @@ export const BatchToolsSidebar: React.FC<BatchToolsSidebarProps> = ({
                 className="px-1.5 py-1.5 rounded-lg bg-white hover:bg-rose-100 border border-rose-200 text-rose-900 text-[10px] font-bold transition shadow-2xs text-center cursor-pointer disabled:opacity-50"
                 title="Tông da hồng hào hàng loạt: Da mặt sáng tươi kỷ yếu / thần tượng"
               >
-                🌸 Tông da tươi
+                Tông da tươi
               </button>
               <button
                 type="button"
@@ -872,7 +742,7 @@ export const BatchToolsSidebar: React.FC<BatchToolsSidebarProps> = ({
                 className="px-1.5 py-1.5 rounded-lg bg-white hover:bg-sky-100 border border-sky-200 text-sky-900 text-[10px] font-bold transition shadow-2xs text-center cursor-pointer disabled:opacity-50"
                 title="Trong trẻo hàng loạt: Khử đục, tương phản trong suốt"
               >
-                💎 Trong trẻo
+                Trong trẻo
               </button>
             </div>
           </div>

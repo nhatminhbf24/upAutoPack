@@ -18,11 +18,12 @@ import {
   HelpCircle,
   CheckCircle2,
   Loader2,
-  Copy,
 } from 'lucide-react';
-import { PackedPage, LayoutSettings, PhotoItem, ShapeType, PlacedPhotoItem } from '../types';
+import { PackedPage, LayoutSettings, PhotoItem, ShapeType, PlacedPhotoItem, FreeformTextTag } from '../types';
 import { A4_WIDTH_MM, A4_HEIGHT_MM } from '../utils/packing';
 import { rotateImageBase64, calculateCrop, createOptimizedPreview } from '../utils/imageUtils';
+import { getDefaultTextTag } from '../utils/textTagUtils';
+import { DraggableTextTag } from './DraggableTextTag';
 
 interface A4PreviewAreaProps {
   pages: PackedPage[];
@@ -37,7 +38,7 @@ interface A4PreviewAreaProps {
   canRedo?: boolean;
   historyCount?: number;
   onBackToHub?: () => void;
-  onClonePageAsBackside?: (pageNumber: number) => void;
+  onUpdateSettings?: (updates: Partial<LayoutSettings>) => void;
 }
 
 export const A4PreviewArea: React.FC<A4PreviewAreaProps> = ({
@@ -53,7 +54,7 @@ export const A4PreviewArea: React.FC<A4PreviewAreaProps> = ({
   canRedo = false,
   historyCount = 0,
   onBackToHub,
-  onClonePageAsBackside,
+  onUpdateSettings,
 }) => {
   const [zoom, setZoom] = useState<number>(70); // Percentage: 30% to 150%
   const [showRuler, setShowRuler] = useState<boolean>(false);
@@ -65,6 +66,26 @@ export const A4PreviewArea: React.FC<A4PreviewAreaProps> = ({
   const isLandscape = settings.paperOrientation === 'landscape';
   const pageW_mm = isLandscape ? A4_HEIGHT_MM : A4_WIDTH_MM;
   const pageH_mm = isLandscape ? A4_WIDTH_MM : A4_HEIGHT_MM;
+
+  const isTagEnabled = Boolean(settings.textTag?.enabled || settings.printSlug);
+  const activeTextTag: FreeformTextTag = settings.textTag || {
+    enabled: isTagEnabled,
+    text: settings.orderSlug || '',
+    includeDateTime: true,
+    includePageNumber: true,
+    fontSizePt: 8,
+    rotation: 0,
+    xMm: Math.max(4, settings.margin || 5),
+    yMm: (settings.slugPosition || 'bottom') === 'top' ? 4 : Math.max(10, pageH_mm - 5.5),
+    color: '#334155',
+  };
+
+  const handleUpdateTextTag = (updates: Partial<FreeformTextTag>) => {
+    if (!onUpdateSettings) return;
+    const current = settings.textTag || activeTextTag;
+    const updated: FreeformTextTag = { ...current, ...updates, enabled: true };
+    onUpdateSettings({ textTag: updated, printSlug: true });
+  };
 
   // Inter-item Drag & Drop Swap State
   const [draggedPhotoId, setDraggedPhotoId] = useState<string | null>(null);
@@ -552,19 +573,6 @@ export const A4PreviewArea: React.FC<A4PreviewAreaProps> = ({
                     />
                   )}
 
-                  {/* Quick Action: Nhân bản làm mặt sau (Dành cho in 2 mặt) */}
-                  {onClonePageAsBackside && page.items.length > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => onClonePageAsBackside(page.pageNumber)}
-                      className="no-print absolute top-2 left-3 z-30 bg-purple-600 hover:bg-purple-700 active:scale-95 text-white text-[10.5px] font-bold px-2.5 py-1 rounded-full shadow-md flex items-center gap-1.5 transition cursor-pointer border border-purple-400/30 select-none hover:shadow-purple-500/20"
-                      title={`Sao chép toàn bộ ${page.items.length} ảnh của Trang ${page.pageNumber} sang trang tiếp theo và tự động căn lật đối xứng in 2 mặt`}
-                    >
-                      <Copy className="w-3.5 h-3.5" />
-                      <span>Nhân bản làm mặt sau</span>
-                    </button>
-                  )}
-
                   {/* Page Status Badges (Hidden in Print) */}
                   <div className="no-print absolute top-2 right-3 z-30 pointer-events-none flex items-center gap-2">
                     {/* Duplex Indicator Badge if enabled */}
@@ -594,16 +602,18 @@ export const A4PreviewArea: React.FC<A4PreviewAreaProps> = ({
                     </div>
                   </div>
 
-                  {/* Print Order Slug Header (Printed on paper header) */}
-                  {settings.printSlug && (
-                    <div className="absolute top-[2.5mm] left-[8mm] right-[8mm] flex items-center justify-between text-[8px] text-slate-500 font-mono select-none pointer-events-none z-20 border-b border-slate-300 pb-0.5">
-                      <span className="font-bold text-slate-700">
-                        [Đơn: {settings.orderSlug?.trim() || 'Dâu Dâu AutoPack Print'}]
-                      </span>
-                      <span>
-                        Trang {page.pageNumber}/{pages.length} • Khổ: A4 {isLandscape ? 'Ngang' : 'Dọc'} • Ngày: {new Date().toLocaleDateString('vi-VN')}
-                      </span>
-                    </div>
+                  {/* Freeform Text Tag / In thông tin mã đơn lề giấy (Kéo thả, xoay, chỉnh cỡ trực tiếp) */}
+                  {isTagEnabled && (
+                    <DraggableTextTag
+                      tag={activeTextTag}
+                      pageNumber={page.pageNumber}
+                      totalPages={pages.length}
+                      isLandscape={isLandscape}
+                      pageW_mm={pageW_mm}
+                      pageH_mm={pageH_mm}
+                      zoom={zoom}
+                      onUpdateTag={onUpdateSettings ? handleUpdateTextTag : undefined}
+                    />
                   )}
 
                   {/* Printable Margin Guideline (Subtle dashed, hidden in print) */}
@@ -619,7 +629,13 @@ export const A4PreviewArea: React.FC<A4PreviewAreaProps> = ({
 
                   {/* Full Trim Guides (Đường gióng thước tràn ra tận 4 mép giấy A4) */}
                   {(() => {
-                    const isFullTrimGuides = settings.cutLines && settings.cutStyle === 'full_trim_guides';
+                    const activeCutStyles =
+                      settings.cutStyles && settings.cutStyles.length > 0
+                        ? settings.cutStyles
+                        : settings.cutStyle
+                        ? [settings.cutStyle]
+                        : ['dashed'];
+                    const isFullTrimGuides = settings.cutLines && activeCutStyles.includes('full_trim_guides');
                     if (!isFullTrimGuides || page.items.length === 0) return null;
 
                     const rawY: number[] = [];
@@ -747,10 +763,15 @@ export const A4PreviewArea: React.FC<A4PreviewAreaProps> = ({
                     const isDraggingThis = draggedPhotoId === item.id;
                     const isDragOverThis = dragOverPhotoId === item.id;
 
-                    const cutStyle = settings.cutStyle || 'dashed';
-                    const isCornerMarks = settings.cutLines && (cutStyle === 'corner_marks' || cutStyle === 'full_trim_guides');
-                    const isSolidCut = settings.cutLines && cutStyle === 'solid';
-                    const isDashedCut = settings.cutLines && cutStyle === 'dashed';
+                    const activeCutStyles =
+                      settings.cutStyles && settings.cutStyles.length > 0
+                        ? settings.cutStyles
+                        : settings.cutStyle
+                        ? [settings.cutStyle]
+                        : ['dashed'];
+                    const isCornerMarks = settings.cutLines && activeCutStyles.includes('corner_marks');
+                    const isSolidCut = settings.cutLines && activeCutStyles.includes('solid');
+                    const isDashedCut = settings.cutLines && activeCutStyles.includes('dashed');
 
                     return (
                       <React.Fragment key={`frag-${item.id}-${item.instanceIndex}`}>
@@ -827,10 +848,10 @@ export const A4PreviewArea: React.FC<A4PreviewAreaProps> = ({
 
                         {/* Drag & Reorder Grip Handle (Top Left, visible on hover) */}
                         <div
-                          className="no-print drag-reorder-handle opacity-0 group-hover/box:opacity-100 transition-opacity absolute top-1 left-1 bg-slate-900/80 backdrop-blur-xs text-white p-1 rounded cursor-grab active:cursor-grabbing z-20 flex items-center shadow-xs"
+                          className="no-print drag-reorder-handle opacity-0 group-hover/box:opacity-100 transition-opacity absolute top-1.5 left-1.5 bg-slate-900/90 hover:bg-slate-800 backdrop-blur-xs text-white p-1.5 rounded-md cursor-grab active:cursor-grabbing z-20 flex items-center shadow-md border border-slate-700/60"
                           title="Kéo biểu tượng này để đổi vị trí sang bức ảnh khác"
                         >
-                          <GripHorizontal className="w-3 h-3 text-slate-200" />
+                          <GripHorizontal className="w-4 h-4 text-slate-200" />
                         </div>
 
                         {/* Quick Rotate Button (Top Right, visible on hover) */}
@@ -841,18 +862,18 @@ export const A4PreviewArea: React.FC<A4PreviewAreaProps> = ({
                             handleRotateItem(item);
                           }}
                           disabled={rotatingPhotoId === item.id}
-                          className="no-print opacity-0 group-hover/box:opacity-100 transition-opacity absolute top-1 right-1 bg-slate-900/80 hover:bg-blue-600 backdrop-blur-xs text-white p-1 rounded cursor-pointer z-20 flex items-center shadow-xs disabled:opacity-50"
+                          className="no-print opacity-0 group-hover/box:opacity-100 transition-opacity absolute top-1.5 right-1.5 bg-slate-900/90 hover:bg-indigo-600 backdrop-blur-xs text-white p-1.5 rounded-md cursor-pointer z-20 flex items-center shadow-md border border-slate-700/60 disabled:opacity-50 active:scale-95 transition-all"
                           title="Xoay ảnh này 90°"
                         >
                           {rotatingPhotoId === item.id ? (
-                            <Loader2 className="w-3 h-3 animate-spin text-white" />
+                            <Loader2 className="w-4 h-4 animate-spin text-white" />
                           ) : (
-                            <RotateCw className="w-3 h-3 text-slate-200 hover:text-white" />
+                            <RotateCw className="w-4 h-4 text-slate-200 hover:text-white" />
                           )}
                         </button>
 
                         {/* Hover Info Tag (Bottom Right, Hidden in Print) */}
-                        <div className="no-print opacity-0 group-hover/box:opacity-100 transition-opacity absolute bottom-1 right-1 bg-black/65 backdrop-blur-xs text-white text-[9px] font-mono px-1 py-0.5 rounded pointer-events-none flex items-center gap-0.5 z-20">
+                        <div className="no-print opacity-0 group-hover/box:opacity-100 transition-opacity absolute bottom-1.5 right-1.5 bg-black/75 backdrop-blur-xs text-white text-[10px] font-mono px-2 py-0.5 rounded-md pointer-events-none flex items-center gap-0.5 z-20 shadow-xs border border-white/10">
                           <span>
                             {item.w / 10}x{item.h / 10}cm
                           </span>
