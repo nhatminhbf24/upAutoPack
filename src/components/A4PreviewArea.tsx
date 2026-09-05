@@ -524,14 +524,50 @@ export const A4PreviewArea: React.FC<A4PreviewAreaProps> = ({
 
               return (
                 <div
-                  key={`page-${page.pageNumber}`}
-                  id={`a4-page-${page.pageNumber}`}
-                  className="a4-page-sheet relative bg-white shadow-xl rounded-xs border border-slate-300/60 overflow-hidden"
-                  style={{
-                    width: `${pageW_mm}mm`,
-                    height: `${pageH_mm}mm`,
-                  }}
+                  key={`page-wrapper-${page.pageNumber}`}
+                  className="page-wrapper flex flex-col items-center"
                 >
+                  {/* Page Status Badges Header (Được dịch lên trên đỉnh, nằm ngoài tờ giấy A4 để không bao giờ che khuất chi tiết ảnh) */}
+                  <div
+                    className="no-print w-full flex items-center justify-end gap-2 pb-2 px-1 pointer-events-none select-none"
+                    style={{ width: `${pageW_mm}mm` }}
+                  >
+                    {/* Duplex Indicator Badge if enabled */}
+                    {settings.duplexMode && (
+                      <div className="bg-purple-700/95 text-white text-[13px] font-bold px-3 py-1 rounded-full shadow-xs flex items-center gap-1.5">
+                        <span>{page.pageNumber % 2 === 0 ? 'Mặt Sau (Lật đối xứng)' : 'Mặt Trước'}</span>
+                      </div>
+                    )}
+
+                    {/* Efficiency Badge */}
+                    <div
+                      className={`text-white text-[13px] font-bold px-3 py-1 rounded-full shadow-xs flex items-center gap-1.5 ${
+                        efficiency >= 80
+                          ? 'bg-emerald-600/95'
+                          : efficiency >= 50
+                          ? 'bg-blue-600/95'
+                          : 'bg-slate-800/90'
+                      }`}
+                    >
+                      <CheckCircle2 className="w-4 h-4" />
+                      <span>{efficiency}% diện tích</span>
+                    </div>
+
+                    {/* Page Number */}
+                    <div className="bg-slate-900/90 backdrop-blur-xs text-white text-[13px] font-bold px-3 py-1 rounded-full shadow-xs">
+                      Trang {page.pageNumber} / {pages.length} (A4 {isLandscape ? 'Ngang' : 'Dọc'})
+                    </div>
+                  </div>
+
+                  <div
+                    key={`page-${page.pageNumber}`}
+                    id={`a4-page-${page.pageNumber}`}
+                    className="a4-page-sheet relative bg-white shadow-xl rounded-xs border border-slate-300/60 overflow-hidden"
+                    style={{
+                      width: `${pageW_mm}mm`,
+                      height: `${pageH_mm}mm`,
+                    }}
+                  >
                   {/* Top Ruler Overlay (mm) */}
                   {showRuler && (
                     <div className="no-print absolute top-0 left-0 right-0 h-4 bg-amber-50/90 border-b border-amber-300/60 z-30 pointer-events-none flex text-[8px] font-mono text-amber-900 select-none overflow-hidden">
@@ -572,35 +608,6 @@ export const A4PreviewArea: React.FC<A4PreviewAreaProps> = ({
                       }}
                     />
                   )}
-
-                  {/* Page Status Badges (Hidden in Print) */}
-                  <div className="no-print absolute top-2 right-3 z-30 pointer-events-none flex items-center gap-2">
-                    {/* Duplex Indicator Badge if enabled */}
-                    {settings.duplexMode && (
-                      <div className="bg-purple-700/90 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-xs flex items-center gap-1">
-                        <span>{page.pageNumber % 2 === 0 ? 'Mặt Sau (Lật đối xứng)' : 'Mặt Trước'}</span>
-                      </div>
-                    )}
-
-                    {/* Efficiency Badge */}
-                    <div
-                      className={`text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-xs flex items-center gap-1 ${
-                        efficiency >= 80
-                          ? 'bg-emerald-600/90'
-                          : efficiency >= 50
-                          ? 'bg-blue-600/90'
-                          : 'bg-slate-800/80'
-                      }`}
-                    >
-                      <CheckCircle2 className="w-3 h-3" />
-                      <span>{efficiency}% diện tích</span>
-                    </div>
-
-                    {/* Page Number */}
-                    <div className="bg-slate-900/80 backdrop-blur-xs text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-xs">
-                      Trang {page.pageNumber} / {pages.length} (A4 {isLandscape ? 'Ngang' : 'Dọc'})
-                    </div>
-                  </div>
 
                   {/* Freeform Text Tag / In thông tin mã đơn lề giấy (Kéo thả, xoay, chỉnh cỡ trực tiếp) */}
                   {isTagEnabled && (
@@ -681,27 +688,27 @@ export const A4PreviewArea: React.FC<A4PreviewAreaProps> = ({
                               y1={`${y}mm`}
                               x2={`${pageW_mm}mm`}
                               y2={`${y}mm`}
-                              stroke="#94a3b8"
-                              strokeWidth="0.5"
+                              stroke="#cbd5e1"
+                              strokeWidth="0.35"
                               strokeDasharray="4 3"
                             />
-                            {/* Vạch tick đậm ở mép trái (5mm) */}
+                            {/* Vạch tick mảnh ở mép trái (5mm) */}
                             <line
                               x1="0"
                               y1={`${y}mm`}
                               x2="5mm"
                               y2={`${y}mm`}
-                              stroke="#334155"
-                              strokeWidth="1.2"
+                              stroke="#64748b"
+                              strokeWidth="0.6"
                             />
-                            {/* Vạch tick đậm ở mép phải (5mm) */}
+                            {/* Vạch tick mảnh ở mép phải (5mm) */}
                             <line
                               x1={`${pageW_mm - 5}mm`}
                               y1={`${y}mm`}
                               x2={`${pageW_mm}mm`}
                               y2={`${y}mm`}
-                              stroke="#334155"
-                              strokeWidth="1.2"
+                              stroke="#64748b"
+                              strokeWidth="0.6"
                             />
                           </React.Fragment>
                         ))}
@@ -715,27 +722,27 @@ export const A4PreviewArea: React.FC<A4PreviewAreaProps> = ({
                               y1="0"
                               x2={`${x}mm`}
                               y2={`${pageH_mm}mm`}
-                              stroke="#94a3b8"
-                              strokeWidth="0.5"
+                              stroke="#cbd5e1"
+                              strokeWidth="0.35"
                               strokeDasharray="4 3"
                             />
-                            {/* Vạch tick đậm ở mép trên (5mm) */}
+                            {/* Vạch tick mảnh ở mép trên (5mm) */}
                             <line
                               x1={`${x}mm`}
                               y1="0"
                               x2={`${x}mm`}
                               y2="5mm"
-                              stroke="#334155"
-                              strokeWidth="1.2"
+                              stroke="#64748b"
+                              strokeWidth="0.6"
                             />
-                            {/* Vạch tick đậm ở mép dưới (5mm) */}
+                            {/* Vạch tick mảnh ở mép dưới (5mm) */}
                             <line
                               x1={`${x}mm`}
                               y1={`${pageH_mm - 5}mm`}
                               x2={`${x}mm`}
                               y2={`${pageH_mm}mm`}
-                              stroke="#334155"
-                              strokeWidth="1.2"
+                              stroke="#64748b"
+                              strokeWidth="0.6"
                             />
                           </React.Fragment>
                         ))}
@@ -882,6 +889,7 @@ export const A4PreviewArea: React.FC<A4PreviewAreaProps> = ({
                     </React.Fragment>
                   );
                 })}
+                  </div>
                 </div>
               );
             })}

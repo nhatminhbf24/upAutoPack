@@ -111,17 +111,17 @@ export async function exportPagesToPdf(
       for (const yMm of fullTrimYList) {
         const py = Math.round(yMm * MM_TO_PX_300DPI);
         // Dashed hairline across entire width
-        ctx.strokeStyle = '#94a3b8';
-        ctx.lineWidth = 1;
+        ctx.strokeStyle = '#cbd5e1';
+        ctx.lineWidth = 0.75;
         ctx.setLineDash([16, 12]);
         ctx.beginPath();
         ctx.moveTo(0, py);
         ctx.lineTo(canvasWidth, py);
         ctx.stroke();
 
-        // Solid edge ticks on left and right borders
-        ctx.strokeStyle = '#334155';
-        ctx.lineWidth = 2.5;
+        // Edge ticks on left and right borders
+        ctx.strokeStyle = '#475569';
+        ctx.lineWidth = 1.2;
         ctx.setLineDash([]);
         ctx.beginPath();
         ctx.moveTo(0, py);
@@ -135,17 +135,17 @@ export async function exportPagesToPdf(
       for (const xMm of fullTrimXList) {
         const px = Math.round(xMm * MM_TO_PX_300DPI);
         // Dashed hairline down entire height
-        ctx.strokeStyle = '#94a3b8';
-        ctx.lineWidth = 1;
+        ctx.strokeStyle = '#cbd5e1';
+        ctx.lineWidth = 0.75;
         ctx.setLineDash([16, 12]);
         ctx.beginPath();
         ctx.moveTo(px, 0);
         ctx.lineTo(px, canvasHeight);
         ctx.stroke();
 
-        // Solid edge ticks on top and bottom borders
-        ctx.strokeStyle = '#334155';
-        ctx.lineWidth = 2.5;
+        // Edge ticks on top and bottom borders
+        ctx.strokeStyle = '#475569';
+        ctx.lineWidth = 1.2;
         ctx.setLineDash([]);
         ctx.beginPath();
         ctx.moveTo(px, 0);
