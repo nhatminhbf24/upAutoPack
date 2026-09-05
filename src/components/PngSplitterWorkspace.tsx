@@ -69,6 +69,7 @@ export const PngSplitterWorkspace: React.FC<PngSplitterWorkspaceProps> = ({
     minPixelArea: 150,
     padding: 2,
     mergeDistance: 0,
+    whiteBorderWidth: 0,
   });
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -550,7 +551,7 @@ export const PngSplitterWorkspace: React.FC<PngSplitterWorkspaceProps> = ({
                   </button>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 text-xs">
                   {/* 1. Alpha Threshold */}
                   <div className="bg-white p-3 rounded-xl border border-purple-200 space-y-1.5">
                     <div className="flex justify-between font-bold text-slate-700">
@@ -567,13 +568,13 @@ export const PngSplitterWorkspace: React.FC<PngSplitterWorkspaceProps> = ({
                       }
                       className="w-full h-2 bg-purple-200 rounded-lg appearance-none cursor-pointer accent-purple-600"
                     />
-                    <span className="text-[11px] text-slate-400">Giá trị nhỏ để nhận diện viền mờ</span>
+                    <span className="text-[11px] text-slate-400">Nhận diện viền mờ</span>
                   </div>
 
                   {/* 2. Min Pixel Area */}
                   <div className="bg-white p-3 rounded-xl border border-purple-200 space-y-1.5">
                     <div className="flex justify-between font-bold text-slate-700">
-                      <span>Lọc bụi (Min pixels):</span>
+                      <span>Lọc bụi (Min):</span>
                       <span className="text-purple-700 font-mono font-bold">{options.minPixelArea}px</span>
                     </div>
                     <input
@@ -606,7 +607,7 @@ export const PngSplitterWorkspace: React.FC<PngSplitterWorkspaceProps> = ({
                       }
                       className="w-full h-2 bg-purple-200 rounded-lg appearance-none cursor-pointer accent-purple-600"
                     />
-                    <span className="text-[11px] text-slate-400">Thêm lề trong suốt quanh ảnh con</span>
+                    <span className="text-[11px] text-slate-400">Lề trong suốt quanh ảnh</span>
                   </div>
 
                   {/* 4. Merge Distance */}
@@ -626,6 +627,33 @@ export const PngSplitterWorkspace: React.FC<PngSplitterWorkspaceProps> = ({
                       className="w-full h-2 bg-purple-200 rounded-lg appearance-none cursor-pointer accent-purple-600"
                     />
                     <span className="text-[11px] text-slate-400">Ghép chữ & icon rời rạc</span>
+                  </div>
+
+                  {/* 5. White Contour / Die-cut Border */}
+                  <div className="bg-white p-3 rounded-xl border border-amber-200 space-y-1.5">
+                    <div className="flex justify-between font-bold text-slate-700">
+                      <span>Viền trắng Die-cut:</span>
+                      <span className="text-amber-700 font-mono font-bold">
+                        {options.whiteBorderWidth ? `+${options.whiteBorderWidth}px` : 'Tắt'}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1 bg-amber-50 p-1 rounded-lg border border-amber-200">
+                      {[0, 2, 4, 6].map((w) => (
+                        <button
+                          key={w}
+                          type="button"
+                          onClick={() => setOptions((prev) => ({ ...prev, whiteBorderWidth: w }))}
+                          className={`flex-1 py-1 rounded text-center text-[10px] font-bold transition cursor-pointer ${
+                            (options.whiteBorderWidth || 0) === w
+                              ? 'bg-amber-600 text-white shadow-2xs'
+                              : 'text-amber-900 hover:bg-amber-100'
+                          }`}
+                        >
+                          {w === 0 ? '0' : `${w}px`}
+                        </button>
+                      ))}
+                    </div>
+                    <span className="text-[11px] text-slate-400">Tạo viền trắng bế sticker</span>
                   </div>
                 </div>
               </div>

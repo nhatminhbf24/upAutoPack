@@ -59,6 +59,104 @@ export async function exportPagesToPdf(
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = 'high';
 
+    // Print Slug (Thông tin đơn hàng ở lề giấy A4)
+    if (settings.printSlug) {
+      ctx.save();
+      ctx.fillStyle = '#64748b';
+      ctx.font = 'bold 26px sans-serif';
+      const orderText = settings.orderSlug?.trim() || 'Dâu Dâu AutoPack Print';
+      const dateText = new Date().toLocaleDateString('vi-VN');
+      const slugLine = `[Đơn: ${orderText}] • Trang ${page.pageNumber}/${pages.length} • Khổ A4 ${isLandscape ? 'Ngang' : 'Dọc'} • In ngày: ${dateText} • 300 DPI`;
+      ctx.fillText(slugLine, Math.round(10 * MM_TO_PX_300DPI), Math.round(5.5 * MM_TO_PX_300DPI));
+      ctx.restore();
+    }
+
+    const bleedMm = settings.bleed && settings.bleed > 0 ? settings.bleed : 0;
+    const bleedPx = Math.round(bleedMm * MM_TO_PX_300DPI);
+
+    // Full Trim Guides: Kẻ đường gióng thước tràn 4 mép giấy A4 chuẩn xưởng
+    if (settings.cutLines && settings.cutStyle === 'full_trim_guides' && page.items.length > 0) {
+      const rawY: number[] = [];
+      const rawX: number[] = [];
+      page.items.forEach((it) => {
+        const isSquare = it.shape === 'circle' || it.shape === 'heart';
+        const diam = isSquare ? Math.min(it.w, it.h) : 0;
+        const rx = isSquare ? it.x + (it.w - diam) / 2 : it.x;
+        const ry = isSquare ? it.y + (it.h - diam) / 2 : it.y;
+        const rw = isSquare ? diam : it.w;
+        const rh = isSquare ? diam : it.h;
+        rawY.push(ry, ry + rh);
+        rawX.push(rx, rx + rw);
+      });
+
+      const fullTrimYList: number[] = [];
+      const fullTrimXList: number[] = [];
+
+      rawY.sort((a, b) => a - b).forEach((y) => {
+        if (!fullTrimYList.some((existing) => Math.abs(existing - y) < 0.3)) {
+          fullTrimYList.push(y);
+        }
+      });
+
+      rawX.sort((a, b) => a - b).forEach((x) => {
+        if (!fullTrimXList.some((existing) => Math.abs(existing - x) < 0.3)) {
+          fullTrimXList.push(x);
+        }
+      });
+
+      ctx.save();
+      const tickLen = Math.round(5 * MM_TO_PX_300DPI);
+
+      // Horizontal guides & edge ticks
+      for (const yMm of fullTrimYList) {
+        const py = Math.round(yMm * MM_TO_PX_300DPI);
+        // Dashed hairline across entire width
+        ctx.strokeStyle = '#94a3b8';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([16, 12]);
+        ctx.beginPath();
+        ctx.moveTo(0, py);
+        ctx.lineTo(canvasWidth, py);
+        ctx.stroke();
+
+        // Solid edge ticks on left and right borders
+        ctx.strokeStyle = '#334155';
+        ctx.lineWidth = 2.5;
+        ctx.setLineDash([]);
+        ctx.beginPath();
+        ctx.moveTo(0, py);
+        ctx.lineTo(tickLen, py);
+        ctx.moveTo(canvasWidth - tickLen, py);
+        ctx.lineTo(canvasWidth, py);
+        ctx.stroke();
+      }
+
+      // Vertical guides & edge ticks
+      for (const xMm of fullTrimXList) {
+        const px = Math.round(xMm * MM_TO_PX_300DPI);
+        // Dashed hairline down entire height
+        ctx.strokeStyle = '#94a3b8';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([16, 12]);
+        ctx.beginPath();
+        ctx.moveTo(px, 0);
+        ctx.lineTo(px, canvasHeight);
+        ctx.stroke();
+
+        // Solid edge ticks on top and bottom borders
+        ctx.strokeStyle = '#334155';
+        ctx.lineWidth = 2.5;
+        ctx.setLineDash([]);
+        ctx.beginPath();
+        ctx.moveTo(px, 0);
+        ctx.lineTo(px, tickLen);
+        ctx.moveTo(px, canvasHeight - tickLen);
+        ctx.lineTo(px, canvasHeight);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
     for (const item of page.items) {
       try {
         const img = await loadImage(item.originalSrc);
@@ -73,14 +171,25 @@ export async function exportPagesToPdf(
 
         ctx.save();
 
-        // Apply Shape Clip
+        // When Bleed is active, image is drawn expanded by bleedPx outwards
+        const drawX = pxX - bleedPx;
+        const drawY = pxY - bleedPx;
+        const drawW = pxW + bleedPx * 2;
+        const drawH = pxH + bleedPx * 2;
+
+        // Clear background under image box so guideline doesn't show behind transparent edges
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(drawX, drawY, drawW, drawH);
+
+        // Apply Shape Clip with Bleed
         if (item.shape === 'circle') {
           ctx.beginPath();
-          ctx.arc(pxX + pxW / 2, pxY + pxH / 2, Math.min(pxW, pxH) / 2, 0, Math.PI * 2);
+          const diam = Math.min(pxW, pxH);
+          ctx.arc(pxX + pxW / 2, pxY + pxH / 2, (diam + bleedPx * 2) / 2, 0, Math.PI * 2);
           ctx.clip();
         } else if (item.shape === 'heart') {
-          ctx.translate(pxX, pxY);
-          ctx.scale(pxW / 24, pxH / 24);
+          ctx.translate(drawX, drawY);
+          ctx.scale(drawW / 24, drawH / 24);
           const heartPath = new Path2D(
             'M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z'
           );
@@ -88,43 +197,90 @@ export async function exportPagesToPdf(
           ctx.setTransform(1, 0, 0, 1, 0, 0);
         }
 
-        // Draw Image with exact pixel crop
+        // Draw Image with exact pixel crop (expanded for bleed if set)
         ctx.drawImage(
           img,
           item.cropX,
           item.cropY,
           actualCropW,
           actualCropH,
-          pxX,
-          pxY,
-          pxW,
-          pxH
+          drawX,
+          drawY,
+          drawW,
+          drawH
         );
 
         ctx.restore();
 
-        // Draw Cut lines
+        // Draw Cut lines / Corner marks at the EXACT finished boundary
         if (settings.cutLines) {
           ctx.save();
-          ctx.strokeStyle = '#9ca3af';
+          ctx.strokeStyle = '#6b7280';
           ctx.lineWidth = 1.5;
-          ctx.setLineDash([12, 8]);
 
-          if (item.shape === 'circle') {
+          const cutStyle = settings.cutStyle || 'dashed';
+
+          if (cutStyle === 'corner_marks' || cutStyle === 'full_trim_guides') {
+            // Chữ thập / Dấu góc tiêu chuẩn in ấn (Corner Crop Marks)
+            ctx.setLineDash([]);
+            const arm = Math.round(3.5 * MM_TO_PX_300DPI); // 3.5mm
+            const gap = Math.round(1 * MM_TO_PX_300DPI); // 1mm khoảng hở ngoài thành phẩm
+
+            // Top-Left
             ctx.beginPath();
-            ctx.arc(pxX + pxW / 2, pxY + pxH / 2, Math.min(pxW, pxH) / 2, 0, Math.PI * 2);
+            ctx.moveTo(pxX - gap, pxY);
+            ctx.lineTo(pxX - gap - arm, pxY);
+            ctx.moveTo(pxX, pxY - gap);
+            ctx.lineTo(pxX, pxY - gap - arm);
             ctx.stroke();
-          } else if (item.shape === 'heart') {
-            ctx.translate(pxX, pxY);
-            ctx.scale(pxW / 24, pxH / 24);
-            const heartPath = new Path2D(
-              'M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z'
-            );
-            ctx.stroke(heartPath);
-            ctx.setTransform(1, 0, 0, 1, 0, 0);
+
+            // Top-Right
+            ctx.beginPath();
+            ctx.moveTo(pxX + pxW + gap, pxY);
+            ctx.lineTo(pxX + pxW + gap + arm, pxY);
+            ctx.moveTo(pxX + pxW, pxY - gap);
+            ctx.lineTo(pxX + pxW, pxY - gap - arm);
+            ctx.stroke();
+
+            // Bottom-Left
+            ctx.beginPath();
+            ctx.moveTo(pxX - gap, pxY + pxH);
+            ctx.lineTo(pxX - gap - arm, pxY + pxH);
+            ctx.moveTo(pxX, pxY + pxH + gap);
+            ctx.lineTo(pxX, pxY + pxH + gap + arm);
+            ctx.stroke();
+
+            // Bottom-Right
+            ctx.beginPath();
+            ctx.moveTo(pxX + pxW + gap, pxY + pxH);
+            ctx.lineTo(pxX + pxW + gap + arm, pxY + pxH);
+            ctx.moveTo(pxX + pxW, pxY + pxH + gap);
+            ctx.lineTo(pxX + pxW, pxY + pxH + gap + arm);
+            ctx.stroke();
           } else {
-            ctx.strokeRect(pxX, pxY, pxW, pxH);
+            if (cutStyle === 'solid') {
+              ctx.setLineDash([]);
+            } else {
+              ctx.setLineDash([12, 8]);
+            }
+
+            if (item.shape === 'circle') {
+              ctx.beginPath();
+              ctx.arc(pxX + pxW / 2, pxY + pxH / 2, Math.min(pxW, pxH) / 2, 0, Math.PI * 2);
+              ctx.stroke();
+            } else if (item.shape === 'heart') {
+              ctx.translate(pxX, pxY);
+              ctx.scale(pxW / 24, pxH / 24);
+              const heartPath = new Path2D(
+                'M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z'
+              );
+              ctx.stroke(heartPath);
+              ctx.setTransform(1, 0, 0, 1, 0, 0);
+            } else {
+              ctx.strokeRect(pxX, pxY, pxW, pxH);
+            }
           }
+
           ctx.restore();
         }
       } catch (e) {

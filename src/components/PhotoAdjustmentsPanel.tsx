@@ -90,28 +90,98 @@ export const PhotoAdjustmentsPanel: React.FC<PhotoAdjustmentsPanelProps> = ({
 
   return (
     <div className="flex flex-col gap-5 p-1 text-slate-800 select-none">
-      {/* 1. Auto-adjust Button (Tự động cân chỉnh) */}
-      <div className="flex items-center gap-2">
-        <button
-          type="button"
-          onClick={onAutoAdjust}
-          disabled={isAutoAdjusting}
-          className="flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-2xl bg-gradient-to-r from-purple-600 via-indigo-600 to-purple-700 hover:from-purple-700 hover:to-indigo-800 text-white font-bold text-xs tracking-wide shadow-md shadow-purple-500/20 active:scale-[0.98] transition cursor-pointer disabled:opacity-60"
-        >
-          <Sparkles className={`w-4 h-4 text-purple-200 ${isAutoAdjusting ? 'animate-spin' : ''}`} />
-          <span>{isAutoAdjusting ? 'Đang phân tích...' : 'Tự động cân chỉnh'}</span>
-        </button>
-
-        {hasChanges && (
+      {/* 1. Auto-adjust Button & Quick Print Presets */}
+      <div className="space-y-2">
+        <div className="flex items-center gap-2">
           <button
             type="button"
-            onClick={handleResetAll}
-            className="p-2.5 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-bold transition flex items-center justify-center cursor-pointer shadow-2xs"
-            title="Đặt lại tất cả thông số về 0"
+            onClick={onAutoAdjust}
+            disabled={isAutoAdjusting}
+            className="flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-2xl bg-gradient-to-r from-purple-600 via-indigo-600 to-purple-700 hover:from-purple-700 hover:to-indigo-800 text-white font-bold text-xs tracking-wide shadow-md shadow-purple-500/20 active:scale-[0.98] transition cursor-pointer disabled:opacity-60"
           >
-            <RotateCcw className="w-4 h-4" />
+            <Sparkles className={`w-4 h-4 text-purple-200 ${isAutoAdjusting ? 'animate-spin' : ''}`} />
+            <span>{isAutoAdjusting ? 'Đang phân tích...' : 'Tự động cân chỉnh AI'}</span>
           </button>
-        )}
+
+          {hasChanges && (
+            <button
+              type="button"
+              onClick={handleResetAll}
+              className="p-2.5 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-bold transition flex items-center justify-center cursor-pointer shadow-2xs"
+              title="Đặt lại tất cả thông số về 0"
+            >
+              <RotateCcw className="w-4 h-4" />
+            </button>
+          )}
+        </div>
+
+        {/* 1-Click Professional Print Presets */}
+        <div className="bg-slate-100/70 p-2 rounded-2xl border border-slate-200/80 space-y-1.5">
+          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block px-1">
+            Preset Chuẩn In Quà Tặng (1-Click)
+          </span>
+          <div className="grid grid-cols-3 gap-1.5">
+            <button
+              type="button"
+              onClick={() =>
+                onChange({
+                  ...DEFAULT_ADJUSTMENTS,
+                  brightness: 12,
+                  contrast: 8,
+                  shadows: 15,
+                  whites: 5,
+                  highlights: -5,
+                  vibrance: 8,
+                })
+              }
+              className="px-2 py-1.5 rounded-xl bg-white hover:bg-purple-50 border border-slate-200 text-slate-800 hover:text-purple-700 text-[11px] font-bold transition shadow-2xs flex flex-col items-center gap-0.5 cursor-pointer text-center leading-tight"
+              title="Bù sáng in xưởng: Tăng sáng + bóng để in ra không bị tối hoặc xỉn màu"
+            >
+              <span>🖨️ Bù sáng in</span>
+              <span className="text-[9px] font-normal text-slate-400">Chống tối</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() =>
+                onChange({
+                  ...DEFAULT_ADJUSTMENTS,
+                  brightness: 10,
+                  contrast: 4,
+                  temperature: 4,
+                  tint: 2,
+                  shadows: 12,
+                  vibrance: 10,
+                })
+              }
+              className="px-2 py-1.5 rounded-xl bg-white hover:bg-rose-50 border border-slate-200 text-slate-800 hover:text-rose-700 text-[11px] font-bold transition shadow-2xs flex flex-col items-center gap-0.5 cursor-pointer text-center leading-tight"
+              title="Tông da chân dung: Làm da hồng hào, tươi tắn khi in ảnh thần tượng / kỷ yếu"
+            >
+              <span>🌸 Tông da</span>
+              <span className="text-[9px] font-normal text-slate-400">Hồng hào</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() =>
+                onChange({
+                  ...DEFAULT_ADJUSTMENTS,
+                  contrast: 12,
+                  highlights: 6,
+                  whites: 8,
+                  blacks: -8,
+                  vibrance: 12,
+                  saturation: 4,
+                })
+              }
+              className="px-2 py-1.5 rounded-xl bg-white hover:bg-sky-50 border border-slate-200 text-slate-800 hover:text-sky-700 text-[11px] font-bold transition shadow-2xs flex flex-col items-center gap-0.5 cursor-pointer text-center leading-tight"
+              title="Trong trẻo / Sắc nét: Khử xỉn, tách bạch chi tiết rực rỡ"
+            >
+              <span>💎 Trong trẻo</span>
+              <span className="text-[9px] font-normal text-slate-400">Khử đục</span>
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* 2. White balance (Cân bằng trắng) */}

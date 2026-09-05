@@ -147,6 +147,8 @@ export const CropModal: React.FC<CropModalProps> = ({
 
   const [showOriginalComparison, setShowOriginalComparison] = useState(false);
   const [cropSuccessToast, setCropSuccessToast] = useState<string | null>(null);
+  const [cornerPreview, setCornerPreview] = useState<'none' | 'r3' | 'r5'>('none');
+  const [showSafeArea, setShowSafeArea] = useState<boolean>(false);
 
   // Adjustments state
   const [adjustments, setAdjustments] = useState<ImageAdjustments>(
@@ -1271,8 +1273,8 @@ export const CropModal: React.FC<CropModalProps> = ({
                       height: `${fitBoxH}px`,
                       aspectRatio: `${effectiveTargetW} / ${effectiveTargetH}`,
                     }}
-                    className={`relative border-2 border-dashed border-blue-400 shadow-2xl overflow-hidden cursor-grab active:cursor-grabbing bg-white transition-all select-none ${
-                      shape === 'circle' ? 'shape-circle' : shape === 'heart' ? 'shape-heart' : 'rounded-2xl'
+                    className={`relative border-2 border-dashed border-blue-400 shadow-2xl overflow-hidden cursor-grab active:cursor-grabbing bg-white transition-all select-none rounded-none ${
+                      shape === 'circle' ? 'shape-circle' : shape === 'heart' ? 'shape-heart' : 'rounded-none'
                     }`}
                   >
                     <img
@@ -1287,6 +1289,28 @@ export const CropModal: React.FC<CropModalProps> = ({
                         top: `${percentY}%`,
                       }}
                     />
+
+                    {/* Corner Radius Simulation (Chỉ hiển thị khi người dùng chủ động chọn R3 / R5 để thử kìm dập) */}
+                    {shape !== 'circle' && shape !== 'heart' && cornerPreview !== 'none' && (
+                      <div
+                        className={`absolute inset-0 border-2 border-dashed border-pink-500 pointer-events-none z-20 ${
+                          cornerPreview === 'r3' ? 'rounded-2xl' : 'rounded-3xl'
+                        }`}
+                      >
+                        <span className="absolute top-1.5 right-1.5 bg-pink-600/90 text-white text-[9px] font-bold px-1.5 py-0.5 rounded shadow-xs">
+                          Mô phỏng bo kìm {cornerPreview.toUpperCase()}
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Safe Zone (Vùng an toàn 3mm) */}
+                    {showSafeArea && (
+                      <div className="absolute inset-3 border border-dotted border-emerald-400/90 pointer-events-none z-20 flex items-start justify-end p-1">
+                        <span className="bg-emerald-600/90 text-white text-[8px] font-bold px-1 rounded shadow-2xs">
+                          Safe 3mm
+                        </span>
+                      </div>
+                    )}
 
                     {/* Original Comparison Badge */}
                     {showOriginalComparison && (
@@ -1313,7 +1337,7 @@ export const CropModal: React.FC<CropModalProps> = ({
                 /* MODE 2: Interactive Crop Workspace */
                 <div className="flex flex-col items-center justify-center w-full h-full relative">
                   {/* Image and Crop Box Container */}
-                  <div className="relative inline-block select-none overflow-hidden rounded-xl shadow-2xl">
+                  <div className="relative inline-block select-none overflow-hidden rounded-none shadow-2xl">
                     <img
                       ref={imageElRef}
                       src={displayImageSrc}
@@ -1374,6 +1398,28 @@ export const CropModal: React.FC<CropModalProps> = ({
                       {/* Circular Cut Guide when shape is 'circle' or ratio is 1:1 */}
                       {(shape === 'circle' || cropRatioPreset === '1:1') && (
                         <div className="absolute inset-0 rounded-full border-2 border-dashed border-amber-300 pointer-events-none shadow-[0_0_8px_rgba(0,0,0,0.3)]" />
+                      )}
+
+                      {/* Corner Radius Preview (R3 / R5 for Photocard & Acrylic gifts) */}
+                      {cornerPreview !== 'none' && (
+                        <div
+                          className={`absolute inset-0 border-2 border-dashed border-pink-400 pointer-events-none ${
+                            cornerPreview === 'r3' ? 'rounded-2xl' : 'rounded-3xl'
+                          }`}
+                        >
+                          <span className="absolute top-1 right-1 bg-pink-600/90 text-white text-[8px] font-bold px-1 rounded">
+                            {cornerPreview.toUpperCase()}
+                          </span>
+                        </div>
+                      )}
+
+                      {/* Safe Zone (Vùng an toàn 3mm) */}
+                      {showSafeArea && (
+                        <div className="absolute inset-3 border border-dotted border-emerald-400/90 pointer-events-none flex items-start justify-end p-1">
+                          <span className="bg-emerald-600/90 text-white text-[8px] font-bold px-1 rounded shadow-2xs">
+                            Safe 3mm
+                          </span>
+                        </div>
                       )}
 
                       {/* Dimensions Pill inside Crop Box */}
@@ -1484,8 +1530,48 @@ export const CropModal: React.FC<CropModalProps> = ({
                 )}
               </div>
 
-              {/* Center Pan & Rotate Buttons */}
-              <div className="flex items-center gap-2">
+              {/* Center Pan, Rotate, Bo góc & Safe Zone Controls */}
+              <div className="flex items-center gap-2 flex-wrap">
+                {/* Bo góc Phôi Preview Button Group */}
+                <div className="flex items-center bg-slate-200/80 p-0.5 rounded-xl text-[11px] font-bold">
+                  <span className="px-2 text-slate-500 text-[10px]">Mô phỏng bo kìm:</span>
+                  {(['none', 'r3', 'r5'] as const).map((r) => (
+                    <button
+                      key={r}
+                      type="button"
+                      onClick={() => setCornerPreview(r)}
+                      className={`px-2 py-1 rounded-lg transition cursor-pointer ${
+                        cornerPreview === r
+                          ? 'bg-pink-600 text-white shadow-2xs'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                      title={
+                        r === 'none'
+                          ? 'Mặc định: Ảnh vuông 4 góc sắc nét 90°'
+                          : `Xem trước đường dập kìm bo góc ${r.toUpperCase()} (Photocard/Móc khóa)`
+                      }
+                    >
+                      {r === 'none' ? 'Tắt (Vuông)' : r.toUpperCase()}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Safe Zone Toggle */}
+                <button
+                  type="button"
+                  onClick={() => setShowSafeArea((prev) => !prev)}
+                  className={`px-2.5 py-1 rounded-xl text-[11px] font-bold border transition cursor-pointer ${
+                    showSafeArea
+                      ? 'bg-emerald-600 border-emerald-600 text-white shadow-2xs'
+                      : canvasTheme === 'dark'
+                      ? 'bg-slate-800 border-slate-700 text-slate-300 hover:text-white'
+                      : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
+                  }`}
+                  title="Hiển thị vùng an toàn lề 3mm (tránh chữ/mặt bị cắt phạm khi xén giấy)"
+                >
+                  Safe 3mm
+                </button>
+
                 <button
                   type="button"
                   onClick={handleResetCenter}

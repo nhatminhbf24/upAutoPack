@@ -5,6 +5,63 @@ export interface SplitterOptions {
   minPixelArea: number; // Minimum number of non-transparent pixels (default: 150)
   padding: number; // Padding in pixels around extracted image (default: 2)
   mergeDistance: number; // Proximity distance in px to merge nearby detached parts (default: 0)
+  whiteBorderWidth?: number; // Automatic white contour/border in px (default: 0)
+}
+
+/**
+ * Creates a clean, solid white contour/border around a transparent PNG sticker
+ */
+export function addWhiteBorderToCanvas(
+  sourceCanvas: HTMLCanvasElement,
+  borderWidth: number
+): HTMLCanvasElement {
+  if (!borderWidth || borderWidth <= 0) return sourceCanvas;
+
+  const pad = borderWidth + 2;
+  const w = sourceCanvas.width;
+  const h = sourceCanvas.height;
+  const targetW = w + pad * 2;
+  const targetH = h + pad * 2;
+
+  // Step 1: Create a white silhouette of sourceCanvas
+  const silhouetteCanvas = document.createElement('canvas');
+  silhouetteCanvas.width = w;
+  silhouetteCanvas.height = h;
+  const silCtx = silhouetteCanvas.getContext('2d');
+  if (!silCtx) return sourceCanvas;
+
+  silCtx.drawImage(sourceCanvas, 0, 0);
+  silCtx.globalCompositeOperation = 'source-in';
+  silCtx.fillStyle = '#FFFFFF';
+  silCtx.fillRect(0, 0, w, h);
+
+  // Step 2: Draw dilated silhouette on target canvas
+  const targetCanvas = document.createElement('canvas');
+  targetCanvas.width = targetW;
+  targetCanvas.height = targetH;
+  const targetCtx = targetCanvas.getContext('2d');
+  if (!targetCtx) return sourceCanvas;
+
+  targetCtx.imageSmoothingEnabled = true;
+
+  // Multi-ring dilation to ensure solid, gap-free white border
+  const steps = 24;
+  const rings = borderWidth <= 3 ? [borderWidth] : [borderWidth * 0.5, borderWidth];
+  for (const r of rings) {
+    for (let i = 0; i < steps; i++) {
+      const angle = (i * 2 * Math.PI) / steps;
+      const dx = pad + Math.cos(angle) * r;
+      const dy = pad + Math.sin(angle) * r;
+      targetCtx.drawImage(silhouetteCanvas, dx, dy);
+    }
+  }
+  // Fill center
+  targetCtx.drawImage(silhouetteCanvas, pad, pad);
+
+  // Step 3: Draw original color sticker on top
+  targetCtx.drawImage(sourceCanvas, pad, pad);
+
+  return targetCanvas;
 }
 
 export interface ExtractedImageItem {
@@ -60,6 +117,7 @@ export async function splitPngSheet(
     minPixelArea = 150,
     padding = 2,
     mergeDistance = 0,
+    whiteBorderWidth = 0,
   } = options;
 
   onProgress?.(10, 'Đang đọc và phân tích dữ liệu điểm ảnh...');
@@ -266,9 +324,14 @@ export async function splitPngSheet(
       cropH
     );
 
-    const dataUrl = itemCanvas.toDataURL('image/png');
+    let finalCanvas = itemCanvas;
+    if (whiteBorderWidth && whiteBorderWidth > 0) {
+      finalCanvas = addWhiteBorderToCanvas(itemCanvas, whiteBorderWidth);
+    }
+
+    const dataUrl = finalCanvas.toDataURL('image/png');
     const blob = await new Promise<Blob>((resolve) => {
-      itemCanvas.toBlob((b) => resolve(b || new Blob()), 'image/png');
+      finalCanvas.toBlob((b) => resolve(b || new Blob()), 'image/png');
     });
 
     const safeBaseName = baseName.replace(/\.[^/.]+$/, '').trim() || 'sticker';
@@ -281,8 +344,8 @@ export async function splitPngSheet(
       name,
       dataUrl,
       blob,
-      width: outW,
-      height: outH,
+      width: finalCanvas.width,
+      height: finalCanvas.height,
       pixelCount: comp.pixelCount,
       bbox: {
         minX: comp.minX,

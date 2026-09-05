@@ -18,6 +18,7 @@ import {
   HelpCircle,
   CheckCircle2,
   Loader2,
+  Copy,
 } from 'lucide-react';
 import { PackedPage, LayoutSettings, PhotoItem, ShapeType, PlacedPhotoItem } from '../types';
 import { A4_WIDTH_MM, A4_HEIGHT_MM } from '../utils/packing';
@@ -36,6 +37,7 @@ interface A4PreviewAreaProps {
   canRedo?: boolean;
   historyCount?: number;
   onBackToHub?: () => void;
+  onClonePageAsBackside?: (pageNumber: number) => void;
 }
 
 export const A4PreviewArea: React.FC<A4PreviewAreaProps> = ({
@@ -51,6 +53,7 @@ export const A4PreviewArea: React.FC<A4PreviewAreaProps> = ({
   canRedo = false,
   historyCount = 0,
   onBackToHub,
+  onClonePageAsBackside,
 }) => {
   const [zoom, setZoom] = useState<number>(70); // Percentage: 30% to 150%
   const [showRuler, setShowRuler] = useState<boolean>(false);
@@ -549,8 +552,28 @@ export const A4PreviewArea: React.FC<A4PreviewAreaProps> = ({
                     />
                   )}
 
+                  {/* Quick Action: Nhân bản làm mặt sau (Dành cho in 2 mặt) */}
+                  {onClonePageAsBackside && page.items.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => onClonePageAsBackside(page.pageNumber)}
+                      className="no-print absolute top-2 left-3 z-30 bg-purple-600 hover:bg-purple-700 active:scale-95 text-white text-[10.5px] font-bold px-2.5 py-1 rounded-full shadow-md flex items-center gap-1.5 transition cursor-pointer border border-purple-400/30 select-none hover:shadow-purple-500/20"
+                      title={`Sao chép toàn bộ ${page.items.length} ảnh của Trang ${page.pageNumber} sang trang tiếp theo và tự động căn lật đối xứng in 2 mặt`}
+                    >
+                      <Copy className="w-3.5 h-3.5" />
+                      <span>Nhân bản làm mặt sau</span>
+                    </button>
+                  )}
+
                   {/* Page Status Badges (Hidden in Print) */}
                   <div className="no-print absolute top-2 right-3 z-30 pointer-events-none flex items-center gap-2">
+                    {/* Duplex Indicator Badge if enabled */}
+                    {settings.duplexMode && (
+                      <div className="bg-purple-700/90 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-xs flex items-center gap-1">
+                        <span>{page.pageNumber % 2 === 0 ? 'Mặt Sau (Lật đối xứng)' : 'Mặt Trước'}</span>
+                      </div>
+                    )}
+
                     {/* Efficiency Badge */}
                     <div
                       className={`text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-xs flex items-center gap-1 ${
@@ -571,6 +594,18 @@ export const A4PreviewArea: React.FC<A4PreviewAreaProps> = ({
                     </div>
                   </div>
 
+                  {/* Print Order Slug Header (Printed on paper header) */}
+                  {settings.printSlug && (
+                    <div className="absolute top-[2.5mm] left-[8mm] right-[8mm] flex items-center justify-between text-[8px] text-slate-500 font-mono select-none pointer-events-none z-20 border-b border-slate-300 pb-0.5">
+                      <span className="font-bold text-slate-700">
+                        [Đơn: {settings.orderSlug?.trim() || 'Dâu Dâu AutoPack Print'}]
+                      </span>
+                      <span>
+                        Trang {page.pageNumber}/{pages.length} • Khổ: A4 {isLandscape ? 'Ngang' : 'Dọc'} • Ngày: {new Date().toLocaleDateString('vi-VN')}
+                      </span>
+                    </div>
+                  )}
+
                   {/* Printable Margin Guideline (Subtle dashed, hidden in print) */}
                   <div
                     className="no-print absolute border border-blue-200/40 pointer-events-none z-10"
@@ -581,6 +616,116 @@ export const A4PreviewArea: React.FC<A4PreviewAreaProps> = ({
                       height: `${pageH_mm - settings.margin * 2}mm`,
                     }}
                   />
+
+                  {/* Full Trim Guides (Đường gióng thước tràn ra tận 4 mép giấy A4) */}
+                  {(() => {
+                    const isFullTrimGuides = settings.cutLines && settings.cutStyle === 'full_trim_guides';
+                    if (!isFullTrimGuides || page.items.length === 0) return null;
+
+                    const rawY: number[] = [];
+                    const rawX: number[] = [];
+                    page.items.forEach((it) => {
+                      const isSquare = it.shape === 'circle' || it.shape === 'heart';
+                      const diam = isSquare ? Math.min(it.w, it.h) : 0;
+                      const rx = isSquare ? it.x + (it.w - diam) / 2 : it.x;
+                      const ry = isSquare ? it.y + (it.h - diam) / 2 : it.y;
+                      const rw = isSquare ? diam : it.w;
+                      const rh = isSquare ? diam : it.h;
+
+                      rawY.push(ry, ry + rh);
+                      rawX.push(rx, rx + rw);
+                    });
+
+                    const fullTrimYList: number[] = [];
+                    const fullTrimXList: number[] = [];
+
+                    rawY.sort((a, b) => a - b).forEach((y) => {
+                      if (!fullTrimYList.some((existing) => Math.abs(existing - y) < 0.3)) {
+                        fullTrimYList.push(y);
+                      }
+                    });
+
+                    rawX.sort((a, b) => a - b).forEach((x) => {
+                      if (!fullTrimXList.some((existing) => Math.abs(existing - x) < 0.3)) {
+                        fullTrimXList.push(x);
+                      }
+                    });
+
+                    return (
+                      <svg
+                        className="absolute inset-0 w-full h-full pointer-events-none z-10"
+                        style={{ overflow: 'visible' }}
+                      >
+                        {/* Horizontal Trim Guides */}
+                        {fullTrimYList.map((y, idx) => (
+                          <React.Fragment key={`trim-y-${idx}`}>
+                            {/* Đường gióng nét đứt mờ xuyên suốt từ mép trái sang mép phải */}
+                            <line
+                              x1="0"
+                              y1={`${y}mm`}
+                              x2={`${pageW_mm}mm`}
+                              y2={`${y}mm`}
+                              stroke="#94a3b8"
+                              strokeWidth="0.5"
+                              strokeDasharray="4 3"
+                            />
+                            {/* Vạch tick đậm ở mép trái (5mm) */}
+                            <line
+                              x1="0"
+                              y1={`${y}mm`}
+                              x2="5mm"
+                              y2={`${y}mm`}
+                              stroke="#334155"
+                              strokeWidth="1.2"
+                            />
+                            {/* Vạch tick đậm ở mép phải (5mm) */}
+                            <line
+                              x1={`${pageW_mm - 5}mm`}
+                              y1={`${y}mm`}
+                              x2={`${pageW_mm}mm`}
+                              y2={`${y}mm`}
+                              stroke="#334155"
+                              strokeWidth="1.2"
+                            />
+                          </React.Fragment>
+                        ))}
+
+                        {/* Vertical Trim Guides */}
+                        {fullTrimXList.map((x, idx) => (
+                          <React.Fragment key={`trim-x-${idx}`}>
+                            {/* Đường gióng nét đứt mờ xuyên suốt từ mép trên xuống mép dưới */}
+                            <line
+                              x1={`${x}mm`}
+                              y1="0"
+                              x2={`${x}mm`}
+                              y2={`${pageH_mm}mm`}
+                              stroke="#94a3b8"
+                              strokeWidth="0.5"
+                              strokeDasharray="4 3"
+                            />
+                            {/* Vạch tick đậm ở mép trên (5mm) */}
+                            <line
+                              x1={`${x}mm`}
+                              y1="0"
+                              x2={`${x}mm`}
+                              y2="5mm"
+                              stroke="#334155"
+                              strokeWidth="1.2"
+                            />
+                            {/* Vạch tick đậm ở mép dưới (5mm) */}
+                            <line
+                              x1={`${x}mm`}
+                              y1={`${pageH_mm - 5}mm`}
+                              x2={`${x}mm`}
+                              y2={`${pageH_mm}mm`}
+                              stroke="#334155"
+                              strokeWidth="1.2"
+                            />
+                          </React.Fragment>
+                        ))}
+                      </svg>
+                    );
+                  })()}
 
                   {/* Placed Photo Items */}
                   {page.items.map((item) => {
@@ -602,36 +747,69 @@ export const A4PreviewArea: React.FC<A4PreviewAreaProps> = ({
                     const isDraggingThis = draggedPhotoId === item.id;
                     const isDragOverThis = dragOverPhotoId === item.id;
 
+                    const cutStyle = settings.cutStyle || 'dashed';
+                    const isCornerMarks = settings.cutLines && (cutStyle === 'corner_marks' || cutStyle === 'full_trim_guides');
+                    const isSolidCut = settings.cutLines && cutStyle === 'solid';
+                    const isDashedCut = settings.cutLines && cutStyle === 'dashed';
+
                     return (
-                      <div
-                        key={`placed-${item.id}-${item.instanceIndex}`}
-                        id={`img-box-${item.id}-${item.instanceIndex}`}
-                        draggable={true}
-                        onDragStart={(e) => handleDragStart(e, item)}
-                        onDragOver={(e) => handleDragOver(e, item)}
-                        onDragLeave={(e) => handleDragLeave(e, item)}
-                        onDrop={(e) => handleDrop(e, item)}
-                        onDragEnd={handleDragEnd}
-                        onMouseDown={(e) => handlePhotoMouseDown(e, item)}
-                        onDoubleClick={() => onOpenCropModal(item)}
-                        title="Kéo thả để đổi vị trí ảnh • Kéo chuột trên ảnh để dịch tâm • Nhấp đúp để chỉnh chi tiết"
-                        style={{
-                          position: 'absolute',
-                          left: `${renderX}mm`,
-                          top: `${renderY}mm`,
-                          width: `${renderW}mm`,
-                          height: `${renderH}mm`,
-                        }}
-                        className={`overflow-hidden select-none cursor-grab active:cursor-grabbing group/box transition-all ${
-                          isCircle ? 'shape-circle' : isHeart ? 'shape-heart' : ''
-                        } ${settings.cutLines ? 'cut-lines-box' : ''} ${
-                          isDraggingThis ? 'opacity-30 scale-95 ring-2 ring-blue-500' : ''
-                        } ${
-                          isDragOverThis
-                            ? 'ring-4 ring-emerald-500 ring-offset-2 scale-105 z-30 shadow-lg'
-                            : ''
-                        }`}
-                      >
+                      <React.Fragment key={`frag-${item.id}-${item.instanceIndex}`}>
+                        {/* Corner Crop Marks for Precision Cutting (SVG Overlay) */}
+                        {isCornerMarks && (
+                          <div
+                            className="pointer-events-none absolute z-20"
+                            style={{
+                              left: `${renderX - 4}mm`,
+                              top: `${renderY - 4}mm`,
+                              width: `${renderW + 8}mm`,
+                              height: `${renderH + 8}mm`,
+                            }}
+                          >
+                            <svg className="w-full h-full" style={{ overflow: 'visible' }}>
+                              {/* Top-Left */}
+                              <line x1="0" y1="4mm" x2="3mm" y2="4mm" stroke="#64748b" strokeWidth="0.8" />
+                              <line x1="4mm" y1="0" x2="4mm" y2="3mm" stroke="#64748b" strokeWidth="0.8" />
+                              {/* Top-Right */}
+                              <line x1="calc(100% - 3mm)" y1="4mm" x2="100%" y2="4mm" stroke="#64748b" strokeWidth="0.8" />
+                              <line x1="calc(100% - 4mm)" y1="0" x2="calc(100% - 4mm)" y2="3mm" stroke="#64748b" strokeWidth="0.8" />
+                              {/* Bottom-Left */}
+                              <line x1="0" y1="calc(100% - 4mm)" x2="3mm" y2="calc(100% - 4mm)" stroke="#64748b" strokeWidth="0.8" />
+                              <line x1="4mm" y1="calc(100% - 3mm)" x2="4mm" y2="100%" stroke="#64748b" strokeWidth="0.8" />
+                              {/* Bottom-Right */}
+                              <line x1="calc(100% - 3mm)" y1="calc(100% - 4mm)" x2="100%" y2="calc(100% - 4mm)" stroke="#64748b" strokeWidth="0.8" />
+                              <line x1="calc(100% - 4mm)" y1="calc(100% - 3mm)" x2="calc(100% - 4mm)" y2="100%" stroke="#64748b" strokeWidth="0.8" />
+                            </svg>
+                          </div>
+                        )}
+
+                        <div
+                          id={`img-box-${item.id}-${item.instanceIndex}`}
+                          draggable={true}
+                          onDragStart={(e) => handleDragStart(e, item)}
+                          onDragOver={(e) => handleDragOver(e, item)}
+                          onDragLeave={(e) => handleDragLeave(e, item)}
+                          onDrop={(e) => handleDrop(e, item)}
+                          onDragEnd={handleDragEnd}
+                          onMouseDown={(e) => handlePhotoMouseDown(e, item)}
+                          onDoubleClick={() => onOpenCropModal(item)}
+                          title="Kéo thả để đổi vị trí ảnh • Kéo chuột trên ảnh để dịch tâm • Nhấp đúp để chỉnh chi tiết"
+                          style={{
+                            position: 'absolute',
+                            left: `${renderX}mm`,
+                            top: `${renderY}mm`,
+                            width: `${renderW}mm`,
+                            height: `${renderH}mm`,
+                          }}
+                          className={`bg-white z-20 overflow-hidden select-none cursor-grab active:cursor-grabbing group/box transition-all ${
+                            isCircle ? 'shape-circle' : isHeart ? 'shape-heart' : ''
+                          } ${isDashedCut ? 'cut-lines-box' : isSolidCut ? 'outline outline-1 outline-slate-400' : ''} ${
+                            isDraggingThis ? 'opacity-30 scale-95 ring-2 ring-blue-500' : ''
+                          } ${
+                            isDragOverThis
+                              ? 'ring-4 ring-emerald-500 ring-offset-2 scale-105 z-30 shadow-lg'
+                              : ''
+                          }`}
+                        >
                         {/* Image Content */}
                         <img
                           src={item.previewSrc || item.originalSrc}
@@ -680,8 +858,9 @@ export const A4PreviewArea: React.FC<A4PreviewAreaProps> = ({
                           </span>
                         </div>
                       </div>
-                    );
-                  })}
+                    </React.Fragment>
+                  );
+                })}
                 </div>
               );
             })}

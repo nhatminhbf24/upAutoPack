@@ -530,6 +530,36 @@ export default function App() {
     return packImagesToPages(photos, settings);
   }, [photos, settings]);
 
+  // Nhân bản toàn bộ ảnh của một trang để làm mặt sau (kèm tự động kích hoạt In 2 mặt đối xứng)
+  const handleClonePageAsBackside = useCallback((pageNumber: number) => {
+    const targetPage = packedPages.find((p) => p.pageNumber === pageNumber);
+    if (!targetPage || targetPage.items.length === 0) {
+      addToast('error', `Không tìm thấy ảnh ở Trang ${pageNumber} để nhân bản!`);
+      return;
+    }
+
+    const clonedPhotos: PhotoItem[] = targetPage.items.map((it, idx) => ({
+      ...it.photo,
+      id: `photo_${Date.now()}_clone_${idx}_${Math.random().toString(36).substring(2, 7)}`,
+      qty: 1,
+    }));
+
+    if (!settings.duplexMode) {
+      setSettings((prev) => ({ ...prev, duplexMode: true }));
+    }
+
+    setPhotos((prev) => [...prev, ...clonedPhotos]);
+
+    addToast(
+      'success',
+      `Đã nhân bản ${clonedPhotos.length} ảnh Trang ${pageNumber} làm mặt sau (tự động bật In 2 mặt đối xứng)!`
+    );
+  }, [packedPages, settings.duplexMode, setSettings, setPhotos, addToast]);
+
+  const handleClonePage1AsBackside = useCallback(() => {
+    handleClonePageAsBackside(1);
+  }, [handleClonePageAsBackside]);
+
   const handlePrint = useCallback(() => {
     if (photos.length === 0) {
       addToast('error', 'Chưa có ảnh nào để in!');
@@ -775,6 +805,8 @@ export default function App() {
             autoMatchOrientation={autoMatchOrientation}
             customPresets={customPresets}
             onOpenPngSplitter={() => setActiveView('png-splitter')}
+            onClonePage1AsBackside={handleClonePage1AsBackside}
+            photos={photos}
           />
 
           {/* Column 4: Live Interactive A4 Preview (Right) */}
@@ -791,6 +823,7 @@ export default function App() {
             canRedo={canRedo}
             historyCount={historyCount}
             onBackToHub={() => setActiveView('hub')}
+            onClonePageAsBackside={handleClonePageAsBackside}
           />
 
           {/* Modal for Fine-Tuned Crop / Pan / Framing / Color Adjustments */}

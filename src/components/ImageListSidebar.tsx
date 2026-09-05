@@ -16,6 +16,7 @@ import {
   AlertTriangle,
   Zap,
   Check,
+  Tag,
 } from 'lucide-react';
 import { PhotoItem, DEFAULT_SIZE_PRESETS, SizePreset } from '../types';
 import { rotateImageBase64, calculateCrop, createOptimizedPreview } from '../utils/imageUtils';
@@ -527,6 +528,29 @@ export const ImageListSidebar: React.FC<ImageListSidebarProps> = ({
                           )}
                         </div>
                       </div>
+                    </div>
+
+                    {/* Order Tag Input (Gán mã đơn / tên khách) */}
+                    <div className="flex items-center gap-1.5 bg-purple-50/70 border border-purple-200/80 rounded-lg px-2 py-1 text-[11px] focus-within:border-purple-400 focus-within:ring-1 focus-within:ring-purple-300 transition">
+                      <Tag className="w-3 h-3 text-purple-600 shrink-0" />
+                      <input
+                        type="text"
+                        placeholder="Gán mã đơn (vd: #DH01, Khách Tuấn)..."
+                        value={photo.orderTag || ''}
+                        onChange={(e) => onUpdatePhoto(photo.id, { orderTag: e.target.value })}
+                        className="w-full bg-transparent text-purple-950 font-medium placeholder:text-purple-400/80 placeholder:font-normal outline-none text-[10.5px]"
+                        title="Mã đơn riêng cho ảnh này - dùng để in mã mini ngoài viền xén hoặc gom đơn ở chân trang"
+                      />
+                      {photo.orderTag && (
+                        <button
+                          type="button"
+                          onClick={() => onUpdatePhoto(photo.id, { orderTag: undefined })}
+                          className="text-[10px] text-purple-400 hover:text-purple-700 px-1 rounded cursor-pointer"
+                          title="Xóa nhãn mã đơn"
+                        >
+                          ✕
+                        </button>
+                      )}
                     </div>
 
                     {/* Bottom: Quantity & Controls */}

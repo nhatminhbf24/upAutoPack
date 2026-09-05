@@ -57,12 +57,20 @@ export interface PhotoItem {
   cropW: number;
   cropH: number;
   rotation: number; // 0, 90, 180, 270 degrees
+  orderTag?: string; // Nhãn mã đơn hoặc tên khách riêng cho ảnh này (ví dụ: #DH01, Khách Tuấn)
 }
 
 export interface LayoutSettings {
   margin: number; // mm
   gap: number; // mm
   cutLines: boolean;
+  cutStyle?: 'solid' | 'dashed' | 'corner_marks' | 'full_trim_guides'; // Kiểu dấu cắt: viền liền, nét đứt, dấu góc (Corner Crop Marks), hoặc gióng tràn mép giấy (Full Trim Guides)
+  bleed?: number; // Tràn lề bù xén (0, 1, 2 mm) để tránh viền trắng khi cắt
+  printSlug?: boolean; // In thông tin đơn hàng / mã đơn ở lề trang giấy A4
+  slugPosition?: 'bottom' | 'top'; // Vị trí in mã đơn: 'bottom' (Chân trang - khuyên dùng vì rộng rãi) hoặc 'top' (Đầu trang)
+  printMicroSlugs?: boolean; // In mã đơn mini ngoài mép viền xén từng ảnh (xén dao xong sẽ bay mất, không phạm vào ảnh)
+  orderSlug?: string; // Tên khách hoặc mã đơn hàng chung (ví dụ: #DH1024 - Khách: Nguyễn Văn A)
+  duplexMode?: boolean; // Chế độ in 2 mặt: Tự động lật đối xứng trang chẵn (Mirror X) để khớp mặt sau
   smartCrop: boolean;
   autoNesting?: boolean; // Tự động xoay ngang/dọc ghép khít tối đa tiết kiệm giấy A4
   paperOrientation: 'portrait' | 'landscape';
@@ -125,4 +133,14 @@ export const DEFAULT_SIZE_PRESETS: SizePreset[] = [
   { id: '70x70_rect', label: 'Vuông 7 x 7 cm', category: 'Hình vuông & Trái tim', width: 70, height: 70, shape: 'rect' },
   { id: '42x42_heart', label: 'Trái tim 4.2 x 4.2 cm (Sticker Cute)', category: 'Hình vuông & Trái tim', width: 42, height: 42, shape: 'heart' },
   { id: '70x70_heart', label: 'Trái tim 7 x 7 cm', category: 'Hình vuông & Trái tim', width: 70, height: 70, shape: 'heart' },
+
+  // Phôi Quà Tặng Chuyên Dụng (Gift & POD Studio)
+  { id: '55x85_gift_pc', label: 'Photocard Idol Kpop (5.5 x 8.5 cm) - Bo góc R3', category: '🎁 Phôi Quà Tặng Chuyên Dụng', width: 55, height: 85, shape: 'rect' },
+  { id: '40x60_gift_keychain', label: 'Móc khóa Acrylic (4 x 6 cm)', category: '🎁 Phôi Quà Tặng Chuyên Dụng', width: 40, height: 60, shape: 'rect' },
+  { id: '50x50_gift_keychain', label: 'Móc khóa Acrylic vuông (5 x 5 cm)', category: '🎁 Phôi Quà Tặng Chuyên Dụng', width: 50, height: 50, shape: 'rect' },
+  { id: '45x45_gift_keychain', label: 'Móc khóa Acrylic tròn (4.5 x 4.5 cm)', category: '🎁 Phôi Quà Tặng Chuyên Dụng', width: 45, height: 45, shape: 'circle' },
+  { id: '44x44_gift_pin', label: 'Huy hiệu cài áo tròn 44mm (Kèm mép phôi bọc 54mm)', category: '🎁 Phôi Quà Tặng Chuyên Dụng', width: 44, height: 44, shape: 'circle' },
+  { id: '58x58_gift_pin', label: 'Huy hiệu cài áo tròn 58mm (Kèm mép phôi bọc 70mm)', category: '🎁 Phôi Quà Tặng Chuyên Dụng', width: 58, height: 58, shape: 'circle' },
+  { id: '50x150_gift_strip', label: 'Dải ảnh Photo Strip 3-4 ô (5 x 15 cm)', category: '🎁 Phôi Quà Tặng Chuyên Dụng', width: 50, height: 150, shape: 'rect' },
+  { id: '200x90_gift_mug', label: 'Phôi Cốc sứ in chuyển nhiệt (20 x 9 cm)', category: '🎁 Phôi Quà Tặng Chuyên Dụng', width: 200, height: 90, shape: 'rect' },
 ];

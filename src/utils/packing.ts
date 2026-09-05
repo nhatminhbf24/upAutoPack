@@ -267,12 +267,31 @@ export function packImagesToPages(
   });
 
   // Khi bật Nesting: Dùng thuật toán Guillotine Bin Packing ưu tiên đường cắt thẳng & diện tích tối đa
+  let packedPages: PackedPage[];
   if (settings.autoNesting === true) {
     // Sắp xếp giảm dần theo diện tích và kích thước lớn để tối ưu lấp đầy
     itemsToPack.sort((a, b) => b.area - a.area || Math.max(b.w, b.h) - Math.max(a.w, a.h));
-    return packGuillotineStraightCut(itemsToPack, usableWidth, usableHeight, margin, gap);
+    packedPages = packGuillotineStraightCut(itemsToPack, usableWidth, usableHeight, margin, gap);
+  } else {
+    // Mặc định: Xếp tuần tự tự nhiên (Standard Shelf Packing) theo thứ tự ảnh
+    packedPages = packShelf(itemsToPack, usableWidth, usableHeight, margin, gap);
   }
 
-  // Mặc định: Xếp tuần tự tự nhiên (Standard Shelf Packing) theo thứ tự ảnh
-  return packShelf(itemsToPack, usableWidth, usableHeight, margin, gap);
+  // Chế độ in 2 mặt (Duplex Alignment): Trang chẵn (2, 4, 6...) lật trục X để khớp chính xác mặt sau
+  if (settings.duplexMode === true) {
+    return packedPages.map((page) => {
+      if (page.pageNumber % 2 === 0) {
+        return {
+          ...page,
+          items: page.items.map((item) => ({
+            ...item,
+            x: Math.round((pageWidth - (item.x + item.w)) * 100) / 100,
+          })),
+        };
+      }
+      return page;
+    });
+  }
+
+  return packedPages;
 }
