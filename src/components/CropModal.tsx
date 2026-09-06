@@ -1273,7 +1273,7 @@ export const CropModal: React.FC<CropModalProps> = ({
                       height: `${fitBoxH}px`,
                       aspectRatio: `${effectiveTargetW} / ${effectiveTargetH}`,
                     }}
-                    className={`relative border-2 border-dashed border-blue-400 shadow-2xl overflow-hidden cursor-grab active:cursor-grabbing bg-white transition-all select-none rounded-none ${
+                    className={`relative shadow-2xl overflow-hidden cursor-grab active:cursor-grabbing bg-white transition-all select-none rounded-none ${
                       shape === 'circle' ? 'shape-circle' : shape === 'heart' ? 'shape-heart' : 'rounded-none'
                     }`}
                   >

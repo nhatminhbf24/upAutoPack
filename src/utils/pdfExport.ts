@@ -171,44 +171,75 @@ export async function exportPagesToPdf(
 
         ctx.save();
 
-        // When Bleed is active, image is drawn expanded by bleedPx outwards
-        const drawX = pxX - bleedPx;
-        const drawY = pxY - bleedPx;
-        const drawW = pxW + bleedPx * 2;
-        const drawH = pxH + bleedPx * 2;
+        if (item.isRotated) {
+          // Ảnh được tự động xoay 90° để lấp khoảng trống: Xoay quanh tâm ô ảnh
+          const centerX = pxX + pxW / 2;
+          const centerY = pxY + pxH / 2;
+          ctx.translate(centerX, centerY);
+          ctx.rotate((90 * Math.PI) / 180);
 
-        // Clear background under image box so guideline doesn't show behind transparent edges
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(drawX, drawY, drawW, drawH);
+          // Trong hệ quy chiếu xoay, chiều rộng/dài ban đầu đảo lại
+          const unrotDrawX = -pxH / 2 - bleedPx;
+          const unrotDrawY = -pxW / 2 - bleedPx;
+          const unrotDrawW = pxH + bleedPx * 2;
+          const unrotDrawH = pxW + bleedPx * 2;
 
-        // Apply Shape Clip with Bleed
-        if (item.shape === 'circle') {
-          ctx.beginPath();
-          const diam = Math.min(pxW, pxH);
-          ctx.arc(pxX + pxW / 2, pxY + pxH / 2, (diam + bleedPx * 2) / 2, 0, Math.PI * 2);
-          ctx.clip();
-        } else if (item.shape === 'heart') {
-          ctx.translate(drawX, drawY);
-          ctx.scale(drawW / 24, drawH / 24);
-          const heartPath = new Path2D(
-            'M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z'
+          // Clear background under image box
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(unrotDrawX, unrotDrawY, unrotDrawW, unrotDrawH);
+
+          // Draw Image with exact pixel crop (expanded for bleed if set)
+          ctx.drawImage(
+            img,
+            item.cropX,
+            item.cropY,
+            actualCropW,
+            actualCropH,
+            unrotDrawX,
+            unrotDrawY,
+            unrotDrawW,
+            unrotDrawH
           );
-          ctx.clip(heartPath);
-          ctx.setTransform(1, 0, 0, 1, 0, 0);
-        }
+        } else {
+          // When Bleed is active, image is drawn expanded by bleedPx outwards
+          const drawX = pxX - bleedPx;
+          const drawY = pxY - bleedPx;
+          const drawW = pxW + bleedPx * 2;
+          const drawH = pxH + bleedPx * 2;
 
-        // Draw Image with exact pixel crop (expanded for bleed if set)
-        ctx.drawImage(
-          img,
-          item.cropX,
-          item.cropY,
-          actualCropW,
-          actualCropH,
-          drawX,
-          drawY,
-          drawW,
-          drawH
-        );
+          // Clear background under image box so guideline doesn't show behind transparent edges
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(drawX, drawY, drawW, drawH);
+
+          // Apply Shape Clip with Bleed
+          if (item.shape === 'circle') {
+            ctx.beginPath();
+            const diam = Math.min(pxW, pxH);
+            ctx.arc(pxX + pxW / 2, pxY + pxH / 2, (diam + bleedPx * 2) / 2, 0, Math.PI * 2);
+            ctx.clip();
+          } else if (item.shape === 'heart') {
+            ctx.translate(drawX, drawY);
+            ctx.scale(drawW / 24, drawH / 24);
+            const heartPath = new Path2D(
+              'M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z'
+            );
+            ctx.clip(heartPath);
+            ctx.setTransform(1, 0, 0, 1, 0, 0);
+          }
+
+          // Draw Image with exact pixel crop (expanded for bleed if set)
+          ctx.drawImage(
+            img,
+            item.cropX,
+            item.cropY,
+            actualCropW,
+            actualCropH,
+            drawX,
+            drawY,
+            drawW,
+            drawH
+          );
+        }
 
         ctx.restore();
 

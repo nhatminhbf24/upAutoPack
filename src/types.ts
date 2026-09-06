@@ -58,6 +58,7 @@ export interface PhotoItem {
   cropH: number;
   rotation: number; // 0, 90, 180, 270 degrees
   orderTag?: string; // Nhãn mã đơn hoặc tên khách riêng cho ảnh này (ví dụ: #DH01, Khách Tuấn)
+  freePositions?: Record<number, { x: number; y: number; pageNumber?: number }>; // Vị trí tự do trên trang A4 theo từng bản in (instanceIndex)
 }
 
 export interface FreeformTextTag {
@@ -88,8 +89,10 @@ export interface LayoutSettings {
   textTag?: FreeformTextTag; // Dòng chữ / mã đơn tự do (kéo thả, xoay dọc/ngang, cỡ chữ tùy chỉnh, ngày giờ tự động)
   duplexMode?: boolean; // Chế độ in 2 mặt: Tự động lật đối xứng trang chẵn (Mirror X) để khớp mặt sau
   smartCrop: boolean;
-  autoNesting?: boolean; // Tự động xoay ngang/dọc ghép khít tối đa tiết kiệm giấy A4
+  autoNesting?: boolean; // Tự động sắp xếp ảnh tối ưu diện tích
+  allowRotation?: boolean; // Cho phép xoay 90° lấp khoảng trống (Tiết kiệm giấy tối đa)
   paperOrientation: 'portrait' | 'landscape';
+  layoutMode?: 'auto' | 'freeform'; // Chế độ xếp: Tự động tối ưu (auto) hoặc Kéo thả di chuyển tự do (freeform)
 }
 
 export interface PlacedPhotoItem extends PhotoItem {
@@ -98,6 +101,7 @@ export interface PlacedPhotoItem extends PhotoItem {
   w: number; // in mm
   h: number; // in mm
   instanceIndex: number;
+  isRotated?: boolean; // true nếu ảnh được thuật toán tự động xoay 90° để lấp khoảng trống
 }
 
 export interface PackedPage {

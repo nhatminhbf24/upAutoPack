@@ -87,7 +87,8 @@ function packGuillotineStraightCut(
   usableWidth: number,
   usableHeight: number,
   margin: number,
-  gap: number
+  gap: number,
+  allowRotation = false
 ): PackedPage[] {
   const remaining = [...items];
   const pages: PackedPage[] = [];
@@ -101,25 +102,48 @@ function packGuillotineStraightCut(
       itemPlaced = false;
       let bestItemIndex = -1;
       let bestRectIndex = -1;
+      let bestRotated = false;
       let bestScore = Number.MAX_VALUE;
 
       for (let i = 0; i < remaining.length; i++) {
         const item = remaining[i];
+        const canRotate = Boolean(
+          allowRotation &&
+          item.photo.shape === 'rect' &&
+          Math.abs(item.w - item.h) > 0.5
+        );
 
         for (let r = 0; r < freeRects.length; r++) {
           const rect = freeRects[r];
-          // Check if item fits in rect without rotation
+          // 1. Thử hướng chuẩn (0° - giữ nguyên chiều dọc/ngang)
           if (item.w <= rect.w && item.h <= rect.h) {
             const leftoverW = rect.w - item.w;
             const leftoverH = rect.h - item.h;
             const shortSideFit = Math.min(leftoverW, leftoverH);
-            // Heuristic: Prefer top-left reading order + tightest fit
+            // Heuristic: Ưu tiên thứ tự đọc từ trên xuống dưới, trái sang phải + vết cắt khít nhất
             const score = rect.y * 10000 + rect.x * 100 + shortSideFit;
 
             if (score < bestScore) {
               bestScore = score;
               bestItemIndex = i;
               bestRectIndex = r;
+              bestRotated = false;
+            }
+          }
+
+          // 2. Thử hướng xoay 90° (hoán đổi w <-> h để lấp khoảng trống)
+          if (canRotate && item.h <= rect.w && item.w <= rect.h) {
+            const leftoverW = rect.w - item.h;
+            const leftoverH = rect.h - item.w;
+            const shortSideFit = Math.min(leftoverW, leftoverH);
+            // Thêm +0.5 để nếu cả 2 hướng đều khít như nhau thì ưu tiên giữ nguyên chiều gốc của ảnh
+            const score = rect.y * 10000 + rect.x * 100 + shortSideFit + 0.5;
+
+            if (score < bestScore) {
+              bestScore = score;
+              bestItemIndex = i;
+              bestRectIndex = r;
+              bestRotated = true;
             }
           }
         }
@@ -128,8 +152,9 @@ function packGuillotineStraightCut(
       if (bestItemIndex !== -1 && bestRectIndex !== -1) {
         const [placedItem] = remaining.splice(bestItemIndex, 1);
         const freeRect = freeRects[bestRectIndex];
-        const finalW = placedItem.w;
-        const finalH = placedItem.h;
+        const isRotated = bestRotated;
+        const finalW = isRotated ? placedItem.h : placedItem.w;
+        const finalH = isRotated ? placedItem.w : placedItem.h;
 
         pageItems.push({
           ...placedItem.photo,
@@ -138,6 +163,7 @@ function packGuillotineStraightCut(
           y: margin + freeRect.y,
           w: finalW,
           h: finalH,
+          isRotated,
         });
 
         // Split free rectangle using Guillotine Straight-Cut Rule (Shorter Axis Split)
@@ -266,15 +292,43 @@ export function packImagesToPages(
     }
   });
 
-  // Khi bật Nesting: Dùng thuật toán Guillotine Bin Packing ưu tiên đường cắt thẳng & diện tích tối đa
+  // Khi ở chế độ Tự động: Dùng thuật toán Guillotine Bin Packing (nếu bật autoNesting) hoặc Standard Shelf Packing
+  // Khi ở chế độ Di chuyển tự do (freeform): Xếp thứ tự ban đầu tuần tự ổn định (Shelf Packing) để không bị đảo xáo trộn hoặc xoay ngầm bên dưới tọa độ tay
   let packedPages: PackedPage[];
-  if (settings.autoNesting === true) {
+  const isFreeform = settings.layoutMode === 'freeform';
+
+  if (!isFreeform && settings.autoNesting === true) {
     // Sắp xếp giảm dần theo diện tích và kích thước lớn để tối ưu lấp đầy
     itemsToPack.sort((a, b) => b.area - a.area || Math.max(b.w, b.h) - Math.max(a.w, a.h));
-    packedPages = packGuillotineStraightCut(itemsToPack, usableWidth, usableHeight, margin, gap);
+    packedPages = packGuillotineStraightCut(
+      itemsToPack,
+      usableWidth,
+      usableHeight,
+      margin,
+      gap,
+      Boolean(settings.allowRotation)
+    );
   } else {
-    // Mặc định: Xếp tuần tự tự nhiên (Standard Shelf Packing) theo thứ tự ảnh
+    // Mặc định hoặc chế độ tự do: Xếp tuần tự tự nhiên (Standard Shelf Packing) theo thứ tự ảnh
     packedPages = packShelf(itemsToPack, usableWidth, usableHeight, margin, gap);
+  }
+
+  // Khi ở chế độ Di chuyển tự do (freeform), áp dụng tọa độ tự do đã lưu do người dùng kéo thả
+  if (isFreeform) {
+    packedPages = packedPages.map((page) => ({
+      ...page,
+      items: page.items.map((it) => {
+        const customPos = it.freePositions?.[it.instanceIndex];
+        if (customPos) {
+          return {
+            ...it,
+            x: customPos.x,
+            y: customPos.y,
+          };
+        }
+        return it;
+      }),
+    }));
   }
 
   // Chế độ in 2 mặt (Duplex Alignment): Trang chẵn (2, 4, 6...) lật trục X để khớp chính xác mặt sau

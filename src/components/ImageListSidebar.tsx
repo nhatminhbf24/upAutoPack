@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Trash2,
   RotateCw,
@@ -54,6 +54,34 @@ export const ImageListSidebar: React.FC<ImageListSidebarProps> = ({
   const [rotatingId, setRotatingId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [upscaleMenuId, setUpscaleMenuId] = useState<string | null>(null);
+
+  // Tự động đóng menu DPI / Upscale khi nhấp chuột ra ngoài hoặc bấm Escape
+  useEffect(() => {
+    if (!upscaleMenuId) return;
+
+    const handlePointerDownOutside = (e: MouseEvent | TouchEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (!target?.closest(`[data-upscale-container="${upscaleMenuId}"]`)) {
+        setUpscaleMenuId(null);
+      }
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setUpscaleMenuId(null);
+      }
+    };
+
+    document.addEventListener('mousedown', handlePointerDownOutside);
+    document.addEventListener('touchstart', handlePointerDownOutside);
+    document.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDownOutside);
+      document.removeEventListener('touchstart', handlePointerDownOutside);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [upscaleMenuId]);
 
   const totalCopies = photos.reduce((acc, p) => acc + (p.qty || 1), 0);
 
@@ -375,7 +403,7 @@ export const ImageListSidebar: React.FC<ImageListSidebarProps> = ({
                           </div>
 
                           {/* Interactive DPI Badge with Upscale Menu */}
-                          <div className="relative shrink-0">
+                          <div className="relative shrink-0" data-upscale-container={photo.id}>
                             <button
                               type="button"
                               onClick={() => setUpscaleMenuId(upscaleMenuId === photo.id ? null : photo.id)}
@@ -399,22 +427,21 @@ export const ImageListSidebar: React.FC<ImageListSidebarProps> = ({
 
                             {/* Dropdown Menu for DPI / Upscale */}
                             {upscaleMenuId === photo.id && (
-                              <div className="absolute right-0 top-full mt-1.5 z-40 bg-white border border-slate-200 shadow-xl rounded-xl p-2 w-56 text-left">
-                                <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5 px-1 flex items-center justify-between">
-                                  <span>Nâng độ phân giải DPI</span>
-                                  <span className="text-amber-600 font-bold">AI Web Worker</span>
+                              <div className="absolute right-0 top-full mt-1.5 z-40 bg-white border border-slate-200 shadow-xl rounded-xl p-2 w-60 text-left">
+                                <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5 px-1">
+                                  Nâng độ phân giải DPI
                                 </div>
                                 <div className="space-y-1 text-xs">
                                   <button
                                     type="button"
                                     onClick={() => handleEnhanceSingle(photo)}
-                                    className="w-full text-left px-2 py-1.5 rounded-lg hover:bg-amber-50 text-slate-700 hover:text-amber-900 flex items-center justify-between transition font-medium cursor-pointer"
+                                    className="w-full text-left px-2 py-1.5 rounded-lg hover:bg-amber-50 text-slate-700 hover:text-amber-900 flex items-center justify-between gap-2 transition font-medium cursor-pointer"
                                   >
-                                    <span className="flex items-center gap-1.5">
-                                      <Zap className="w-3.5 h-3.5 text-amber-500" />
-                                      <span>Tự động tối ưu DPI</span>
+                                    <span className="flex items-center gap-1.5 min-w-0">
+                                      <Zap className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                                      <span className="whitespace-nowrap font-semibold">Tự động tối ưu</span>
                                     </span>
-                                    <span className="text-[9px] font-bold text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded">
+                                    <span className="text-[9px] font-bold text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded shrink-0 whitespace-nowrap">
                                       Khuyên dùng
                                     </span>
                                   </button>

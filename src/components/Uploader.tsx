@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { UploadCloud, Image as ImageIcon, Sparkles, Plus, Loader2, FileImage } from 'lucide-react';
+import { UploadCloud, Image as ImageIcon, Images, Plus, Loader2, FileImage } from 'lucide-react';
 import { PhotoItem, ShapeType, SizePreset } from '../types';
 import { readFileAsDataURL, getImageDimensions, calculateCrop, createOptimizedPreview, getOrientedDimensions } from '../utils/imageUtils';
 
@@ -250,13 +250,13 @@ export const Uploader: React.FC<UploaderProps> = ({
           id="btn-load-sample"
           onClick={loadSamplePhotos}
           disabled={isProcessing}
-          className="w-7 h-7 flex items-center justify-center rounded-lg bg-white/95 hover:bg-amber-50 hover:border-amber-300 border border-rose-200 text-amber-500 hover:text-amber-600 transition shadow-2xs cursor-pointer active:scale-90 disabled:opacity-50"
-          title="Thử ngay với ảnh mẫu có sẵn"
+          className="w-7 h-7 flex items-center justify-center rounded-lg bg-white/95 hover:bg-rose-50 hover:border-rose-300 border border-rose-200 text-rose-500 hover:text-rose-600 transition shadow-2xs cursor-pointer active:scale-90 disabled:opacity-50"
+          title="Thử ngay với ảnh mẫu có sẵn (Chân dung, phong cảnh, thú cưng)"
         >
           {isProcessing ? (
-            <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-500" />
+            <Loader2 className="w-3.5 h-3.5 animate-spin text-rose-500" />
           ) : (
-            <Sparkles className="w-4 h-4" />
+            <Images className="w-3.5 h-3.5" />
           )}
         </button>
       </div>

@@ -4,7 +4,6 @@ import {
   ZoomOut,
   Maximize2,
   Minimize2,
-  RotateCcw,
   RotateCw,
   Sparkles,
   Info,
@@ -24,6 +23,7 @@ import { A4_WIDTH_MM, A4_HEIGHT_MM } from '../utils/packing';
 import { rotateImageBase64, calculateCrop, createOptimizedPreview } from '../utils/imageUtils';
 import { getDefaultTextTag } from '../utils/textTagUtils';
 import { DraggableTextTag } from './DraggableTextTag';
+import { calculateAlignmentSnap, AlignmentGuideLine, SnapTarget } from '../utils/alignmentGuides';
 
 interface A4PreviewAreaProps {
   pages: PackedPage[];
@@ -39,6 +39,8 @@ interface A4PreviewAreaProps {
   historyCount?: number;
   onBackToHub?: () => void;
   onUpdateSettings?: (updates: Partial<LayoutSettings>) => void;
+  onUpdateFreeformPosition?: (photoId: string, instanceIndex: number, pos: { x: number; y: number; pageNumber?: number }) => void;
+  onResetFreeformPositions?: () => void;
 }
 
 export const A4PreviewArea: React.FC<A4PreviewAreaProps> = ({
@@ -55,6 +57,8 @@ export const A4PreviewArea: React.FC<A4PreviewAreaProps> = ({
   historyCount = 0,
   onBackToHub,
   onUpdateSettings,
+  onUpdateFreeformPosition,
+  onResetFreeformPositions,
 }) => {
   const [zoom, setZoom] = useState<number>(70); // Percentage: 30% to 150%
   const [showRuler, setShowRuler] = useState<boolean>(false);
@@ -90,37 +94,218 @@ export const A4PreviewArea: React.FC<A4PreviewAreaProps> = ({
   // Inter-item Drag & Drop Swap State
   const [draggedPhotoId, setDraggedPhotoId] = useState<string | null>(null);
   const [dragOverPhotoId, setDragOverPhotoId] = useState<string | null>(null);
+
+  // Chế độ Di chuyển tự do & Tự động gióng nam châm (Smart Alignment & Snapping)
+  const isFreeformMode = settings.layoutMode === 'freeform';
+  const [freeDraggingItem, setFreeDraggingItem] = useState<{
+    id: string;
+    instanceIndex: number;
+    pageNumber: number;
+    currentX: number;
+    currentY: number;
+    w: number;
+    h: number;
+  } | null>(null);
+  const [activeGuides, setActiveGuides] = useState<AlignmentGuideLine[]>([]);
+
   const [rotatingPhotoId, setRotatingPhotoId] = useState<string | null>(null);
 
-  const handleRotateItem = async (photo: PlacedPhotoItem) => {
+  // Xoay cả Khung và Ảnh 90° (Dọc ↔ Ngang): Khung và ảnh cùng quay đồng bộ, giữ nguyên 100% nội dung ảnh
+  const handleRotateFrame = async (photo: PlacedPhotoItem | PhotoItem) => {
     if (rotatingPhotoId === photo.id) return;
     setRotatingPhotoId(photo.id);
 
     try {
+      // 1. Xoay pixel ảnh gốc và preview 90°
       const rotatedSrc = await rotateImageBase64(photo.originalSrc, 90);
-      const rawRotated = photo.rawOriginalSrc ? await rotateImageBase64(photo.rawOriginalSrc, 90) : undefined;
-      const previewSrc = await createOptimizedPreview(rotatedSrc, 800, 0.85);
-      const newWidth = photo.imgHeight;
-      const newHeight = photo.imgWidth;
-      const crop = calculateCrop(newWidth, newHeight, photo.targetWidth, photo.targetHeight, settings.smartCrop);
+      const previewSrc = photo.previewSrc
+        ? await rotateImageBase64(photo.previewSrc, 90)
+        : await createOptimizedPreview(rotatedSrc, 800, 0.85);
+      const rawRotated = photo.rawOriginalSrc
+        ? await rotateImageBase64(photo.rawOriginalSrc, 90)
+        : undefined;
+
+      // 2. Kích thước pixel ảnh mới sau khi xoay 90°
+      const newImgWidth = photo.imgHeight;
+      const newImgHeight = photo.imgWidth;
+
+      // 3. Kích thước khung in mới (Hoán đổi Rộng ↔ Dài)
+      const newTargetWidth = photo.targetHeight;
+      const newTargetHeight = photo.targetWidth;
+
+      // 4. Chuyển đổi vùng cúp ảnh tương ứng theo góc quay 90° thuận chiều kim đồng hồ
+      // Điểm (x, y) trên ảnh WxH sang ảnh mới HxW sẽ thành (H - (y + cropH), x)
+      const newCropW = photo.cropH;
+      const newCropH = photo.cropW;
+      const newCropX = Math.max(
+        0,
+        Math.min(newImgWidth - newCropW, photo.imgHeight - (photo.cropY + photo.cropH))
+      );
+      const newCropY = Math.max(
+        0,
+        Math.min(newImgHeight - newCropH, photo.cropX)
+      );
+
+      // 5. Nếu đang ở chế độ Di chuyển tự do và ảnh đã có tọa độ tự do, xoay quanh tâm ảnh
+      let updatedFreePositions = photo.freePositions;
+      if (updatedFreePositions) {
+        const nextFree: Record<number, { x: number; y: number; pageNumber?: number }> = {};
+        for (const [idxStr, pos] of Object.entries(updatedFreePositions)) {
+          const idx = Number(idxStr);
+          // Giữ tâm của ảnh ở nguyên vị trí cũ trên mặt giấy A4
+          const oldW = photo.targetWidth;
+          const oldH = photo.targetHeight;
+          const centerX = pos.x + oldW / 2;
+          const centerY = pos.y + oldH / 2;
+          const nextX = Math.max(0, Math.min(pageW_mm - newTargetWidth, centerX - newTargetWidth / 2));
+          const nextY = Math.max(0, Math.min(pageH_mm - newTargetHeight, centerY - newTargetHeight / 2));
+          nextFree[idx] = {
+            ...pos,
+            x: Math.round(nextX * 100) / 100,
+            y: Math.round(nextY * 100) / 100,
+          };
+        }
+        updatedFreePositions = nextFree;
+      }
 
       onUpdatePhoto(photo.id, {
         originalSrc: rotatedSrc,
         previewSrc: previewSrc,
         rawOriginalSrc: rawRotated,
-        imgWidth: newWidth,
-        imgHeight: newHeight,
-        cropX: crop.cropX,
-        cropY: crop.cropY,
-        cropW: crop.cropW,
-        cropH: crop.cropH,
-        scale: 1,
+        imgWidth: newImgWidth,
+        imgHeight: newImgHeight,
+        targetWidth: newTargetWidth,
+        targetHeight: newTargetHeight,
+        cropX: newCropX,
+        cropY: newCropY,
+        cropW: newCropW,
+        cropH: newCropH,
+        scale: photo.scale || 1,
+        rotation: ((photo.rotation || 0) + 90) % 360,
+        freePositions: updatedFreePositions,
       });
     } catch (err) {
-      console.error('Error rotating item in preview:', err);
+      console.error('Error rotating frame and image:', err);
     } finally {
       setRotatingPhotoId(null);
     }
+  };
+
+  // Kéo thả di chuyển tự do trên trang A4 kèm tự động gióng nam châm (3mm)
+  const handleFreeformMouseDown = (
+    e: React.MouseEvent,
+    item: PlacedPhotoItem,
+    pageNumber: number
+  ) => {
+    if (e.button !== 0) return;
+    if ((e.target as HTMLElement).closest('button') || (e.target as HTMLElement).closest('.no-drag')) {
+      return;
+    }
+
+    e.preventDefault();
+    e.stopPropagation();
+
+    const pageElement = document.getElementById(`a4-page-${pageNumber}`);
+    if (!pageElement) return;
+
+    const pageRect = pageElement.getBoundingClientRect();
+    const pxToMmX = pageW_mm / pageRect.width;
+    const pxToMmY = pageH_mm / pageRect.height;
+
+    const startClientX = e.clientX;
+    const startClientY = e.clientY;
+    const startItemX = item.x;
+    const startItemY = item.y;
+
+    const targetPage = pages.find((p) => p.pageNumber === pageNumber);
+    const otherItems: SnapTarget[] = (targetPage ? targetPage.items : [])
+      .filter((it) => !(it.id === item.id && it.instanceIndex === item.instanceIndex))
+      .map((it) => {
+        const isSquare = it.shape === 'circle' || it.shape === 'heart';
+        const diam = isSquare ? Math.min(it.w, it.h) : 0;
+        return {
+          id: it.id,
+          instanceIndex: it.instanceIndex,
+          x: isSquare ? it.x + (it.w - diam) / 2 : it.x,
+          y: isSquare ? it.y + (it.h - diam) / 2 : it.y,
+          w: isSquare ? diam : it.w,
+          h: isSquare ? diam : it.h,
+        };
+      });
+
+    const isSquareShape = item.shape === 'circle' || item.shape === 'heart';
+    const diam = isSquareShape ? Math.min(item.w, item.h) : 0;
+    const itemW = isSquareShape ? diam : item.w;
+    const itemH = isSquareShape ? diam : item.h;
+
+    setFreeDraggingItem({
+      id: item.id,
+      instanceIndex: item.instanceIndex,
+      pageNumber,
+      currentX: startItemX,
+      currentY: startItemY,
+      w: itemW,
+      h: itemH,
+    });
+
+    let latestSnappedX = startItemX;
+    let latestSnappedY = startItemY;
+    let rafId: number | null = null;
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      if (rafId) return;
+      rafId = requestAnimationFrame(() => {
+        rafId = null;
+
+        const deltaPxX = moveEvent.clientX - startClientX;
+        const deltaPxY = moveEvent.clientY - startClientY;
+
+        const rawX = startItemX + deltaPxX * pxToMmX;
+        const rawY = startItemY + deltaPxY * pxToMmY;
+
+        // Tự động gióng với các ảnh xung quanh và lề trang A4 với lực hút nam châm 3mm
+        const snapResult = calculateAlignmentSnap(
+          { x: rawX, y: rawY, w: itemW, h: itemH },
+          otherItems,
+          pageW_mm,
+          pageH_mm,
+          settings.margin,
+          settings.gap,
+          3.0 // 3mm magnetic snapping
+        );
+
+        latestSnappedX = snapResult.x;
+        latestSnappedY = snapResult.y;
+
+        setFreeDraggingItem((prev) =>
+          prev ? { ...prev, currentX: snapResult.x, currentY: snapResult.y } : null
+        );
+        setActiveGuides(snapResult.guides);
+      });
+    };
+
+    const handleMouseUp = () => {
+      if (rafId) {
+        cancelAnimationFrame(rafId);
+        rafId = null;
+      }
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+
+      setFreeDraggingItem(null);
+      setActiveGuides([]);
+
+      if (onUpdateFreeformPosition) {
+        onUpdateFreeformPosition(item.id, item.instanceIndex, {
+          x: latestSnappedX,
+          y: latestSnappedY,
+          pageNumber,
+        });
+      }
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
   };
 
   // In-Page Interactive Cropping / Pan State
@@ -133,6 +318,7 @@ export const A4PreviewArea: React.FC<A4PreviewAreaProps> = ({
     initialCropY: number;
     renderedWidth: number;
     renderedHeight: number;
+    isRotated?: boolean;
   } | null>(null);
 
   // Calculate paper efficiency
@@ -207,7 +393,7 @@ export const A4PreviewArea: React.FC<A4PreviewAreaProps> = ({
   // 3. In-box photo pan / framing adjustment (Mousedown on image body)
   const handlePhotoMouseDown = (
     e: React.MouseEvent,
-    photo: PhotoItem
+    photo: PlacedPhotoItem
   ) => {
     // Only drag on primary mouse button
     if (e.button !== 0) return;
@@ -231,6 +417,7 @@ export const A4PreviewArea: React.FC<A4PreviewAreaProps> = ({
       initialCropY: photo.cropY,
       renderedWidth: rect.width || 100,
       renderedHeight: rect.height || 100,
+      isRotated: Boolean(photo.isRotated),
     };
 
     let rafId: number | null = null;
@@ -250,6 +437,7 @@ export const A4PreviewArea: React.FC<A4PreviewAreaProps> = ({
           initialCropY,
           renderedWidth,
           renderedHeight,
+          isRotated,
         } = panInfoRef.current;
 
         const dx = moveEvent.clientX - startX;
@@ -259,12 +447,22 @@ export const A4PreviewArea: React.FC<A4PreviewAreaProps> = ({
         const actualCropW = p.cropW / scale;
         const actualCropH = p.cropH / scale;
 
-        // Direct manipulation mapping
-        const pxScaleX = actualCropW / renderedWidth;
-        const pxScaleY = actualCropH / renderedHeight;
+        // When rotated 90 deg clockwise, width and height of outer container are swapped
+        const unrotRenderedW = isRotated ? renderedHeight : renderedWidth;
+        const unrotRenderedH = isRotated ? renderedWidth : renderedHeight;
 
-        let newX = initialCropX - dx * pxScaleX;
-        let newY = initialCropY - dy * pxScaleY;
+        // Direct manipulation mapping
+        const pxScaleX = actualCropW / unrotRenderedW;
+        const pxScaleY = actualCropH / unrotRenderedH;
+
+        // When rotated 90 deg clockwise:
+        // dragging right on screen (dx > 0) moves down in photo coords (dy)
+        // dragging down on screen (dy > 0) moves left in photo coords (-dx)
+        const effectiveDx = isRotated ? dy : dx;
+        const effectiveDy = isRotated ? -dx : dy;
+
+        let newX = initialCropX - effectiveDx * pxScaleX;
+        let newY = initialCropY - effectiveDy * pxScaleY;
 
         newX = Math.max(0, Math.min(newX, p.imgWidth - actualCropW));
         newY = Math.max(0, Math.min(newY, p.imgHeight - actualCropH));
@@ -315,49 +513,54 @@ export const A4PreviewArea: React.FC<A4PreviewAreaProps> = ({
               type="button"
               id="btn-preview-back-hub"
               onClick={onBackToHub}
-              className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-[11px] transition cursor-pointer"
-              title="Quay về màn hình chọn 2 chức năng"
+              className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-[11px] transition cursor-pointer"
+              title="ToolKit"
             >
-              <span className="text-pink-600 font-black">🍓</span>
-              <span>Đổi công cụ</span>
+              ToolKit
             </button>
             <div className="w-px h-4 bg-slate-200 mx-0.5" />
           </>
         )}
 
-        <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider pl-1">
-          Thu phóng:
-        </span>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => setZoom((z) => Math.max(30, z - 10))}
+            className="p-1 rounded-full hover:bg-slate-100 text-slate-600 transition cursor-pointer"
+            title="Thu nhỏ"
+          >
+            <ZoomOut className="w-4 h-4" />
+          </button>
 
-        <button
-          type="button"
-          onClick={() => setZoom((z) => Math.max(30, z - 10))}
-          className="p-1 rounded-full hover:bg-slate-100 text-slate-600 transition cursor-pointer"
-          title="Thu nhỏ"
-        >
-          <ZoomOut className="w-4 h-4" />
-        </button>
+          <input
+            type="range"
+            min="30"
+            max="150"
+            step="5"
+            value={zoom}
+            onChange={(e) => setZoom(parseInt(e.target.value))}
+            className="w-20 accent-blue-600 cursor-pointer"
+          />
 
-        <input
-          type="range"
-          min="30"
-          max="150"
-          step="5"
-          value={zoom}
-          onChange={(e) => setZoom(parseInt(e.target.value))}
-          className="w-20 accent-blue-600 cursor-pointer"
-        />
+          <button
+            type="button"
+            onClick={() => setZoom((z) => Math.min(150, z + 10))}
+            className="p-1 rounded-full hover:bg-slate-100 text-slate-600 transition cursor-pointer"
+            title="Phóng to"
+          >
+            <ZoomIn className="w-4 h-4" />
+          </button>
 
-        <button
-          type="button"
-          onClick={() => setZoom((z) => Math.min(150, z + 10))}
-          className="p-1 rounded-full hover:bg-slate-100 text-slate-600 transition cursor-pointer"
-          title="Phóng to"
-        >
-          <ZoomIn className="w-4 h-4" />
-        </button>
-
-        <span className="font-mono font-bold text-slate-800 w-10 text-right">{zoom}%</span>
+          <button
+            type="button"
+            id="btn-toggle-zoom"
+            onClick={() => setZoom((z) => (z === 100 ? 70 : 100))}
+            className="font-mono font-bold text-slate-800 text-[11px] px-1 py-0.5 hover:bg-slate-100 active:scale-95 rounded transition cursor-pointer select-none"
+            title="Nhấp để chuyển đổi 100% / 70%"
+          >
+            {zoom}%
+          </button>
+        </div>
 
         <div className="w-px h-4 bg-slate-200 mx-0.5" />
 
@@ -390,6 +593,47 @@ export const A4PreviewArea: React.FC<A4PreviewAreaProps> = ({
 
         <div className="w-px h-4 bg-slate-200 mx-0.5" />
 
+        {/* Chế độ sắp xếp: Tự động ghép khít vs Di chuyển tự do */}
+        <div className="flex items-center bg-slate-100/90 rounded-lg p-0.5 border border-slate-200 shadow-2xs">
+          <button
+            type="button"
+            id="btn-mode-auto"
+            onClick={() => {
+              onUpdateSettings?.({ layoutMode: 'auto' });
+              onResetFreeformPositions?.();
+            }}
+            className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold transition cursor-pointer ${
+              !isFreeformMode
+                ? 'bg-blue-600 text-white shadow-xs'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+            }`}
+            title="Chế độ tự động sắp xếp ảnh tối ưu giấy in"
+          >
+            <Layers className="w-3.5 h-3.5" />
+            <span>Tự động</span>
+          </button>
+
+          <button
+            type="button"
+            id="btn-mode-freeform"
+            onClick={() => onUpdateSettings?.({ layoutMode: 'freeform' })}
+            className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold transition cursor-pointer ${
+              isFreeformMode
+                ? 'bg-indigo-600 text-white shadow-xs ring-1 ring-indigo-400/40'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+            }`}
+            title="Bật chế độ di chuyển ảnh tự do trên trang A4 kèm tự động gióng và hút nam châm"
+          >
+            <Move className="w-3.5 h-3.5" />
+            <span>Di chuyển tự do</span>
+            {isFreeformMode && (
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-300 animate-pulse" />
+            )}
+          </button>
+        </div>
+
+        <div className="w-px h-4 bg-slate-200 mx-0.5" />
+
         {/* Ruler & Grid Toggles */}
         <button
           type="button"
@@ -402,7 +646,7 @@ export const A4PreviewArea: React.FC<A4PreviewAreaProps> = ({
           title="Bật/tắt thước đo milimet (mm)"
         >
           <Ruler className="w-3.5 h-3.5" />
-          <span>Thước đo</span>
+          <span>Thước</span>
         </button>
 
         <button
@@ -416,7 +660,7 @@ export const A4PreviewArea: React.FC<A4PreviewAreaProps> = ({
           title="Bật/tắt lưới căn lề mm"
         >
           <Grid className="w-3.5 h-3.5" />
-          <span>Lưới mm</span>
+          <span>Lưới</span>
         </button>
 
         {/* Fullscreen Zen Mode */}
@@ -562,51 +806,158 @@ export const A4PreviewArea: React.FC<A4PreviewAreaProps> = ({
                   <div
                     key={`page-${page.pageNumber}`}
                     id={`a4-page-${page.pageNumber}`}
-                    className="a4-page-sheet relative bg-white shadow-xl rounded-xs border border-slate-300/60 overflow-hidden"
+                    className="a4-page-sheet relative bg-white shadow-xl rounded-xs ring-1 ring-slate-300/60 overflow-hidden"
                     style={{
                       width: `${pageW_mm}mm`,
                       height: `${pageH_mm}mm`,
                     }}
                   >
-                  {/* Top Ruler Overlay (mm) */}
+                  {/* Top-Left Ruler Origin Corner */}
                   {showRuler && (
-                    <div className="no-print absolute top-0 left-0 right-0 h-4 bg-amber-50/90 border-b border-amber-300/60 z-30 pointer-events-none flex text-[8px] font-mono text-amber-900 select-none overflow-hidden">
-                      {Array.from({ length: Math.ceil(pageW_mm / 10) + 1 }).map((_, idx) => (
-                        <div
-                          key={`ruler-top-${idx}`}
-                          className="relative border-r border-amber-300/70 shrink-0 flex items-end pl-0.5 pb-0.5"
-                          style={{ width: '10mm', height: '100%' }}
-                        >
-                          {idx * 10 > 0 && <span>{idx * 10}</span>}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Left Ruler Overlay (mm) */}
-                  {showRuler && (
-                    <div className="no-print absolute top-0 left-0 bottom-0 w-4 bg-amber-50/90 border-r border-amber-300/60 z-30 pointer-events-none flex flex-col text-[8px] font-mono text-amber-900 select-none overflow-hidden">
-                      {Array.from({ length: Math.ceil(pageH_mm / 10) + 1 }).map((_, idx) => (
-                        <div
-                          key={`ruler-left-${idx}`}
-                          className="relative border-b border-amber-300/70 shrink-0 flex items-start pl-0.5 pt-0.5"
-                          style={{ height: '10mm', width: '100%' }}
-                        >
-                          {idx * 10 > 0 && <span>{idx * 10}</span>}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Grid mm Overlay */}
-                  {showGrid && (
                     <div
-                      className="no-print absolute inset-0 pointer-events-none z-10 opacity-30"
-                      style={{
-                        backgroundImage: `linear-gradient(to right, #3b82f6 1px, transparent 1px), linear-gradient(to bottom, #3b82f6 1px, transparent 1px)`,
-                        backgroundSize: '10mm 10mm',
-                      }}
-                    />
+                      className="no-print absolute top-0 left-0 bg-amber-100/95 border-r border-b border-amber-300/80 z-40 flex items-center justify-center text-[7px] font-mono font-black text-amber-900 select-none pointer-events-none"
+                      style={{ width: '4.5mm', height: '4.5mm' }}
+                    >
+                      mm
+                    </div>
+                  )}
+
+                  {/* Top Ruler Overlay (mm) - Vector SVG đồng bộ 100% tọa độ mm với lưới */}
+                  {showRuler && (
+                    <div
+                      className="no-print absolute top-0 left-0 right-0 bg-amber-50/95 border-b border-amber-300/80 z-30 pointer-events-none select-none overflow-hidden"
+                      style={{ height: '4.5mm' }}
+                    >
+                      <svg
+                        className="w-full h-full block"
+                        viewBox={`0 0 ${pageW_mm} 4.5`}
+                        preserveAspectRatio="none"
+                      >
+                        {Array.from({ length: Math.floor(pageW_mm) }).map((_, i) => {
+                          const x = i + 1;
+                          if (x >= pageW_mm) return null;
+                          const is10mm = x % 10 === 0;
+                          const is5mm = x % 5 === 0;
+                          const y1 = is10mm ? 0 : is5mm ? 1.8 : 2.8;
+                          return (
+                            <g key={`ruler-top-${x}`}>
+                              <line
+                                x1={x}
+                                y1={y1}
+                                x2={x}
+                                y2={4.5}
+                                stroke={is10mm ? '#b45309' : '#d97706'}
+                                strokeWidth={is10mm ? 0.28 : 0.15}
+                                opacity={is10mm ? 0.9 : is5mm ? 0.6 : 0.35}
+                              />
+                              {is10mm && (
+                                <text
+                                  x={x + 0.6}
+                                  y={3.2}
+                                  fontSize="2.1"
+                                  fill="#78350f"
+                                  fontFamily="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace"
+                                  fontWeight="bold"
+                                >
+                                  {x}
+                                </text>
+                              )}
+                            </g>
+                          );
+                        })}
+                      </svg>
+                    </div>
+                  )}
+
+                  {/* Left Ruler Overlay (mm) - Vector SVG đồng bộ 100% tọa độ mm với lưới */}
+                  {showRuler && (
+                    <div
+                      className="no-print absolute top-0 left-0 bottom-0 bg-amber-50/95 border-r border-amber-300/80 z-30 pointer-events-none select-none overflow-hidden"
+                      style={{ width: '4.5mm' }}
+                    >
+                      <svg
+                        className="w-full h-full block"
+                        viewBox={`0 0 4.5 ${pageH_mm}`}
+                        preserveAspectRatio="none"
+                      >
+                        {Array.from({ length: Math.floor(pageH_mm) }).map((_, i) => {
+                          const y = i + 1;
+                          if (y >= pageH_mm) return null;
+                          const is10mm = y % 10 === 0;
+                          const is5mm = y % 5 === 0;
+                          const x1 = is10mm ? 0 : is5mm ? 1.8 : 2.8;
+                          return (
+                            <g key={`ruler-left-${y}`}>
+                              <line
+                                x1={x1}
+                                y1={y}
+                                x2={4.5}
+                                y2={y}
+                                stroke={is10mm ? '#b45309' : '#d97706'}
+                                strokeWidth={is10mm ? 0.28 : 0.15}
+                                opacity={is10mm ? 0.9 : is5mm ? 0.6 : 0.35}
+                              />
+                              {is10mm && (
+                                <text
+                                  x={0.5}
+                                  y={y + 2.5}
+                                  fontSize="2.0"
+                                  fill="#78350f"
+                                  fontFamily="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace"
+                                  fontWeight="bold"
+                                >
+                                  {y}
+                                </text>
+                              )}
+                            </g>
+                          );
+                        })}
+                      </svg>
+                    </div>
+                  )}
+
+                  {/* Grid mm Overlay - Vector SVG chuẩn xác 100% tọa độ với thước */}
+                  {showGrid && (
+                    <svg
+                      className="no-print absolute inset-0 w-full h-full pointer-events-none z-10"
+                      viewBox={`0 0 ${pageW_mm} ${pageH_mm}`}
+                      style={{ width: `${pageW_mm}mm`, height: `${pageH_mm}mm` }}
+                    >
+                      {/* Vertical grid lines every 10mm */}
+                      {Array.from({ length: Math.floor(pageW_mm / 10) }).map((_, i) => {
+                        const x = (i + 1) * 10;
+                        if (x >= pageW_mm) return null;
+                        return (
+                          <line
+                            key={`grid-v-${x}`}
+                            x1={x}
+                            y1={0}
+                            x2={x}
+                            y2={pageH_mm}
+                            stroke="#3b82f6"
+                            strokeWidth="0.2"
+                            opacity="0.35"
+                          />
+                        );
+                      })}
+                      {/* Horizontal grid lines every 10mm */}
+                      {Array.from({ length: Math.floor(pageH_mm / 10) }).map((_, i) => {
+                        const y = (i + 1) * 10;
+                        if (y >= pageH_mm) return null;
+                        return (
+                          <line
+                            key={`grid-h-${y}`}
+                            x1={0}
+                            y1={y}
+                            x2={pageW_mm}
+                            y2={y}
+                            stroke="#3b82f6"
+                            strokeWidth="0.2"
+                            opacity="0.35"
+                          />
+                        );
+                      })}
+                    </svg>
                   )}
 
                   {/* Freeform Text Tag / In thông tin mã đơn lề giấy (Kéo thả, xoay, chỉnh cỡ trực tiếp) */}
@@ -750,6 +1101,78 @@ export const A4PreviewArea: React.FC<A4PreviewAreaProps> = ({
                     );
                   })()}
 
+                  {/* Smart Alignment Guides Overlay (Visible during freeform dragging) */}
+                  {isFreeformMode && freeDraggingItem && freeDraggingItem.pageNumber === page.pageNumber && activeGuides.length > 0 && (
+                    <div className="absolute inset-0 pointer-events-none z-40 overflow-visible">
+                      <svg
+                        className="w-full h-full overflow-visible"
+                        viewBox={`0 0 ${pageW_mm} ${pageH_mm}`}
+                      >
+                        {activeGuides.map((guide) => {
+                          const isVert = guide.type === 'vertical';
+                          const guideColor = guide.isCenter ? '#0284c7' : '#ec4899';
+                          return (
+                            <g key={guide.id}>
+                              {/* Đường vạch gióng xuyên trang mờ nhẹ */}
+                              <line
+                                x1={isVert ? guide.pos : 0}
+                                y1={isVert ? 0 : guide.pos}
+                                x2={isVert ? guide.pos : pageW_mm}
+                                y2={isVert ? pageH_mm : guide.pos}
+                                stroke={guideColor}
+                                strokeWidth="0.3"
+                                strokeDasharray="2 2"
+                                opacity="0.45"
+                              />
+                              {/* Vạch gióng nam châm chính xác nối giữa các ảnh */}
+                              <line
+                                x1={isVert ? guide.pos : guide.start}
+                                y1={isVert ? guide.start : guide.pos}
+                                x2={isVert ? guide.pos : guide.end}
+                                y2={isVert ? guide.end : guide.pos}
+                                stroke={guideColor}
+                                strokeWidth="0.8"
+                              />
+                              {/* Điểm neo hai đầu vạch gióng */}
+                              <circle
+                                cx={isVert ? guide.pos : guide.start}
+                                cy={isVert ? guide.start : guide.pos}
+                                r="1"
+                                fill={guideColor}
+                              />
+                              <circle
+                                cx={isVert ? guide.pos : guide.end}
+                                cy={isVert ? guide.end : guide.pos}
+                                r="1"
+                                fill={guideColor}
+                              />
+                            </g>
+                          );
+                        })}
+                      </svg>
+
+                      {/* Huy hiệu thông báo điểm gióng (Mép, Tâm, Lề, Gap...) */}
+                      {activeGuides.map((guide) => {
+                        const isVert = guide.type === 'vertical';
+                        const leftPos = isVert ? `${guide.pos}mm` : `${(guide.start + guide.end) / 2}mm`;
+                        const topPos = isVert ? `${(guide.start + guide.end) / 2}mm` : `${guide.pos}mm`;
+                        return (
+                          <div
+                            key={`badge-${guide.id}`}
+                            className="absolute -translate-x-1/2 -translate-y-1/2 px-1.5 py-0.5 rounded text-[9px] font-bold text-white shadow-md backdrop-blur-xs whitespace-nowrap flex items-center gap-1 z-50 pointer-events-none"
+                            style={{
+                              left: leftPos,
+                              top: topPos,
+                              backgroundColor: guide.isCenter ? 'rgba(2, 132, 199, 0.95)' : 'rgba(236, 72, 153, 0.95)',
+                            }}
+                          >
+                            <span>{guide.label}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
                   {/* Placed Photo Items */}
                   {page.items.map((item) => {
                     const actualCropW = item.cropW / (item.scale || 1);
@@ -767,6 +1190,15 @@ export const A4PreviewArea: React.FC<A4PreviewAreaProps> = ({
                     const renderH = isSquareShape ? diam : item.h;
                     const renderX = isSquareShape ? item.x + (item.w - diam) / 2 : item.x;
                     const renderY = isSquareShape ? item.y + (item.h - diam) / 2 : item.y;
+
+                    const isFreeDraggingThis =
+                      Boolean(freeDraggingItem) &&
+                      freeDraggingItem?.id === item.id &&
+                      freeDraggingItem?.instanceIndex === item.instanceIndex;
+
+                    const currentItemX = isFreeDraggingThis && freeDraggingItem ? freeDraggingItem.currentX : renderX;
+                    const currentItemY = isFreeDraggingThis && freeDraggingItem ? freeDraggingItem.currentY : renderY;
+
                     const isDraggingThis = draggedPhotoId === item.id;
                     const isDragOverThis = dragOverPhotoId === item.id;
 
@@ -787,8 +1219,8 @@ export const A4PreviewArea: React.FC<A4PreviewAreaProps> = ({
                           <div
                             className="pointer-events-none absolute z-20"
                             style={{
-                              left: `${renderX - 4}mm`,
-                              top: `${renderY - 4}mm`,
+                              left: `${currentItemX - 4}mm`,
+                              top: `${currentItemY - 4}mm`,
                               width: `${renderW + 8}mm`,
                               height: `${renderH + 8}mm`,
                             }}
@@ -812,65 +1244,125 @@ export const A4PreviewArea: React.FC<A4PreviewAreaProps> = ({
 
                         <div
                           id={`img-box-${item.id}-${item.instanceIndex}`}
-                          draggable={true}
-                          onDragStart={(e) => handleDragStart(e, item)}
-                          onDragOver={(e) => handleDragOver(e, item)}
-                          onDragLeave={(e) => handleDragLeave(e, item)}
-                          onDrop={(e) => handleDrop(e, item)}
-                          onDragEnd={handleDragEnd}
-                          onMouseDown={(e) => handlePhotoMouseDown(e, item)}
+                          draggable={!isFreeformMode}
+                          onDragStart={(e) => !isFreeformMode && handleDragStart(e, item)}
+                          onDragOver={(e) => !isFreeformMode && handleDragOver(e, item)}
+                          onDragLeave={(e) => !isFreeformMode && handleDragLeave(e, item)}
+                          onDrop={(e) => !isFreeformMode && handleDrop(e, item)}
+                          onDragEnd={!isFreeformMode ? handleDragEnd : undefined}
+                          onMouseDown={(e) =>
+                            isFreeformMode
+                              ? handleFreeformMouseDown(e, item, page.pageNumber)
+                              : handlePhotoMouseDown(e, item)
+                          }
                           onDoubleClick={() => onOpenCropModal(item)}
-                          title="Kéo thả để đổi vị trí ảnh • Kéo chuột trên ảnh để dịch tâm • Nhấp đúp để chỉnh chi tiết"
+                          title={
+                            isFreeformMode
+                              ? 'Nhấp giữ và kéo ảnh tự do trên trang A4 • Tự động gióng & hút nam châm 3mm • Nhấp đúp để chỉnh chi tiết'
+                              : 'Kéo thả để đổi vị trí ảnh • Kéo chuột trên ảnh để dịch tâm • Nhấp đúp để chỉnh chi tiết'
+                          }
                           style={{
                             position: 'absolute',
-                            left: `${renderX}mm`,
-                            top: `${renderY}mm`,
+                            left: `${currentItemX}mm`,
+                            top: `${currentItemY}mm`,
                             width: `${renderW}mm`,
                             height: `${renderH}mm`,
                           }}
-                          className={`bg-white z-20 overflow-hidden select-none cursor-grab active:cursor-grabbing group/box transition-all ${
-                            isCircle ? 'shape-circle' : isHeart ? 'shape-heart' : ''
-                          } ${isDashedCut ? 'cut-lines-box' : isSolidCut ? 'outline outline-1 outline-slate-400' : ''} ${
-                            isDraggingThis ? 'opacity-30 scale-95 ring-2 ring-blue-500' : ''
-                          } ${
-                            isDragOverThis
+                          className={`bg-white z-20 overflow-hidden select-none group/box ${
+                            isFreeDraggingThis
+                              ? 'z-50 shadow-2xl cursor-grabbing opacity-95'
+                              : isFreeformMode
+                              ? 'cursor-move transition-shadow'
+                              : 'cursor-grab active:cursor-grabbing transition-all'
+                          } ${isCircle ? 'shape-circle' : isHeart ? 'shape-heart' : ''} ${
+                            isDashedCut ? 'cut-lines-box' : isSolidCut ? 'outline outline-1 outline-slate-400' : ''
+                          } ${!isFreeformMode && isDraggingThis ? 'opacity-30 scale-95 ring-2 ring-blue-500' : ''} ${
+                            !isFreeformMode && isDragOverThis
                               ? 'ring-4 ring-emerald-500 ring-offset-2 scale-105 z-30 shadow-lg'
                               : ''
                           }`}
                         >
                         {/* Image Content */}
-                        <img
-                          src={item.previewSrc || item.originalSrc}
-                          alt={item.name}
-                          draggable={false}
-                          decoding="async"
-                          className="absolute max-w-none pointer-events-none transition-none"
-                          style={{
-                            width: `${percentW}%`,
-                            height: `${percentH}%`,
-                            left: `${percentX}%`,
-                            top: `${percentY}%`,
-                          }}
-                        />
+                        {item.isRotated ? (
+                          <div
+                            className="absolute pointer-events-none"
+                            style={{
+                              width: `${renderH}mm`,
+                              height: `${renderW}mm`,
+                              left: '50%',
+                              top: '50%',
+                              transform: 'translate(-50%, -50%) rotate(90deg)',
+                              transformOrigin: 'center center',
+                              overflow: 'hidden',
+                            }}
+                          >
+                            <img
+                              src={item.previewSrc || item.originalSrc}
+                              alt={item.name}
+                              draggable={false}
+                              decoding="async"
+                              className="absolute max-w-none pointer-events-none transition-none"
+                              style={{
+                                width: `${percentW}%`,
+                                height: `${percentH}%`,
+                                left: `${percentX}%`,
+                                top: `${percentY}%`,
+                              }}
+                            />
+                          </div>
+                        ) : (
+                          <img
+                            src={item.previewSrc || item.originalSrc}
+                            alt={item.name}
+                            draggable={false}
+                            decoding="async"
+                            className="absolute max-w-none pointer-events-none transition-none"
+                            style={{
+                              width: `${percentW}%`,
+                              height: `${percentH}%`,
+                              left: `${percentX}%`,
+                              top: `${percentY}%`,
+                            }}
+                          />
+                        )}
+
+                        {/* 90° Auto-Rotated Badge (Visible when not hovered, disappears on hover) */}
+                        {item.isRotated && (
+                          <div
+                            className="no-print opacity-90 group-hover/box:opacity-0 transition-opacity absolute top-1.5 right-1.5 bg-emerald-700/90 backdrop-blur-xs text-white text-[9px] font-bold px-1.5 py-0.5 rounded shadow-sm border border-emerald-500/40 pointer-events-none flex items-center gap-0.5 z-10"
+                            title="Ảnh được tự động xoay 90° để tối ưu ghép khít khoảng trống giấy in"
+                          >
+                            <RotateCw className="w-2.5 h-2.5" />
+                            <span>90°</span>
+                          </div>
+                        )}
 
                         {/* Drag & Reorder Grip Handle (Top Left, visible on hover) */}
                         <div
                           className="no-print drag-reorder-handle opacity-0 group-hover/box:opacity-100 transition-opacity absolute top-1.5 left-1.5 bg-slate-900/90 hover:bg-slate-800 backdrop-blur-xs text-white p-1.5 rounded-md cursor-grab active:cursor-grabbing z-20 flex items-center shadow-md border border-slate-700/60"
-                          title="Kéo biểu tượng này để đổi vị trí sang bức ảnh khác"
+                          title={
+                            isFreeformMode
+                              ? 'Kéo thả ảnh tự do trên trang A4 (Tự động gióng & hút nam châm)'
+                              : 'Kéo biểu tượng này để đổi vị trí sang bức ảnh khác'
+                          }
                         >
-                          <GripHorizontal className="w-4 h-4 text-slate-200" />
+                          {isFreeformMode ? (
+                            <Move className="w-4 h-4 text-indigo-300" />
+                          ) : (
+                            <GripHorizontal className="w-4 h-4 text-slate-200" />
+                          )}
                         </div>
 
-                        {/* Quick Rotate Button (Top Right, visible on hover) */}
+                        {/* Quick Rotate Frame & Image Button (Top Right, visible on hover) */}
                         <button
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
-                            handleRotateItem(item);
+                            handleRotateFrame(item);
                           }}
                           disabled={rotatingPhotoId === item.id}
-                          className="no-print opacity-0 group-hover/box:opacity-100 transition-opacity absolute top-1.5 right-1.5 bg-slate-900/90 hover:bg-indigo-600 backdrop-blur-xs text-white p-1.5 rounded-md cursor-pointer z-20 flex items-center shadow-md border border-slate-700/60 disabled:opacity-50 active:scale-95 transition-all"
-                          title="Xoay ảnh này 90°"
+                          className="no-print opacity-0 group-hover/box:opacity-100 transition-opacity absolute top-1.5 right-1.5 bg-slate-900/90 hover:bg-blue-600 backdrop-blur-xs text-white p-1.5 rounded-md cursor-pointer z-20 flex items-center shadow-md border border-slate-700/60 active:scale-95 transition-all disabled:opacity-50"
+                          title={`Xoay cả khung và ảnh 90° (Dọc ↔ Ngang): Giữ nguyên trọn vẹn ảnh, chuyển thành ${item.targetHeight / 10}x${item.targetWidth / 10}cm`}
                         >
                           {rotatingPhotoId === item.id ? (
                             <Loader2 className="w-4 h-4 animate-spin text-white" />
@@ -880,11 +1372,24 @@ export const A4PreviewArea: React.FC<A4PreviewAreaProps> = ({
                         </button>
 
                         {/* Hover Info Tag (Bottom Right, Hidden in Print) */}
-                        <div className="no-print opacity-0 group-hover/box:opacity-100 transition-opacity absolute bottom-1.5 right-1.5 bg-black/75 backdrop-blur-xs text-white text-[10px] font-mono px-2 py-0.5 rounded-md pointer-events-none flex items-center gap-0.5 z-20 shadow-xs border border-white/10">
+                        <div className="no-print opacity-0 group-hover/box:opacity-100 transition-opacity absolute bottom-1.5 right-1.5 bg-black/75 backdrop-blur-xs text-white text-[10px] font-mono px-2 py-0.5 rounded-md pointer-events-none flex items-center gap-1 z-20 shadow-xs border border-white/10">
                           <span>
-                            {item.w / 10}x{item.h / 10}cm
+                            {item.isRotated
+                              ? `${item.targetWidth / 10}x${item.targetHeight / 10}cm (Xoay 90°)`
+                              : `${item.w / 10}x${item.h / 10}cm`}
                           </span>
                         </div>
+
+                        {/* Viền nhận diện BÊN TRONG lòng ảnh (Inset Border) - Không phình mép ra ngoài, vạch thước và mép ảnh khớp chuẩn 100% */}
+                        <div
+                          className={`no-print pointer-events-none absolute inset-0 z-15 transition-all duration-150 ${
+                            isFreeDraggingThis
+                              ? 'border-2 border-indigo-500 shadow-inner'
+                              : isFreeformMode
+                              ? 'opacity-0 group-hover/box:opacity-100 border-2 border-indigo-400/90'
+                              : 'opacity-0 group-hover/box:opacity-100 border border-blue-400/80'
+                          }`}
+                        />
                       </div>
                     </React.Fragment>
                   );

@@ -1,6 +1,6 @@
 import React from 'react';
 import {
-  Sparkles,
+  Wand2,
   Lightbulb,
   Sun,
   Palette,
@@ -99,7 +99,7 @@ export const PhotoAdjustmentsPanel: React.FC<PhotoAdjustmentsPanelProps> = ({
             disabled={isAutoAdjusting}
             className="flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-2xl bg-gradient-to-r from-purple-600 via-indigo-600 to-purple-700 hover:from-purple-700 hover:to-indigo-800 text-white font-bold text-xs tracking-wide shadow-md shadow-purple-500/20 active:scale-[0.98] transition cursor-pointer disabled:opacity-60"
           >
-            <Sparkles className={`w-4 h-4 text-purple-200 ${isAutoAdjusting ? 'animate-spin' : ''}`} />
+            <Wand2 className={`w-4 h-4 text-purple-200 ${isAutoAdjusting ? 'animate-spin' : ''}`} />
             <span>{isAutoAdjusting ? 'Đang phân tích...' : 'Tự động cân chỉnh AI'}</span>
           </button>
 

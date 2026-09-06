@@ -546,7 +546,7 @@ export const BatchToolsSidebar: React.FC<BatchToolsSidebarProps> = ({
                     <span className="text-[9px] bg-blue-100 text-blue-700 px-1 rounded font-bold">Khuyên dùng</span>
                   </div>
                   <div className="text-[10px] text-slate-500 leading-tight">
-                    Ảnh ngang ↔ Khổ ngang, Ảnh dọc ↔ Khổ dọc. Tránh bị cắt xén nội dung.
+                    Ảnh ngang ↔ Khổ ngang, Ảnh dọc ↔ Khổ dọc. Giữ nguyên tỉ lệ kích thước.
                   </div>
                 </div>
               </label>
@@ -692,7 +692,7 @@ export const BatchToolsSidebar: React.FC<BatchToolsSidebarProps> = ({
                   </>
                 ) : (
                   <>
-                    <Sparkles className="w-4 h-4 text-purple-200" />
+                    <Wand2 className="w-4 h-4 text-purple-200" />
                     <span>Cân chỉnh màu Tất Cả</span>
                   </>
                 )}

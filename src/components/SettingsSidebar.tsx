@@ -20,6 +20,7 @@ import {
   Copy,
   Type,
   Clock,
+  RotateCw,
 } from 'lucide-react';
 import { LayoutSettings, SizePreset, FreeformTextTag, CutMarkFeature } from '../types';
 import { Uploader } from './Uploader';
@@ -49,6 +50,7 @@ interface SettingsSidebarProps {
   isCollapsed?: boolean;
   onToggleCollapse?: () => void;
   onClonePage1AsBackside?: () => void;
+  onResetFreeformPositions?: () => void;
   photos?: PhotoItem[];
 }
 
@@ -75,6 +77,7 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
   isCollapsed = false,
   onToggleCollapse,
   onClonePage1AsBackside,
+  onResetFreeformPositions,
   photos = [],
 }) => {
   const projectInputRef = useRef<HTMLInputElement | null>(null);
@@ -240,19 +243,57 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
               </div>
             </div>
 
-            {/* 1. Tự động sắp xếp ảnh */}
-            <label className="flex items-center justify-between p-2.5 bg-white rounded-lg border border-emerald-300 cursor-pointer hover:bg-emerald-50/60 transition select-none shadow-2xs">
-              <div className="flex items-center gap-2">
-                <LayoutGrid className="w-4 h-4 text-emerald-600" />
-                <span className="text-xs font-bold text-emerald-950">Tự động sắp xếp ảnh</span>
-              </div>
-              <input
-                type="checkbox"
-                checked={Boolean(settings.autoNesting)}
-                onChange={(e) => onUpdateSettings({ autoNesting: e.target.checked })}
-                className="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500 cursor-pointer"
-              />
-            </label>
+            {/* 1. Tự động sắp xếp ảnh (Bin Packing) */}
+            <div className="space-y-1.5">
+              <label className="flex items-center justify-between p-2.5 bg-white rounded-lg border border-emerald-300 cursor-pointer hover:bg-emerald-50/60 transition select-none shadow-2xs">
+                <div className="flex items-center gap-2">
+                  <LayoutGrid className="w-4 h-4 text-emerald-600" />
+                  <span className="text-xs font-bold text-emerald-950">Tự động sắp xếp ảnh</span>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={Boolean(settings.autoNesting)}
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    onUpdateSettings({
+                      autoNesting: checked,
+                      // Nếu bật tự động sắp xếp, đảm bảo chuyển về chế độ Tự động để tránh đè ảnh
+                      ...(checked ? { layoutMode: 'auto' } : {}),
+                    });
+                    if (checked) {
+                      onResetFreeformPositions?.();
+                    }
+                  }}
+                  className="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500 cursor-pointer"
+                />
+              </label>
+
+              {/* Tùy chọn mở rộng: Xoay lấp khoảng trống */}
+              {settings.autoNesting && (
+                <label className="flex items-center justify-between p-2 ml-2 bg-emerald-50/90 rounded-lg border border-emerald-300 cursor-pointer hover:bg-emerald-100/70 transition select-none shadow-2xs">
+                  <div className="flex items-center gap-2">
+                    <RotateCw className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                    <span className="text-xs font-medium text-emerald-950">Xoay lấp khoảng trống</span>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={Boolean(settings.allowRotation)}
+                    onChange={(e) => {
+                      const checked = e.target.checked;
+                      onUpdateSettings({
+                        allowRotation: checked,
+                        // Tự động chuyển về auto và xóa vị trí kéo tay cũ
+                        ...(checked ? { layoutMode: 'auto' } : {}),
+                      });
+                      if (checked) {
+                        onResetFreeformPositions?.();
+                      }
+                    }}
+                    className="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500 cursor-pointer shrink-0"
+                  />
+                </label>
+              )}
+            </div>
 
             {/* 2. Đường cắt ảnh & Dấu góc chữ thập */}
             <div className="bg-white rounded-lg border border-slate-300 p-2.5 space-y-2 shadow-2xs">

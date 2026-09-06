@@ -489,9 +489,39 @@ export default function App() {
     addToast('info', 'Đã xóa toàn bộ ảnh trong dự án');
   }, [setPhotos, addToast]);
 
-  const handleUpdateSettings = useCallback((updates: Partial<LayoutSettings>) => {
-    setSettings((prev) => ({ ...prev, ...updates }));
-  }, []);
+  const handleUpdateSettings = useCallback(
+    (updates: Partial<LayoutSettings>) => {
+      setSettings((prev) => {
+        const nextSettings = { ...prev, ...updates };
+
+        // Nếu người dùng chuyển sang chế độ 'auto' hoặc bật autoNesting / allowRotation:
+        // Tự động xóa các tọa độ kéo tay cũ để thuật toán xếp tối ưu mà không bị đè ảnh!
+        const isSwitchingToAuto = updates.layoutMode === 'auto';
+        const isEnablingAutoNesting = updates.autoNesting === true && prev.layoutMode === 'freeform';
+        const isEnablingAllowRotation = updates.allowRotation === true && prev.layoutMode === 'freeform';
+
+        if (isSwitchingToAuto || isEnablingAutoNesting || isEnablingAllowRotation) {
+          nextSettings.layoutMode = 'auto';
+          setPhotos((currentPhotos) => {
+            const hasFree = currentPhotos.some((p) => p.freePositions && Object.keys(p.freePositions).length > 0);
+            if (hasFree) {
+              return currentPhotos.map((p) => {
+                if (!p.freePositions) return p;
+                const copy = { ...p };
+                delete copy.freePositions;
+                return copy;
+              });
+            }
+            return currentPhotos;
+          });
+          addToast('success', 'Đã chuyển sang chế độ Tự động sắp xếp (Đã xóa vị trí chồng lấn)');
+        }
+
+        return nextSettings;
+      });
+    },
+    [setPhotos, addToast]
+  );
 
   const handleMovePhoto = useCallback(
     (fromIndex: number, toIndex: number) => {
@@ -529,6 +559,37 @@ export default function App() {
   const packedPages = useMemo(() => {
     return packImagesToPages(photos, settings);
   }, [photos, settings]);
+
+  // Cập nhật vị trí tự do của ảnh trên trang in A4 (kèm hỗ trợ Undo/Redo)
+  const handleUpdateFreeformPosition = useCallback(
+    (photoId: string, instanceIndex: number, pos: { x: number; y: number; pageNumber?: number }) => {
+      setPhotos((prev) =>
+        prev.map((p) => {
+          if (p.id !== photoId) return p;
+          const currentFree = { ...(p.freePositions || {}) };
+          currentFree[instanceIndex] = pos;
+          return {
+            ...p,
+            freePositions: currentFree,
+          };
+        })
+      );
+    },
+    [setPhotos]
+  );
+
+  // Đặt lại toàn bộ ảnh về vị trí sắp xếp tối ưu tự động
+  const handleResetFreeformPositions = useCallback(() => {
+    setPhotos((prev) =>
+      prev.map((p) => {
+        if (!p.freePositions || Object.keys(p.freePositions).length === 0) return p;
+        const copy = { ...p };
+        delete copy.freePositions;
+        return copy;
+      })
+    );
+    addToast('success', 'Đã đặt lại toàn bộ ảnh về vị trí sắp xếp tối ưu tự động');
+  }, [setPhotos, addToast]);
 
   // Nhân bản toàn bộ ảnh của một trang để làm mặt sau (kèm tự động kích hoạt In 2 mặt đối xứng)
   const handleClonePageAsBackside = useCallback((pageNumber: number) => {
@@ -843,6 +904,7 @@ export default function App() {
             customPresets={customPresets}
             onOpenPngSplitter={() => setActiveView('png-splitter')}
             onClonePage1AsBackside={handleClonePage1AsBackside}
+            onResetFreeformPositions={handleResetFreeformPositions}
             photos={photos}
           />
 
@@ -861,6 +923,8 @@ export default function App() {
             historyCount={historyCount}
             onBackToHub={() => setActiveView('hub')}
             onUpdateSettings={handleUpdateSettings}
+            onUpdateFreeformPosition={handleUpdateFreeformPosition}
+            onResetFreeformPositions={handleResetFreeformPositions}
           />
 
           {/* Modal for Fine-Tuned Crop / Pan / Framing / Color Adjustments */}
