@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { UploadCloud, Image as ImageIcon, Images, Plus, Loader2, FileImage } from 'lucide-react';
+import { UploadCloud, Image as ImageIcon, Images, Plus, Loader2, FileImage, Save, FolderOpen, ChevronDown } from 'lucide-react';
 import { PhotoItem, ShapeType, SizePreset } from '../types';
 import { readFileAsDataURL, getImageDimensions, calculateCrop, createOptimizedPreview, getOrientedDimensions } from '../utils/imageUtils';
 
@@ -11,6 +11,8 @@ interface UploaderProps {
   smartCrop: boolean;
   customPresets?: SizePreset[];
   onOpenPngSplitter?: () => void;
+  onExportProject?: () => void;
+  onImportProject?: (file: File) => void;
 }
 
 export const Uploader: React.FC<UploaderProps> = ({
@@ -21,11 +23,51 @@ export const Uploader: React.FC<UploaderProps> = ({
   smartCrop,
   customPresets = [],
   onOpenPngSplitter,
+  onExportProject,
+  onImportProject,
 }) => {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const projectInputRef = useRef<HTMLInputElement | null>(null);
+  const projectDropdownRef = useRef<HTMLDivElement | null>(null);
+  const [isProjectDropdownOpen, setIsProjectDropdownOpen] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<{ current: number; total: number; percent: number } | null>(null);
+
+  // Close project dropdown on click outside or Escape
+  useEffect(() => {
+    if (!isProjectDropdownOpen) return;
+
+    const handleClickOutside = (e: MouseEvent) => {
+      if (projectDropdownRef.current && !projectDropdownRef.current.contains(e.target as Node)) {
+        setIsProjectDropdownOpen(false);
+      }
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsProjectDropdownOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isProjectDropdownOpen]);
+
+  const handleProjectFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file && onImportProject) {
+      onImportProject(file);
+    }
+    if (e.target) {
+      e.target.value = '';
+    }
+  };
 
   const processFiles = async (fileList: FileList | File[]) => {
     const files = Array.from(fileList).filter((f) =>
@@ -239,26 +281,115 @@ export const Uploader: React.FC<UploaderProps> = ({
 
   return (
     <div id="uploader-section" className="space-y-2">
-      {/* Header cùng dòng: TẢI ẢNH VÀO TRANG và Nút "Thử ngay với mẫu có sẵn" (chỉ hiện icon bên phải) */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-1.5 text-rose-950 font-bold">
+      {/* Header cùng dòng: TẢI ẢNH LÊN + Dropdown Dự án (Image 1) + Nút ảnh mẫu */}
+      <div className="flex items-center justify-between gap-1.5">
+        <div className="flex items-center gap-1.5 text-rose-950 font-bold shrink-0">
           <FileImage className="w-4 h-4 text-rose-600" />
-          <h2 className="text-xs uppercase tracking-wide">Tải ảnh vào trang</h2>
+          <h2 className="text-xs uppercase tracking-wide">Tải ảnh lên</h2>
         </div>
-        <button
-          type="button"
-          id="btn-load-sample"
-          onClick={loadSamplePhotos}
-          disabled={isProcessing}
-          className="w-7 h-7 flex items-center justify-center rounded-lg bg-white/95 hover:bg-rose-50 hover:border-rose-300 border border-rose-200 text-rose-500 hover:text-rose-600 transition shadow-2xs cursor-pointer active:scale-90 disabled:opacity-50"
-          title="Thử ngay với ảnh mẫu có sẵn (Chân dung, phong cảnh, thú cưng)"
-        >
-          {isProcessing ? (
-            <Loader2 className="w-3.5 h-3.5 animate-spin text-rose-500" />
-          ) : (
-            <Images className="w-3.5 h-3.5" />
+
+        <div className="flex items-center gap-1.5 shrink-0">
+          {/* Streamlined Project Dropdown (Lưu / Mở dự án .daudau) */}
+          {(onExportProject || onImportProject) && (
+            <div className="relative" ref={projectDropdownRef}>
+              <button
+                type="button"
+                id="btn-project-dropdown"
+                onClick={() => setIsProjectDropdownOpen((prev) => !prev)}
+                className={`h-7 flex items-center gap-1 px-2.5 rounded-lg border transition cursor-pointer shadow-2xs text-xs font-semibold ${
+                  isProjectDropdownOpen
+                    ? 'bg-slate-200/90 text-slate-900 border-slate-300'
+                    : 'bg-white/95 hover:bg-slate-50 text-slate-700 border-slate-200/90 hover:border-slate-300'
+                }`}
+                title="Quản lý dự án: Lưu hoặc Mở tệp .daudau"
+              >
+                <Save className="w-3.5 h-3.5 text-slate-600" />
+                <span>Dự án</span>
+                <ChevronDown className={`w-3 h-3 text-slate-400 transition-transform duration-150 ${isProjectDropdownOpen ? 'rotate-180' : ''}`} />
+              </button>
+
+              {/* Dropdown Menu (Image 1 style) */}
+              {isProjectDropdownOpen && (
+                <div
+                  id="project-menu-popover"
+                  className="absolute right-0 top-full mt-1.5 w-60 bg-white rounded-2xl shadow-xl border border-slate-200/90 p-1.5 z-50 animate-fadeIn space-y-0.5"
+                >
+                  {onExportProject && (
+                    <button
+                      type="button"
+                      id="btn-menu-export-daudau"
+                      onClick={() => {
+                        setIsProjectDropdownOpen(false);
+                        onExportProject();
+                      }}
+                      className="w-full flex items-start gap-2.5 p-2 rounded-xl hover:bg-emerald-50/70 text-left transition cursor-pointer group"
+                    >
+                      <div className="p-0.5 text-emerald-600 shrink-0 mt-0.5">
+                        <Save className="w-5 h-5" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-[13px] font-bold text-slate-900 group-hover:text-emerald-950 transition leading-tight">
+                          Lưu tệp .daudau
+                        </div>
+                        <div className="text-[11px] text-slate-500 mt-0.5 leading-tight">
+                          Tải về máy để dùng lại sau
+                        </div>
+                      </div>
+                    </button>
+                  )}
+
+                  {onImportProject && (
+                    <button
+                      type="button"
+                      id="btn-menu-import-daudau"
+                      onClick={() => {
+                        setIsProjectDropdownOpen(false);
+                        projectInputRef.current?.click();
+                      }}
+                      className="w-full flex items-start gap-2.5 p-2 rounded-xl hover:bg-blue-50/70 text-left transition cursor-pointer group"
+                    >
+                      <div className="p-0.5 text-blue-600 shrink-0 mt-0.5">
+                        <FolderOpen className="w-5 h-5" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-[13px] font-bold text-slate-900 group-hover:text-blue-950 transition leading-tight">
+                          Mở tệp .daudau
+                        </div>
+                        <div className="text-[11px] text-slate-500 mt-0.5 leading-tight">
+                          Nhập dự án từ máy tính
+                        </div>
+                      </div>
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {/* Hidden file input for .daudau */}
+              <input
+                type="file"
+                ref={projectInputRef}
+                accept=".daudau,.zip"
+                className="hidden"
+                onChange={handleProjectFileChange}
+              />
+            </div>
           )}
-        </button>
+
+          <button
+            type="button"
+            id="btn-load-sample"
+            onClick={loadSamplePhotos}
+            disabled={isProcessing}
+            className="w-7 h-7 flex items-center justify-center rounded-lg bg-white/95 hover:bg-rose-50 hover:border-rose-300 border border-rose-200 text-rose-500 hover:text-rose-600 transition shadow-2xs cursor-pointer active:scale-90 disabled:opacity-50"
+            title="Thử ngay với ảnh mẫu có sẵn (Chân dung, phong cảnh, thú cưng)"
+          >
+            {isProcessing ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin text-rose-500" />
+            ) : (
+              <Images className="w-3.5 h-3.5" />
+            )}
+          </button>
+        </div>
       </div>
 
       {/* Hidden File Input */}
@@ -320,15 +451,16 @@ export const Uploader: React.FC<UploaderProps> = ({
 
         <button
           type="button"
+          id="btn-select-photos-device"
           disabled={isProcessing}
           onClick={(e) => {
             e.stopPropagation();
             fileInputRef.current?.click();
           }}
-          className="mt-2.5 inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg text-xs font-semibold shadow-xs transition active:scale-95 cursor-pointer"
+          className="mt-2.5 inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-lg text-xs font-semibold shadow-xs transition active:scale-95 cursor-pointer"
         >
           <Plus className="w-3.5 h-3.5" />
-          <span>Chọn tệp từ máy</span>
+          <span>Chọn ảnh từ máy</span>
         </button>
       </div>
     </div>

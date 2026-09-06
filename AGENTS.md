@@ -9,9 +9,11 @@ Tệp tin này ghi lại toàn bộ bối cảnh dự án, kiến trúc hệ th�
 - **Tên miền sản xuất:** `daudau.pro.vn` (Tenten Hosting)
 - **Mục đích:** Ứng dụng web chuyên nghiệp phục vụ in ấn ảnh A4 tự động và bóc tách sticker PNG cho shop Dâu Dâu.
 - **Tính năng cốt lõi:**
-  1. **Dàn trang in A4 thông minh:** Sắp xếp ảnh tối ưu giấy in (Bin Packing), thước đo milimet, kiểm tra DPI, chỉnh tâm trực tiếp, làm nét/cân sáng, xuất file PDF đa trang chuẩn in 300 DPI.
-  2. **Tách nhãn dán PNG tự động (PNG Sheet Splitter):** Quét kênh Alpha độ trong suốt, tách rời từng sticker từ bảng sticker tổng hợp, cho phép kéo thả sang bàn in hoặc tải về file ZIP.
-  3. **Lưu trữ phiên làm việc:** Tự động lưu ngầm vào IndexedDB và xuất/nhập tệp dự án định dạng `.daudau`.
+  1. **Dàn trang in A4 thông minh & Bố cục kép:** Sắp xếp ảnh tối ưu giấy in (Bin Packing Best-Fit) hoặc Kéo thả vị trí tự do (Freeform), thước đo milimet, kiểm tra DPI, chỉnh tâm trực tiếp, làm nét/cân sáng, xuất file PDF đa trang chuẩn in 300 DPI.
+  2. **Căn gióng nam châm & In 2 mặt đối xứng:** Smart Snapping căn mép/tâm thông minh khi kéo thả, in 2 mặt đối xứng tự động lật ảnh qua trục dọc, viền xén tràn lề (Bleed) và dấu căn xén (Crop Marks).
+  3. **Nhãn đơn hàng di động (Draggable Text Tag):** Nhãn tên khách, mã đơn và ngày giờ có thể kéo thả linh hoạt đến vùng trống trên trang in.
+  4. **Tách nhãn dán PNG tự động (PNG Sheet Splitter):** Quét kênh Alpha độ trong suốt, tách rời từng sticker từ bảng sticker tổng hợp, cho phép kéo thả sang bàn in hoặc tải về file ZIP.
+  5. **Lưu trữ & Lịch sử thao tác:** Ngăn xếp Undo / Redo đa bước (Ctrl+Z / Ctrl+Y), tự động lưu ngầm vào IndexedDB và xuất/nhập tệp dự án định dạng `.daudau`.
 
 ---
 
@@ -27,6 +29,15 @@ Tệp tin này ghi lại toàn bộ bối cảnh dự án, kiến trúc hệ th�
    - Port: Luôn dùng `const PORT = process.env.PORT || 3000;` để nhận port động từ hosting Tenten/cPanel.
    - Host: Luôn lắng nghe `0.0.0.0`.
    - Phục vụ tĩnh: Thư mục `dist/` và fallback SPA route `app.get('*') -> index.html`.
+
+3. **Tính toán Tọa độ & Đơn vị In ấn (mm Coordinate Integrity):**
+   - Đơn vị tiêu chuẩn trong toàn bộ logic in ấn là **milimet (mm)**.
+   - Khổ A4 chuẩn: Dọc `210mm x 297mm`, Ngang `297mm x 210mm`.
+   - Tọa độ hiển thị màn hình (px) được quy đổi đồng bộ từ mm thông qua tỷ lệ `scaleFactor` và `DPI (300 DPI: 1mm ≈ 11.811px)`.
+   - Đảm bảo tính nhất quán tuyệt đối giữa: Vùng xem trước màn hình (Preview Canvas) = Bản in trình duyệt (`@media print`) = File PDF xuất ra (`jspdf`).
+
+4. **Quản lý Ngăn xếp Hoàn tác (Undo/Redo History):**
+   - Mọi thao tác thay đổi dữ liệu danh sách ảnh (thêm, xóa, nhân bản, xoay, đổi kích thước, di chuyển tọa độ freeform) bắt buộc phải cập nhật qua `useHistoryState` để người dùng luôn có thể ấn `Ctrl+Z` hoàn tác an toàn.
 
 ---
 
@@ -49,9 +60,10 @@ Hosting Tenten trang bị giao diện **"Triển khai nhanh" (Quick Deploy)**:
 
 ---
 
-## 🛠️ 4. Quy ước Mã nguồn (Coding Conventions)
+## 🛠️ 4. Quy ước Mã nguồn & Hiệu năng (Coding Conventions)
 - **Framework:** React 19 + TypeScript + Vite + Tailwind CSS v4.
 - **Icons:** Sử dụng độc quyền thư viện `lucide-react`.
 - **Hiệu ứng:** Sử dụng `motion` (từ `motion/react`).
 - **Xuất file:** `jspdf` (in ấn A4 PDF 300 DPI), `jszip` (đóng gói sticker).
 - **Đa luồng:** Xử lý pixel nặng qua `src/workers/pixelWorker.ts` và `workerBridge.ts`.
+- **Hiệu năng kéo thả:** Các tính toán đường gióng nam châm (Smart Snapping) và định vị Freeform cần tính toán trực tiếp trên tọa độ toán học thuần túy, tránh re-render React không cần thiết để đạt độ mượt 60 FPS.

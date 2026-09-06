@@ -625,7 +625,7 @@ export const A4PreviewArea: React.FC<A4PreviewAreaProps> = ({
             title="Bật chế độ di chuyển ảnh tự do trên trang A4 kèm tự động gióng và hút nam châm"
           >
             <Move className="w-3.5 h-3.5" />
-            <span>Di chuyển tự do</span>
+            <span>Tự do</span>
             {isFreeformMode && (
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-300 animate-pulse" />
             )}
@@ -1120,9 +1120,9 @@ export const A4PreviewArea: React.FC<A4PreviewAreaProps> = ({
                                 x2={isVert ? guide.pos : pageW_mm}
                                 y2={isVert ? pageH_mm : guide.pos}
                                 stroke={guideColor}
-                                strokeWidth="0.3"
-                                strokeDasharray="2 2"
-                                opacity="0.45"
+                                strokeWidth="0.15"
+                                strokeDasharray="1.5 1.5"
+                                opacity="0.4"
                               />
                               {/* Vạch gióng nam châm chính xác nối giữa các ảnh */}
                               <line
@@ -1131,19 +1131,19 @@ export const A4PreviewArea: React.FC<A4PreviewAreaProps> = ({
                                 x2={isVert ? guide.pos : guide.end}
                                 y2={isVert ? guide.end : guide.pos}
                                 stroke={guideColor}
-                                strokeWidth="0.8"
+                                strokeWidth="0.4"
                               />
                               {/* Điểm neo hai đầu vạch gióng */}
                               <circle
                                 cx={isVert ? guide.pos : guide.start}
                                 cy={isVert ? guide.start : guide.pos}
-                                r="1"
+                                r="0.5"
                                 fill={guideColor}
                               />
                               <circle
                                 cx={isVert ? guide.pos : guide.end}
                                 cy={isVert ? guide.end : guide.pos}
-                                r="1"
+                                r="0.5"
                                 fill={guideColor}
                               />
                             </g>
@@ -1159,7 +1159,7 @@ export const A4PreviewArea: React.FC<A4PreviewAreaProps> = ({
                         return (
                           <div
                             key={`badge-${guide.id}`}
-                            className="absolute -translate-x-1/2 -translate-y-1/2 px-1.5 py-0.5 rounded text-[9px] font-bold text-white shadow-md backdrop-blur-xs whitespace-nowrap flex items-center gap-1 z-50 pointer-events-none"
+                            className="absolute -translate-x-1/2 -translate-y-1/2 px-1 py-0.5 rounded text-[7.5px] leading-none font-semibold text-white shadow-xs backdrop-blur-xs whitespace-nowrap flex items-center gap-0.5 z-50 pointer-events-none"
                             style={{
                               left: leftPos,
                               top: topPos,

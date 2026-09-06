@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import {
   Printer,
   Download,
@@ -12,6 +12,8 @@ import {
   Trash2,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
+  ChevronUp,
   Maximize,
   FlipHorizontal,
   Tag,
@@ -80,16 +82,32 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
   onResetFreeformPositions,
   photos = [],
 }) => {
-  const projectInputRef = useRef<HTMLInputElement | null>(null);
+  const [isExportCollapsed, setIsExportCollapsed] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('daudau_export_collapsed');
+      return saved !== null ? saved === 'true' : false;
+    } catch {
+      return false;
+    }
+  });
 
-  const handleProjectFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file && onImportProject) {
-      onImportProject(file);
+  // Tự động mở lên khi đang xử lý xuất file
+  useEffect(() => {
+    if (isExporting) {
+      setIsExportCollapsed(false);
     }
-    if (e.target) {
-      e.target.value = '';
-    }
+  }, [isExporting]);
+
+  const handleToggleExportCollapsed = () => {
+    setIsExportCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem('daudau_export_collapsed', String(next));
+      } catch (e) {
+        console.warn(e);
+      }
+      return next;
+    });
   };
 
   const isLandscape = settings.paperOrientation === 'landscape';
@@ -208,37 +226,41 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
               smartCrop={settings.smartCrop}
               customPresets={customPresets}
               onOpenPngSplitter={onOpenPngSplitter}
+              onExportProject={onExportProject}
+              onImportProject={onImportProject}
             />
           </div>
 
           {/* 2. General Settings (Cài đặt lề & khoảng cách) (Pastel Slate/Indigo) */}
           <div className="bg-indigo-50/50 rounded-xl p-3 border border-indigo-200/80 shadow-2xs space-y-2.5">
             <div className="grid grid-cols-2 gap-2">
-              <div className="bg-white p-2.5 rounded-lg border border-indigo-200 shadow-2xs">
-                <label className="block text-[10px] text-indigo-900 font-bold uppercase mb-1">
-                  Lề trang (mm)
+              <div className="bg-white px-2.5 py-1.5 rounded-lg border border-indigo-200 shadow-2xs flex items-center justify-between gap-1.5">
+                <label className="text-xs text-indigo-900 font-bold tracking-tight whitespace-nowrap">
+                  Lề trang
                 </label>
                 <input
                   type="number"
                   min="0"
-                  max="25"
+                  max="50"
                   value={settings.margin}
                   onChange={(e) => onUpdateSettings({ margin: Math.max(0, parseInt(e.target.value) || 0) })}
-                  className="w-full bg-indigo-50/30 border border-indigo-200 rounded-md px-2 py-1 text-xs font-bold text-slate-800 outline-none focus:ring-1 focus:ring-indigo-400"
+                  className="w-[34px] bg-indigo-50/40 border border-indigo-200 rounded-md py-0.5 text-xs font-bold text-center text-slate-800 outline-none focus:ring-1 focus:ring-indigo-400 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  title="Lề trang in (mm)"
                 />
               </div>
 
-              <div className="bg-white p-2.5 rounded-lg border border-indigo-200 shadow-2xs">
-                <label className="block text-[10px] text-indigo-900 font-bold uppercase mb-1">
-                  K.Cách ảnh (mm)
+              <div className="bg-white px-2.5 py-1.5 rounded-lg border border-indigo-200 shadow-2xs flex items-center justify-between gap-1.5">
+                <label className="text-xs text-indigo-900 font-bold tracking-tight whitespace-nowrap">
+                  Ảnh
                 </label>
                 <input
                   type="number"
                   min="0"
-                  max="20"
+                  max="50"
                   value={settings.gap}
                   onChange={(e) => onUpdateSettings({ gap: Math.max(0, parseInt(e.target.value) || 0) })}
-                  className="w-full bg-indigo-50/30 border border-indigo-200 rounded-md px-2 py-1 text-xs font-bold text-slate-800 outline-none focus:ring-1 focus:ring-indigo-400"
+                  className="w-[34px] bg-indigo-50/40 border border-indigo-200 rounded-md py-0.5 text-xs font-bold text-center text-slate-800 outline-none focus:ring-1 focus:ring-indigo-400 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  title="Khoảng cách giữa các ảnh (mm)"
                 />
               </div>
             </div>
@@ -713,126 +735,152 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
             </div>
           </div>
 
-          {/* 3. Dự án & Tệp tin (.daudau session) */}
-          <div className="bg-amber-50/60 rounded-xl p-2.5 border border-amber-200/90 shadow-2xs space-y-2">
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                id="btn-export-daudau"
-                onClick={onExportProject}
-                disabled={totalPhotos === 0 || isExporting}
-                className="flex items-center justify-center gap-1.5 bg-white hover:bg-amber-100/70 disabled:opacity-50 text-amber-950 border border-amber-300 font-bold py-2 px-2 rounded-xl text-xs transition shadow-2xs cursor-pointer active:scale-95"
-                title="Xuất file dự án (.daudau) lưu sang USB hoặc gửi cho người khác"
-              >
-                <Save className="w-3.5 h-3.5 text-amber-700" />
-                <span>Lưu .daudau</span>
-              </button>
-
-              <button
-                type="button"
-                id="btn-import-daudau"
-                onClick={() => projectInputRef.current?.click()}
-                disabled={isExporting}
-                className="flex items-center justify-center gap-1.5 bg-white hover:bg-amber-100/70 disabled:opacity-50 text-amber-950 border border-amber-300 font-bold py-2 px-2 rounded-xl text-xs transition shadow-2xs cursor-pointer active:scale-95"
-                title="Mở file dự án (.daudau hoặc .zip) để nạp lại toàn bộ trạng thái"
-              >
-                <FolderOpen className="w-3.5 h-3.5 text-amber-700" />
-                <span>Mở dự án</span>
-              </button>
-            </div>
-
-            {/* Hidden file input for .daudau */}
-            <input
-              type="file"
-              ref={projectInputRef}
-              accept=".daudau,.zip"
-              className="hidden"
-              onChange={handleProjectFileChange}
-            />
-
-            {totalPhotos > 0 && onClearAllPhotos && (
+          {totalPhotos > 0 && onClearAllPhotos && (
+            <div className="pt-0.5">
               <button
                 type="button"
                 id="btn-clear-project"
                 onClick={onClearAllPhotos}
-                className="w-full flex items-center justify-center gap-1 text-[11px] text-rose-600 hover:text-rose-700 hover:bg-rose-50/70 py-1 rounded-lg transition cursor-pointer font-semibold border border-transparent hover:border-rose-200"
+                className="w-full flex items-center justify-center gap-1.5 text-xs text-rose-600 hover:text-rose-700 hover:bg-rose-50/80 py-1.5 rounded-xl transition cursor-pointer font-semibold border border-rose-200/80 shadow-2xs"
               >
                 <Trash2 className="w-3.5 h-3.5" />
                 <span>Xóa làm mới toàn bộ</span>
               </button>
-            )}
-          </div>
+            </div>
+          )}
         </div>
       )}
 
-      {/* Export & Print Action Footer */}
+      {/* Export & Print Action Footer (Có nút hạ xuống / mở lên để rút gọn) */}
       {!isCollapsed && (
-        <div className="p-3.5 border-t border-slate-200 bg-white space-y-2 sticky bottom-0 z-20 shadow-lg">
-          {isExporting && exportProgress && (
-            <div className="text-[11px] text-pink-600 font-bold text-center pb-0.5 animate-pulse">
-              Đang xử lý trang {exportProgress.current} / {exportProgress.total}...
-            </div>
-          )}
-
-          {/* Row 1: Print & Export PDF */}
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              id="btn-print"
-              onClick={onPrint}
-              disabled={totalPhotos === 0 || isExporting}
-              className="flex items-center justify-center gap-1.5 bg-gradient-to-r from-pink-600 to-rose-600 hover:from-pink-700 hover:to-rose-700 disabled:opacity-50 text-white font-bold py-2 rounded-xl text-xs transition shadow-md shadow-pink-500/20 active:scale-95 cursor-pointer truncate"
-              title="In trực tiếp trang A4 (Ctrl+P)"
-            >
-              <Printer className="w-3.5 h-3.5 shrink-0" />
-              <span className="truncate">In ngay (A4)</span>
-            </button>
-
-            {onExportPdf && (
+        <div className="border-t border-slate-200 bg-white sticky bottom-0 z-20 shadow-lg transition-all duration-200">
+          {isExportCollapsed ? (
+            /* Trạng thái rút gọn (Hạ xuống) */
+            <div className="p-2.5 px-3">
               <button
                 type="button"
-                id="btn-export-pdf"
-                onClick={onExportPdf}
-                disabled={totalPhotos === 0 || isExporting}
-                className="flex items-center justify-center gap-1.5 bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-700 hover:to-rose-700 disabled:opacity-50 text-white font-bold py-2 rounded-xl text-xs transition shadow-md shadow-red-500/20 active:scale-95 cursor-pointer truncate"
-                title={`Xuất file PDF in ấn chuẩn 300 DPI (${pageCount} trang)`}
+                id="btn-expand-export-panel"
+                onClick={handleToggleExportCollapsed}
+                className="w-full flex items-center justify-between p-2 rounded-xl bg-gradient-to-r from-pink-50 to-rose-50 hover:from-pink-100/90 hover:to-rose-100/90 border border-pink-200/90 transition cursor-pointer group shadow-2xs"
+                title="Bấm để mở bảng công cụ Xuất file & In ấn"
               >
-                <FileText className="w-3.5 h-3.5 shrink-0" />
-                <span className="truncate">Xuất PDF</span>
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className="p-1.5 rounded-lg bg-gradient-to-tr from-pink-600 to-rose-600 text-white shadow-2xs group-hover:scale-105 transition shrink-0">
+                    <Printer className="w-3.5 h-3.5" />
+                  </div>
+                  <div className="text-left min-w-0">
+                    <div className="text-xs font-bold text-slate-800 flex items-center gap-1.5 truncate">
+                      <span>Xuất file & In ấn</span>
+                      {totalPhotos > 0 && (
+                        <span className="text-[10px] font-semibold bg-white text-pink-600 border border-pink-200 px-1.5 py-0.2 rounded-full shrink-0">
+                          {pageCount} trang
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-[10px] text-slate-500 truncate">PDF 300 DPI, In A4, PNG, JPG</div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1 text-[11px] font-bold text-pink-700 bg-white hover:bg-pink-50 border border-pink-200 px-2.5 py-1 rounded-lg transition shadow-2xs shrink-0 ml-1.5">
+                  <span>Mở lên</span>
+                  <ChevronUp className="w-3.5 h-3.5 text-pink-600 group-hover:-translate-y-0.5 transition-transform" />
+                </div>
               </button>
-            )}
-          </div>
+            </div>
+          ) : (
+            /* Trạng thái mở rộng đầy đủ (Mở lên) */
+            <div className="p-3.5 pt-2.5 space-y-2">
+              {/* Header with Collapse Button (Nút hạ xuống) */}
+              <div className="flex items-center justify-between pb-1.5 border-b border-slate-100">
+                <div className="flex items-center gap-1.5 text-xs font-bold text-slate-800">
+                  <Printer className="w-3.5 h-3.5 text-pink-600" />
+                  <span>Xuất file & In ấn</span>
+                  {totalPhotos > 0 && (
+                    <span className="text-[10.5px] font-semibold text-slate-500">
+                      ({pageCount} trang)
+                    </span>
+                  )}
+                </div>
 
-          {/* Row 2: Export PNG & Export JPG */}
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              id="btn-export-png"
-              onClick={() => onExport('png')}
-              disabled={totalPhotos === 0 || isExporting}
-              className="flex items-center justify-center gap-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-bold py-2 rounded-xl text-xs transition shadow-xs active:scale-95 cursor-pointer truncate"
-              title="Xuất file ảnh PNG chất lượng cao"
-            >
-              <Download className="w-3.5 h-3.5 shrink-0" />
-              <span className="truncate">Xuất PNG</span>
-            </button>
-            <button
-              type="button"
-              id="btn-export-jpg"
-              onClick={() => onExport('jpeg')}
-              disabled={totalPhotos === 0 || isExporting}
-              className="flex items-center justify-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold py-2 rounded-xl text-xs transition shadow-xs active:scale-95 cursor-pointer truncate"
-              title="Xuất file ảnh JPG tiết kiệm dung lượng"
-            >
-              <Download className="w-3.5 h-3.5 shrink-0" />
-              <span className="truncate">Xuất JPG</span>
-            </button>
-          </div>
+                <button
+                  type="button"
+                  id="btn-collapse-export-panel"
+                  onClick={handleToggleExportCollapsed}
+                  className="flex items-center gap-1 text-[11px] font-semibold text-slate-600 hover:text-slate-900 bg-slate-50 hover:bg-slate-100 px-2 py-0.5 rounded-lg transition cursor-pointer border border-slate-200"
+                  title="Hạ xuống để rút gọn bảng này"
+                >
+                  <span>Hạ xuống</span>
+                  <ChevronDown className="w-3.5 h-3.5 text-slate-500" />
+                </button>
+              </div>
 
-          {/* Print 100% Scale Calibration Tip */}
-          <div className="bg-amber-50/80 border border-amber-200/80 rounded-xl px-2.5 py-1.5 text-[10.5px] text-amber-900 leading-snug">
-            <span className="font-bold text-amber-800">💡 Mẹo in:</span> Khổ giấy A4 , Lề: Không , Tỷ lệ: 100% (Mặc định) , Đồ họa nền.
-          </div>
+              {isExporting && exportProgress && (
+                <div className="text-[11px] text-pink-600 font-bold text-center pb-0.5 animate-pulse">
+                  Đang xử lý trang {exportProgress.current} / {exportProgress.total}...
+                </div>
+              )}
+
+              {/* Row 1: Print & Export PDF */}
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  id="btn-print"
+                  onClick={onPrint}
+                  disabled={totalPhotos === 0 || isExporting}
+                  className="flex items-center justify-center gap-1.5 bg-gradient-to-r from-pink-600 to-rose-600 hover:from-pink-700 hover:to-rose-700 disabled:opacity-50 text-white font-bold py-2 rounded-xl text-xs transition shadow-md shadow-pink-500/20 active:scale-95 cursor-pointer truncate"
+                  title="In trực tiếp trang A4 (Ctrl+P)"
+                >
+                  <Printer className="w-3.5 h-3.5 shrink-0" />
+                  <span className="truncate">In ngay (A4)</span>
+                </button>
+
+                {onExportPdf && (
+                  <button
+                    type="button"
+                    id="btn-export-pdf"
+                    onClick={onExportPdf}
+                    disabled={totalPhotos === 0 || isExporting}
+                    className="flex items-center justify-center gap-1.5 bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-700 hover:to-rose-700 disabled:opacity-50 text-white font-bold py-2 rounded-xl text-xs transition shadow-md shadow-red-500/20 active:scale-95 cursor-pointer truncate"
+                    title={`Xuất file PDF in ấn chuẩn 300 DPI (${pageCount} trang)`}
+                  >
+                    <FileText className="w-3.5 h-3.5 shrink-0" />
+                    <span className="truncate">Xuất PDF</span>
+                  </button>
+                )}
+              </div>
+
+              {/* Row 2: Export PNG & Export JPG */}
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  id="btn-export-png"
+                  onClick={() => onExport('png')}
+                  disabled={totalPhotos === 0 || isExporting}
+                  className="flex items-center justify-center gap-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-bold py-2 rounded-xl text-xs transition shadow-xs active:scale-95 cursor-pointer truncate"
+                  title="Xuất file ảnh PNG chất lượng cao"
+                >
+                  <Download className="w-3.5 h-3.5 shrink-0" />
+                  <span className="truncate">Xuất PNG</span>
+                </button>
+                <button
+                  type="button"
+                  id="btn-export-jpg"
+                  onClick={() => onExport('jpeg')}
+                  disabled={totalPhotos === 0 || isExporting}
+                  className="flex items-center justify-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold py-2 rounded-xl text-xs transition shadow-xs active:scale-95 cursor-pointer truncate"
+                  title="Xuất file ảnh JPG tiết kiệm dung lượng"
+                >
+                  <Download className="w-3.5 h-3.5 shrink-0" />
+                  <span className="truncate">Xuất JPG</span>
+                </button>
+              </div>
+
+              {/* Print 100% Scale Calibration Tip */}
+              <div className="bg-amber-50/80 border border-amber-200/80 rounded-xl px-2.5 py-1.5 text-[10.5px] text-amber-900 leading-snug">
+                <span className="font-bold text-amber-800">💡 Mẹo in:</span> Khổ giấy A4 , Lề: Không , Tỷ lệ: 100% (Mặc định) , Đồ họa nền.
+              </div>
+            </div>
+          )}
         </div>
       )}
     </aside>
