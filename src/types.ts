@@ -101,6 +101,8 @@ export interface LayoutSettings {
   smartCrop: boolean;
   orientationMode?: OrientationMode; // Chế độ định hướng: 'rotate_to_fit' (Ép đúng cỡ & Tự xoay ảnh), 'auto_match' (Khớp chiều theo ảnh), 'fixed_crop' (Cố định khổ)
   autoNesting?: boolean; // Tự động sắp xếp ảnh tối ưu diện tích
+  packingStrategy?: 'maxrects' | 'guillotine'; // 'maxrects': Ép chặt siêu tiết kiệm (Tetris) | 'guillotine': Cắt thẳng dễ rọc (Dao)
+  enableSmartBundling?: boolean; // Tự động ghép cặp các ảnh cùng kích thước để lấp giấy đều hơn
   allowRotation?: boolean; // Cho phép xoay 90° lấp khoảng trống (Tiết kiệm giấy tối đa)
   paperOrientation: 'portrait' | 'landscape';
   layoutMode?: 'auto' | 'freeform'; // Chế độ xếp: Tự động tối ưu (auto) hoặc Kéo thả di chuyển tự do (freeform)

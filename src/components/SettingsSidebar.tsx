@@ -24,6 +24,9 @@ import {
   Clock,
   RotateCw,
   Plus,
+  Boxes,
+  Layers,
+  SplitSquareHorizontal,
 } from 'lucide-react';
 import { LayoutSettings, SizePreset, FreeformTextTag, CutMarkFeature, OrientationMode } from '../types';
 import { Uploader } from './Uploader';
@@ -468,30 +471,98 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
                 />
               </label>
 
-              {/* Tùy chọn mở rộng: Xoay lấp khoảng trống */}
+              {/* Tùy chọn mở rộng cho Tự động sắp xếp ảnh */}
               {settings.autoNesting && (
-                <label className="flex items-center justify-between p-2 ml-2 bg-emerald-50/90 rounded-lg border border-emerald-300 cursor-pointer hover:bg-emerald-100/70 transition select-none shadow-2xs">
-                  <div className="flex items-center gap-2">
-                    <RotateCw className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                    <span className="text-xs font-medium text-emerald-950">Xoay lấp khoảng trống</span>
+                <div className="p-2 ml-1 bg-emerald-50/90 rounded-lg border border-emerald-300 space-y-2 select-none shadow-2xs">
+                  {/* Chế độ thuật toán: Ép chặt Tetris vs Cắt thẳng Dao */}
+                  <div>
+                    <div className="text-[11px] font-bold text-emerald-950 mb-1 flex items-center justify-between">
+                      <span>Kiểu thuật toán:</span>
+                      <span className="text-[9.5px] text-emerald-700 font-semibold">
+                        {settings.packingStrategy === 'guillotine' ? 'Đường xén thẳng' : 'Tiết kiệm giấy nhất'}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onUpdateSettings({ packingStrategy: 'maxrects', layoutMode: 'auto' });
+                          onResetFreeformPositions?.();
+                        }}
+                        className={`py-1.5 px-1.5 rounded-md text-[11px] font-bold transition flex items-center justify-center gap-1 cursor-pointer ${
+                          settings.packingStrategy !== 'guillotine'
+                            ? 'bg-emerald-600 text-white shadow-xs'
+                            : 'bg-white text-emerald-900 border border-emerald-300 hover:bg-emerald-100/60'
+                        }`}
+                        title="Thuật toán MaxRects Tetris: Lấp kín mọi khe hở, tận dụng tối đa diện tích khổ giấy A4"
+                      >
+                        <Boxes className="w-3.5 h-3.5 shrink-0" />
+                        <span>Ép chặt (Tetris)</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onUpdateSettings({ packingStrategy: 'guillotine', layoutMode: 'auto' });
+                          onResetFreeformPositions?.();
+                        }}
+                        className={`py-1.5 px-1.5 rounded-md text-[11px] font-bold transition flex items-center justify-center gap-1 cursor-pointer ${
+                          settings.packingStrategy === 'guillotine'
+                            ? 'bg-emerald-600 text-white shadow-xs'
+                            : 'bg-white text-emerald-900 border border-emerald-300 hover:bg-emerald-100/60'
+                        }`}
+                        title="Thuật toán Guillotine: Tạo các đường xén thẳng tắp từ mép này sang mép kia của giấy A4, cực kỳ dễ rọc dao"
+                      >
+                        <SplitSquareHorizontal className="w-3.5 h-3.5 shrink-0" />
+                        <span>Cắt thẳng (Dao)</span>
+                      </button>
+                    </div>
                   </div>
-                  <input
-                    type="checkbox"
-                    checked={Boolean(settings.allowRotation)}
-                    onChange={(e) => {
-                      const checked = e.target.checked;
-                      onUpdateSettings({
-                        allowRotation: checked,
-                        // Tự động chuyển về auto và xóa vị trí kéo tay cũ
-                        ...(checked ? { layoutMode: 'auto' } : {}),
-                      });
-                      if (checked) {
+
+                  {/* Xoay lấp khoảng trống */}
+                  <label className="flex items-center justify-between cursor-pointer pt-1.5 border-t border-emerald-200/80">
+                    <div className="flex items-center gap-1.5">
+                      <RotateCw className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
+                      <span className="text-xs font-medium text-emerald-950">Xoay ảnh lấp khoảng trống</span>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={Boolean(settings.allowRotation)}
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        onUpdateSettings({
+                          allowRotation: checked,
+                          ...(checked ? { layoutMode: 'auto' } : {}),
+                        });
+                        if (checked) {
+                          onResetFreeformPositions?.();
+                        }
+                      }}
+                      className="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500 cursor-pointer shrink-0"
+                    />
+                  </label>
+
+                  {/* Ghép cặp ảnh cùng cỡ (Smart Bundling) */}
+                  <label className="flex items-center justify-between cursor-pointer pt-1.5 border-t border-emerald-200/80">
+                    <div className="flex items-center gap-1.5">
+                      <Layers className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
+                      <span className="text-xs font-medium text-emerald-950">Ghép cặp ảnh cùng cỡ</span>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={settings.enableSmartBundling !== false}
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        onUpdateSettings({
+                          enableSmartBundling: checked,
+                          layoutMode: 'auto',
+                        });
                         onResetFreeformPositions?.();
-                      }
-                    }}
-                    className="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500 cursor-pointer shrink-0"
-                  />
-                </label>
+                      }}
+                      className="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500 cursor-pointer shrink-0"
+                      title="Tự động gom nhóm các ảnh có chung kích thước cạnh vào cùng hàng/cột để tờ A4 vuông vức hơn"
+                    />
+                  </label>
+                </div>
               )}
             </div>
 
