@@ -1,13 +1,14 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { UploadCloud, Image as ImageIcon, Images, Plus, Loader2, FileImage, Save, FolderOpen, ChevronDown } from 'lucide-react';
-import { PhotoItem, ShapeType, SizePreset } from '../types';
-import { readFileAsDataURL, getImageDimensions, calculateCrop, createOptimizedPreview, getOrientedDimensions } from '../utils/imageUtils';
+import { PhotoItem, ShapeType, SizePreset, OrientationMode } from '../types';
+import { readFileAsDataURL, getImageDimensions, calculateCrop, createOptimizedPreview, getOrientedDimensions, rotateImageBase64, getShortPresetLabel } from '../utils/imageUtils';
 
 interface UploaderProps {
   onAddPhotos: (newPhotos: PhotoItem[]) => void;
   onToast: (type: 'success' | 'error' | 'info', text: string) => void;
   activePreset: SizePreset;
-  autoMatchOrientation: boolean;
+  orientationMode?: OrientationMode;
+  autoMatchOrientation?: boolean;
   smartCrop: boolean;
   customPresets?: SizePreset[];
   onOpenPngSplitter?: () => void;
@@ -19,7 +20,8 @@ export const Uploader: React.FC<UploaderProps> = ({
   onAddPhotos,
   onToast,
   activePreset,
-  autoMatchOrientation,
+  orientationMode,
+  autoMatchOrientation = true,
   smartCrop,
   customPresets = [],
   onOpenPngSplitter,
@@ -33,6 +35,8 @@ export const Uploader: React.FC<UploaderProps> = ({
   const [isDragging, setIsDragging] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<{ current: number; total: number; percent: number } | null>(null);
+
+  const effectiveMode: OrientationMode = orientationMode || (autoMatchOrientation ? 'auto_match' : 'rotate_to_fit');
 
   // Close project dropdown on click outside or Escape
   useEffect(() => {
@@ -75,7 +79,7 @@ export const Uploader: React.FC<UploaderProps> = ({
     );
 
     if (files.length === 0) {
-      onToast('error', 'Vui lòng chọn tệp hình ảnh hợp lệ (JPG, PNG, WebP, v.v.)');
+      onToast('error', 'Vui lòng chọn tệp ảnh hợp lệ');
       return;
     }
 
@@ -98,28 +102,66 @@ export const Uploader: React.FC<UploaderProps> = ({
           const dims = await getImageDimensions(dataUrl);
 
           // Generate lightweight preview for buttery smooth UI rendering (60fps)
-          const previewSrc = await createOptimizedPreview(dataUrl, 800, 0.85);
+          let previewSrc = await createOptimizedPreview(dataUrl, 800, 0.85);
 
           // Determine target dimensions based on active preset configured on the app
           let targetW = activePreset.width;
           let targetH = activePreset.height;
           const targetShape: ShapeType = activePreset.shape;
+          let finalOriginalSrc = dataUrl;
+          let finalPreviewSrc = previewSrc;
+          let finalImgWidth = dims.width;
+          let finalImgHeight = dims.height;
+          let finalRotation = 0;
 
-          if (autoMatchOrientation && targetShape === 'rect') {
-            const oriented = getOrientedDimensions(dims.width, dims.height, targetW, targetH, true, targetShape);
-            targetW = oriented.targetWidth;
-            targetH = oriented.targetHeight;
+          if (targetShape === 'rect' && activePreset.width !== activePreset.height) {
+            const isPresetPortrait = activePreset.height > activePreset.width;
+            const isPresetLandscape = activePreset.width > activePreset.height;
+            const isImgLandscape = dims.width > dims.height;
+            const isImgPortrait = dims.height > dims.width;
+
+            if (effectiveMode === 'rotate_to_fit') {
+              if ((isPresetPortrait && isImgLandscape) || (isPresetLandscape && isImgPortrait)) {
+                // Auto rotate 90 degrees to fit frame perfectly
+                finalOriginalSrc = await rotateImageBase64(dataUrl, 90);
+                finalPreviewSrc = await createOptimizedPreview(finalOriginalSrc, 800, 0.85);
+                finalImgWidth = dims.height;
+                finalImgHeight = dims.width;
+                finalRotation = 90;
+              }
+              targetW = activePreset.width;
+              targetH = activePreset.height;
+            } else if (effectiveMode === 'auto_match') {
+              const oriented = getOrientedDimensions(dims.width, dims.height, targetW, targetH, true, targetShape);
+              targetW = oriented.targetWidth;
+              targetH = oriented.targetHeight;
+            } else {
+              // 'fixed_crop'
+              targetW = activePreset.width;
+              targetH = activePreset.height;
+            }
           }
 
-          const crop = calculateCrop(dims.width, dims.height, targetW, targetH, smartCrop);
+          const crop = calculateCrop(finalImgWidth, finalImgHeight, targetW, targetH, smartCrop);
 
           addedPhotos.push({
             id: 'photo_' + Math.random().toString(36).substring(2, 9) + '_' + Date.now() + '_' + i,
             name: file.name || 'Ảnh tải lên',
-            originalSrc: dataUrl,
-            previewSrc: previewSrc,
-            imgWidth: dims.width,
-            imgHeight: dims.height,
+            originalSrc: finalOriginalSrc,
+            previewSrc: finalPreviewSrc,
+            rawOriginalSrc: dataUrl,
+            rawOriginalWidth: dims.width,
+            rawOriginalHeight: dims.height,
+            rawOriginalCrop: { cropX: 0, cropY: 0, cropW: dims.width, cropH: dims.height },
+            unrotatedOriginalSrc: dataUrl,
+            unrotatedPreviewSrc: previewSrc,
+            unrotatedWidth: dims.width,
+            unrotatedHeight: dims.height,
+            rotatedOriginalSrc: finalRotation === 90 ? finalOriginalSrc : undefined,
+            rotatedPreviewSrc: finalRotation === 90 ? finalPreviewSrc : undefined,
+            autoRotateAngle: finalRotation,
+            imgWidth: finalImgWidth,
+            imgHeight: finalImgHeight,
             targetWidth: targetW,
             targetHeight: targetH,
             shape: targetShape,
@@ -129,7 +171,7 @@ export const Uploader: React.FC<UploaderProps> = ({
             cropY: crop.cropY,
             cropW: crop.cropW,
             cropH: crop.cropH,
-            rotation: 0,
+            rotation: finalRotation,
           });
         } catch (err) {
           console.error('Error processing single image:', err);
@@ -143,19 +185,14 @@ export const Uploader: React.FC<UploaderProps> = ({
 
       if (addedPhotos.length > 0) {
         onAddPhotos(addedPhotos);
-        const portraitCount = addedPhotos.filter((p) => p.targetHeight >= p.targetWidth).length;
-        const landscapeCount = addedPhotos.length - portraitCount;
-        const detailMsg =
-          portraitCount > 0 && landscapeCount > 0
-            ? ` (${portraitCount} ảnh dọc, ${landscapeCount} ảnh ngang)`
-            : '';
-        onToast('success', `Đã nạp ${addedPhotos.length} ảnh${detailMsg} theo khổ ${activePreset.label}!`);
+        const shortLabel = getShortPresetLabel(activePreset.label);
+        onToast('success', `Đã thêm ${addedPhotos.length} ảnh (${shortLabel})`);
       } else {
-        onToast('error', 'Không thể đọc nội dung file ảnh.');
+        onToast('error', 'Không thể đọc file ảnh');
       }
     } catch (e) {
       console.error('Error in batch upload:', e);
-      onToast('error', 'Có lỗi xảy ra khi tải ảnh lên.');
+      onToast('error', 'Lỗi khi tải ảnh lên');
     } finally {
       setIsProcessing(false);
       setUploadProgress(null);
@@ -188,7 +225,7 @@ export const Uploader: React.FC<UploaderProps> = ({
 
     window.addEventListener('paste', handlePaste);
     return () => window.removeEventListener('paste', handlePaste);
-  }, [activePreset, autoMatchOrientation, smartCrop, customPresets]);
+  }, [activePreset, orientationMode, autoMatchOrientation, smartCrop, customPresets]);
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
@@ -238,25 +275,61 @@ export const Uploader: React.FC<UploaderProps> = ({
       const addedPhotos: PhotoItem[] = [];
       for (const sample of sampleUrls) {
         const dims = await getImageDimensions(sample.url);
-        const previewSrc = await createOptimizedPreview(sample.url, 800, 0.85);
+        let previewSrc = await createOptimizedPreview(sample.url, 800, 0.85);
         let targetW = activePreset.width;
         let targetH = activePreset.height;
         const targetShape: ShapeType = activePreset.shape;
+        let finalOriginalSrc = sample.url;
+        let finalPreviewSrc = previewSrc;
+        let finalImgWidth = dims.width;
+        let finalImgHeight = dims.height;
+        let finalRotation = 0;
 
-        if (autoMatchOrientation && targetShape === 'rect') {
-          const oriented = getOrientedDimensions(dims.width, dims.height, targetW, targetH, true, targetShape);
-          targetW = oriented.targetWidth;
-          targetH = oriented.targetHeight;
+        if (targetShape === 'rect' && activePreset.width !== activePreset.height) {
+          const isPresetPortrait = activePreset.height > activePreset.width;
+          const isPresetLandscape = activePreset.width > activePreset.height;
+          const isImgLandscape = dims.width > dims.height;
+          const isImgPortrait = dims.height > dims.width;
+
+          if (effectiveMode === 'rotate_to_fit') {
+            if ((isPresetPortrait && isImgLandscape) || (isPresetLandscape && isImgPortrait)) {
+              finalOriginalSrc = await rotateImageBase64(sample.url, 90);
+              finalPreviewSrc = await createOptimizedPreview(finalOriginalSrc, 800, 0.85);
+              finalImgWidth = dims.height;
+              finalImgHeight = dims.width;
+              finalRotation = 90;
+            }
+            targetW = activePreset.width;
+            targetH = activePreset.height;
+          } else if (effectiveMode === 'auto_match') {
+            const oriented = getOrientedDimensions(dims.width, dims.height, targetW, targetH, true, targetShape);
+            targetW = oriented.targetWidth;
+            targetH = oriented.targetHeight;
+          } else {
+            targetW = activePreset.width;
+            targetH = activePreset.height;
+          }
         }
 
-        const crop = calculateCrop(dims.width, dims.height, targetW, targetH, smartCrop);
+        const crop = calculateCrop(finalImgWidth, finalImgHeight, targetW, targetH, smartCrop);
         addedPhotos.push({
           id: 'sample_' + Math.random().toString(36).substring(2, 9),
           name: sample.name,
-          originalSrc: sample.url,
-          previewSrc: previewSrc,
-          imgWidth: dims.width,
-          imgHeight: dims.height,
+          originalSrc: finalOriginalSrc,
+          previewSrc: finalPreviewSrc,
+          rawOriginalSrc: sample.url,
+          rawOriginalWidth: dims.width,
+          rawOriginalHeight: dims.height,
+          rawOriginalCrop: { cropX: 0, cropY: 0, cropW: dims.width, cropH: dims.height },
+          unrotatedOriginalSrc: sample.url,
+          unrotatedPreviewSrc: previewSrc,
+          unrotatedWidth: dims.width,
+          unrotatedHeight: dims.height,
+          rotatedOriginalSrc: finalRotation === 90 ? finalOriginalSrc : undefined,
+          rotatedPreviewSrc: finalRotation === 90 ? finalPreviewSrc : undefined,
+          autoRotateAngle: finalRotation,
+          imgWidth: finalImgWidth,
+          imgHeight: finalImgHeight,
           targetWidth: targetW,
           targetHeight: targetH,
           shape: targetShape,
@@ -266,14 +339,15 @@ export const Uploader: React.FC<UploaderProps> = ({
           cropY: crop.cropY,
           cropW: crop.cropW,
           cropH: crop.cropH,
-          rotation: 0,
+          rotation: finalRotation,
         });
       }
       onAddPhotos(addedPhotos);
-      onToast('success', `Đã nạp 3 ảnh mẫu theo khổ ${activePreset.label}!`);
+      const shortLabel = getShortPresetLabel(activePreset.label);
+      onToast('success', `Đã thêm 3 ảnh mẫu (${shortLabel})`);
     } catch (e) {
       console.error(e);
-      onToast('error', 'Không thể tải ảnh mẫu.');
+      onToast('error', 'Không thể tải ảnh mẫu');
     } finally {
       setIsProcessing(false);
     }
@@ -444,8 +518,16 @@ export const Uploader: React.FC<UploaderProps> = ({
           </div>
         ) : (
           <p className="text-[11px] text-gray-500">
-            Tự định dạng sang <strong className="text-blue-700 font-semibold">{activePreset.label}</strong>
-            {autoMatchOrientation ? ' (Tự khớp chiều)' : ''}
+            Định dạng <strong className="text-blue-700 font-semibold">{activePreset.label}</strong>
+            {effectiveMode === 'rotate_to_fit' && (
+              <span className="text-emerald-700 font-semibold ml-1">· Ép đúng khuôn - Tự xoay ảnh</span>
+            )}
+            {effectiveMode === 'fixed_crop' && (
+              <span className="text-slate-600 font-semibold ml-1">· Ép đúng khuôn - Không xoay ảnh</span>
+            )}
+            {effectiveMode === 'auto_match' && (
+              <span className="text-blue-700 font-semibold ml-1">· Xoay khuôn theo chiều ảnh</span>
+            )}
           </p>
         )}
 

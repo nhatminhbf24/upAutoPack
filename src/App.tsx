@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
-import { PhotoItem, LayoutSettings, ShapeType, SizePreset, DEFAULT_SIZE_PRESETS } from './types';
+import { PhotoItem, LayoutSettings, ShapeType, SizePreset, DEFAULT_SIZE_PRESETS, OrientationMode } from './types';
 import { packImagesToPages } from './utils/packing';
-import { exportPagesToImage, calculateCrop } from './utils/imageUtils';
+import { exportPagesToImage, calculateCrop, formatPhotoToPreset, getShortPresetLabel } from './utils/imageUtils';
 import { exportPagesToPdf } from './utils/pdfExport';
 import {
   saveProjectMeta,
@@ -53,14 +53,36 @@ export default function App() {
     historyCount,
   } = useHistoryState<PhotoItem[]>([], 13);
 
-  const [settings, setSettings] = useState<LayoutSettings>({
+  const initialOrientationMode: OrientationMode = (() => {
+    try {
+      const saved = localStorage.getItem('daudau_orientation_mode');
+      if (saved === 'rotate_to_fit' || saved === 'auto_match' || saved === 'fixed_crop') {
+        return saved as OrientationMode;
+      }
+      const legacyAutoMatch = localStorage.getItem('daudau_auto_match_orientation');
+      if (legacyAutoMatch === 'true') {
+        return 'auto_match';
+      }
+      if (legacyAutoMatch === 'false') {
+        return 'rotate_to_fit';
+      }
+    } catch {
+      // ignore
+    }
+    return 'rotate_to_fit';
+  })();
+
+  const [orientationMode, setOrientationMode] = useState<OrientationMode>(initialOrientationMode);
+
+  const [settings, setSettings] = useState<LayoutSettings>(() => ({
     margin: 5,
     gap: 2,
     cutLines: false,
     smartCrop: false,
     autoNesting: false,
     paperOrientation: 'portrait',
-  });
+    orientationMode: initialOrientationMode,
+  }));
 
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [cropModalConfig, setCropModalConfig] = useState<{
@@ -139,12 +161,52 @@ export default function App() {
     }
   }, []);
 
+  const handleOrientationModeChange = useCallback(
+    (newMode: OrientationMode) => {
+      setOrientationMode(newMode);
+      setAutoMatchOrientation(newMode === 'auto_match');
+      setSettings((prev) => ({ ...prev, orientationMode: newMode }));
+      try {
+        localStorage.setItem('daudau_orientation_mode', newMode);
+        localStorage.setItem('daudau_auto_match_orientation', String(newMode === 'auto_match'));
+      } catch (e) {
+        console.warn(e);
+      }
+    },
+    []
+  );
+
+  const handleBatchUpdatePhotos = useCallback(
+    (updatedPhotos: PhotoItem[]) => {
+      setPhotos(updatedPhotos);
+    },
+    [setPhotos]
+  );
+
+  const MAX_TOASTS = 5;
+
   const addToast = useCallback((type: 'success' | 'error' | 'info', text: string) => {
-    const id = 'toast_' + Math.random().toString(36).substring(2, 9);
-    setToasts((prev) => [...prev, { id, type, text }]);
+    const trimmed = text.trim();
+    if (!trimmed) return;
+    const id = 'toast_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
+
+    setToasts((prev) => {
+      let filtered = prev;
+      // Khi tác vụ thành công hoặc có lỗi kết thúc, dọn dẹp các thông báo "Đang..." chờ trước đó
+      if (type === 'success' || type === 'error') {
+        filtered = filtered.filter((t) => !t.text.startsWith('Đang '));
+      }
+      // Tránh lặp lại thông báo trùng lặp
+      filtered = filtered.filter((t) => t.text !== trimmed);
+
+      // Thêm mới và giữ tối đa 5 thông báo (tự động đẩy thông báo cũ nhất đi)
+      const next = [...filtered, { id, type, text: trimmed }];
+      return next.length > MAX_TOASTS ? next.slice(next.length - MAX_TOASTS) : next;
+    });
+
     setTimeout(() => {
       setToasts((prev) => prev.filter((t) => t.id !== id));
-    }, 4000);
+    }, 3500);
   }, []);
 
   const dismissToast = useCallback((id: string) => {
@@ -153,81 +215,33 @@ export default function App() {
 
   // Bật/tắt "Tự khớp chiều theo ảnh" -> áp dụng tức thì cho cả các ảnh đã tải lên trước đó
   const handleToggleAutoMatchOrientation = useCallback(
-    (enabled: boolean) => {
-      setAutoMatchOrientation(enabled);
-      try {
-        localStorage.setItem('daudau_auto_match_orientation', String(enabled));
-      } catch (e) {
-        console.warn(e);
-      }
+    async (enabled: boolean) => {
+      const newMode: OrientationMode = enabled ? 'auto_match' : 'rotate_to_fit';
+      handleOrientationModeChange(newMode);
 
       if (photos.length === 0) {
-        addToast('info', enabled ? 'Đã bật tự khớp chiều theo ảnh' : 'Đã tắt tự khớp chiều theo ảnh');
+        addToast('info', enabled ? 'Đã bật tự khớp chiều' : 'Đã tắt tự khớp chiều');
         return;
       }
 
-      let changedCount = 0;
-      const updatedPhotos = photos.map((photo) => {
-        if (photo.shape !== 'rect') return photo;
-
-        let targetW = photo.targetWidth;
-        let targetH = photo.targetHeight;
-
-        if (enabled) {
-          // Bật: Ảnh ngang -> Khổ ngang, Ảnh dọc -> Khổ dọc
-          if (photo.imgWidth > photo.imgHeight) {
-            targetW = Math.max(photo.targetWidth, photo.targetHeight);
-            targetH = Math.min(photo.targetWidth, photo.targetHeight);
-          } else if (photo.imgHeight > photo.imgWidth) {
-            targetW = Math.min(photo.targetWidth, photo.targetHeight);
-            targetH = Math.max(photo.targetWidth, photo.targetHeight);
-          }
-        } else {
-          // Tắt: Đồng bộ theo chiều gốc của khổ in đang cài trên ứng dụng
-          if (activePreset.height >= activePreset.width) {
-            targetW = Math.min(photo.targetWidth, photo.targetHeight);
-            targetH = Math.max(photo.targetWidth, photo.targetHeight);
-          } else {
-            targetW = Math.max(photo.targetWidth, photo.targetHeight);
-            targetH = Math.min(photo.targetWidth, photo.targetHeight);
-          }
+      try {
+        const updatedPhotos: PhotoItem[] = [];
+        for (const photo of photos) {
+          const res = await formatPhotoToPreset(photo, activePreset, newMode, settings.smartCrop);
+          updatedPhotos.push(res.photo);
         }
-
-        if (targetW !== photo.targetWidth || targetH !== photo.targetHeight) {
-          changedCount++;
-          const crop = calculateCrop(photo.imgWidth, photo.imgHeight, targetW, targetH, settings.smartCrop);
-          return {
-            ...photo,
-            targetWidth: targetW,
-            targetHeight: targetH,
-            cropX: crop.cropX,
-            cropY: crop.cropY,
-            cropW: crop.cropW,
-            cropH: crop.cropH,
-            scale: 1,
-          };
-        }
-        return photo;
-      });
-
-      if (changedCount > 0) {
         setPhotos(updatedPhotos);
         addToast(
           'success',
           enabled
-            ? `Đã bật tự khớp chiều: Tự xoay ${changedCount} ảnh theo chiều ảnh gốc!`
-            : `Đã tắt tự khớp chiều: Đồng bộ ${changedCount} ảnh theo chiều khổ in!`
+            ? `Đã bật tự khớp chiều (${updatedPhotos.length} ảnh)`
+            : `Đã ép đúng khuôn (${updatedPhotos.length} ảnh)`
         );
-      } else {
-        addToast(
-          'info',
-          enabled
-            ? 'Đã bật tự khớp chiều (các ảnh hiện tại đã khớp đúng chiều)'
-            : 'Đã tắt tự khớp chiều theo ảnh'
-        );
+      } catch (err) {
+        console.error('Error in handleToggleAutoMatchOrientation:', err);
       }
     },
-    [photos, activePreset, settings.smartCrop, setPhotos, addToast]
+    [handleOrientationModeChange, photos, activePreset, settings.smartCrop, setPhotos, addToast]
   );
 
   // =========================================================================
@@ -309,21 +323,25 @@ export default function App() {
   // Khôi phục session từ IndexedDB
   const handleRestoreSession = useCallback(async () => {
     try {
-      addToast('info', 'Đang khôi phục dự án cũ...');
+      addToast('info', 'Đang nạp dự án cũ...');
       const session = await loadSavedSession();
       if (session && session.photos.length > 0) {
         setPhotos(session.photos);
         setSettings(session.settings);
+        if (session.settings.orientationMode) {
+          setOrientationMode(session.settings.orientationMode);
+          setAutoMatchOrientation(session.settings.orientationMode === 'auto_match');
+        }
         if (session.customPresets && session.customPresets.length > 0) {
           setCustomPresets(session.customPresets);
         }
-        addToast('success', `Đã khôi phục thành công dự án (${session.photos.length} bức ảnh)!`);
+        addToast('success', `Đã khôi phục ${session.photos.length} ảnh`);
       } else {
-        addToast('error', 'Không thể nạp dữ liệu ảnh từ phiên cũ.');
+        addToast('error', 'Không thể nạp dữ liệu phiên cũ');
       }
     } catch (err) {
       console.error('Failed to restore session:', err);
-      addToast('error', 'Có lỗi khi khôi phục dự án.');
+      addToast('error', 'Lỗi khôi phục dự án');
     } finally {
       setPendingRestoreMeta(null);
     }
@@ -333,7 +351,7 @@ export default function App() {
   const handleDiscardSession = useCallback(async () => {
     await clearSavedSession();
     setPendingRestoreMeta(null);
-    addToast('info', 'Đã khởi tạo dự án mới trống');
+    addToast('info', 'Đã tạo dự án mới');
   }, [addToast]);
 
   // =========================================================================
@@ -341,7 +359,7 @@ export default function App() {
   // =========================================================================
   const handleExportProject = useCallback(() => {
     if (photos.length === 0) {
-      addToast('error', 'Chưa có ảnh nào trong dự án để xuất file .daudau!');
+      addToast('error', 'Chưa có ảnh để xuất file');
       return;
     }
     setIsSaveProjectModalOpen(true);
@@ -354,12 +372,12 @@ export default function App() {
 
       setIsExporting(true);
       try {
-        addToast('info', `Đang đóng gói file dự án "${projectName}.daudau"...`);
+        addToast('info', `Đang lưu dự án "${projectName}"...`);
         await exportProjectToDaudauFile(photos, settings, customPresets, projectName);
-        addToast('success', `Đã lưu file dự án "${projectName}.daudau" thành công!`);
+        addToast('success', `Đã lưu dự án "${projectName}.daudau"`);
       } catch (err) {
         console.error('Error exporting project:', err);
-        addToast('error', 'Có lỗi khi đóng gói file dự án.');
+        addToast('error', 'Lỗi khi lưu file dự án');
       } finally {
         setIsExporting(false);
       }
@@ -370,26 +388,30 @@ export default function App() {
   const handleImportProject = useCallback(
     async (file: File) => {
       try {
-        addToast('info', `Đang giải nén & nạp dự án "${file.name}"...`);
+        addToast('info', `Đang mở dự án "${file.name}"...`);
         const projectData = await importProjectFromDaudauFile(file);
 
         if (!projectData.photos || projectData.photos.length === 0) {
-          addToast('error', 'Tệp dự án không chứa hình ảnh hợp lệ.');
+          addToast('error', 'Tệp dự án không có ảnh hợp lệ');
           return;
         }
 
         setPhotos(projectData.photos);
         if (projectData.settings) {
           setSettings(projectData.settings);
+          if (projectData.settings.orientationMode) {
+            setOrientationMode(projectData.settings.orientationMode);
+            setAutoMatchOrientation(projectData.settings.orientationMode === 'auto_match');
+          }
         }
         if (projectData.customPresets && projectData.customPresets.length > 0) {
           setCustomPresets(projectData.customPresets);
         }
 
-        addToast('success', `Đã nạp thành công dự án "${projectData.name}" (${projectData.photos.length} ảnh)!`);
+        addToast('success', `Đã mở dự án "${projectData.name}" (${projectData.photos.length} ảnh)`);
       } catch (err: any) {
         console.error('Error importing project:', err);
-        addToast('error', err?.message || 'Có lỗi xảy ra khi đọc file dự án.');
+        addToast('error', err?.message || 'Lỗi đọc file dự án');
       }
     },
     [addToast, setPhotos]
@@ -417,13 +439,13 @@ export default function App() {
             // Redo: Ctrl+Shift+Z
             if (canRedo) {
               handleRedo();
-              addToast('info', 'Làm lại bước tiếp theo');
+              addToast('info', 'Đã làm lại (Ctrl+Y)');
             }
           } else {
             // Undo: Ctrl+Z
             if (canUndo) {
               handleUndo();
-              addToast('info', 'Đã hoàn tác bước trước');
+              addToast('info', 'Đã hoàn tác (Ctrl+Z)');
             }
           }
         } else if (e.key === 'y' || e.key === 'Y') {
@@ -431,7 +453,7 @@ export default function App() {
           e.preventDefault();
           if (canRedo) {
             handleRedo();
-            addToast('info', 'Làm lại bước tiếp theo');
+            addToast('info', 'Đã làm lại (Ctrl+Y)');
           }
         } else if (e.key === 's' || e.key === 'S') {
           // Quick save project: Ctrl+S
@@ -448,14 +470,14 @@ export default function App() {
   const onUndoWithToast = useCallback(() => {
     if (canUndo) {
       handleUndo();
-      addToast('info', 'Đã hoàn tác bước trước');
+      addToast('info', 'Đã hoàn tác (Ctrl+Z)');
     }
   }, [canUndo, handleUndo, addToast]);
 
   const onRedoWithToast = useCallback(() => {
     if (canRedo) {
       handleRedo();
-      addToast('info', 'Làm lại bước tiếp theo');
+      addToast('info', 'Đã làm lại (Ctrl+Y)');
     }
   }, [canRedo, handleRedo, addToast]);
 
@@ -476,7 +498,7 @@ export default function App() {
 
   const handleClearAll = useCallback(() => {
     if (photos.length === 0) {
-      addToast('info', 'Danh sách ảnh đang trống.');
+      addToast('info', 'Danh sách ảnh trống');
       return;
     }
     setIsClearConfirmOpen(true);
@@ -486,7 +508,7 @@ export default function App() {
     setPhotos([]);
     await clearSavedSession();
     setIsAutoSaved(false);
-    addToast('info', 'Đã xóa toàn bộ ảnh trong dự án');
+    addToast('info', 'Đã xóa toàn bộ ảnh');
   }, [setPhotos, addToast]);
 
   const handleUpdateSettings = useCallback(
@@ -514,7 +536,7 @@ export default function App() {
             }
             return currentPhotos;
           });
-          addToast('success', 'Đã chuyển sang chế độ Tự động sắp xếp (Đã xóa vị trí chồng lấn)');
+          addToast('success', 'Đã bật Tự động sắp xếp');
         }
 
         return nextSettings;
@@ -588,14 +610,14 @@ export default function App() {
         return copy;
       })
     );
-    addToast('success', 'Đã đặt lại toàn bộ ảnh về vị trí sắp xếp tối ưu tự động');
+    addToast('success', 'Đã xếp lại ảnh tối ưu');
   }, [setPhotos, addToast]);
 
   // Nhân bản toàn bộ ảnh của một trang để làm mặt sau (kèm tự động kích hoạt In 2 mặt đối xứng)
   const handleClonePageAsBackside = useCallback((pageNumber: number) => {
     const targetPage = packedPages.find((p) => p.pageNumber === pageNumber);
     if (!targetPage || targetPage.items.length === 0) {
-      addToast('error', `Không tìm thấy ảnh ở Trang ${pageNumber} để nhân bản!`);
+      addToast('error', `Trang ${pageNumber} không có ảnh để nhân bản`);
       return;
     }
 
@@ -650,7 +672,7 @@ export default function App() {
 
     addToast(
       'success',
-      `Đã nhân bản ${clonedPhotos.length} ảnh Trang ${pageNumber} làm mặt sau (tự động bật In 2 mặt đối xứng)!`
+      `Đã nhân bản ${clonedPhotos.length} ảnh Trang ${pageNumber} làm mặt sau`
     );
   }, [packedPages, photos, settings.duplexMode, setSettings, setPhotos, addToast]);
 
@@ -660,7 +682,7 @@ export default function App() {
 
   const handlePrint = useCallback(() => {
     if (photos.length === 0) {
-      addToast('error', 'Chưa có ảnh nào để in!');
+      addToast('error', 'Chưa có ảnh để in');
       return;
     }
     window.print();
@@ -669,22 +691,22 @@ export default function App() {
   const handleExport = useCallback(
     async (format: 'png' | 'jpeg') => {
       if (photos.length === 0) {
-        addToast('error', 'Chưa có ảnh nào để xuất file!');
+        addToast('error', 'Chưa có ảnh để xuất file');
         return;
       }
 
       setIsExporting(true);
       setExportProgress({ current: 1, total: packedPages.length });
-      addToast('info', `Đang kết xuất ${packedPages.length} trang độ nét cao 300 DPI...`);
+      addToast('info', `Đang xuất ${packedPages.length} trang ảnh 300 DPI...`);
 
       try {
         await exportPagesToImage(packedPages, settings, format, (current, total) => {
           setExportProgress({ current, total });
         });
-        addToast('success', `Đã xuất ${packedPages.length} trang ảnh chất lượng cao thành công!`);
+        addToast('success', `Đã xuất xong ${packedPages.length} trang ảnh`);
       } catch (err) {
         console.error('Error exporting:', err);
-        addToast('error', 'Có lỗi xảy ra khi tạo file xuất.');
+        addToast('error', 'Lỗi khi xuất ảnh');
       } finally {
         setIsExporting(false);
         setExportProgress(null);
@@ -695,22 +717,22 @@ export default function App() {
 
   const handleExportPdf = useCallback(async () => {
     if (photos.length === 0) {
-      addToast('error', 'Chưa có ảnh nào để xuất file PDF!');
+      addToast('error', 'Chưa có ảnh để xuất PDF');
       return;
     }
 
     setIsExporting(true);
     setExportProgress({ current: 1, total: packedPages.length });
-    addToast('info', `Đang kết xuất PDF ${packedPages.length} trang chuẩn in ấn 300 DPI...`);
+    addToast('info', `Đang tạo PDF ${packedPages.length} trang chuẩn 300 DPI...`);
 
     try {
       await exportPagesToPdf(packedPages, settings, (current, total) => {
         setExportProgress({ current, total });
       });
-      addToast('success', `Đã xuất file PDF (${packedPages.length} trang) chuẩn in ấn thành công!`);
+      addToast('success', `Đã xuất xong PDF ${packedPages.length} trang`);
     } catch (err) {
       console.error('Error exporting PDF:', err);
-      addToast('error', 'Có lỗi xảy ra khi tạo file PDF.');
+      addToast('error', 'Lỗi khi tạo file PDF');
     } finally {
       setIsExporting(false);
       setExportProgress(null);
@@ -736,7 +758,7 @@ export default function App() {
     } catch (e) {
       console.warn(e);
     }
-    addToast('success', `Đã lưu và chọn kích thước: ${preset.label}`);
+    addToast('success', `Đã lưu cỡ: ${getShortPresetLabel(preset.label)}`);
   }, [addToast]);
 
   const handleRemoveCustomPreset = useCallback((id: string) => {
@@ -749,7 +771,7 @@ export default function App() {
       }
       return updated;
     });
-    addToast('info', 'Đã xóa kích thước tùy chỉnh');
+    addToast('info', 'Đã xóa cỡ tùy chỉnh');
   }, [addToast]);
 
   const handleApplyPresetToPhoto = useCallback(
@@ -767,7 +789,7 @@ export default function App() {
         cropH: crop.cropH,
         scale: 1,
       });
-      addToast('success', `Đã áp dụng kích thước ${preset.label} cho ảnh`);
+      addToast('success', `Đã đổi cỡ: ${getShortPresetLabel(preset.label)}`);
     },
     [photos, settings.smartCrop, handleUpdatePhoto, addToast]
   );
@@ -775,7 +797,7 @@ export default function App() {
   const handleApplyPresetToAll = useCallback(
     (preset: SizePreset) => {
       if (photos.length === 0) {
-        addToast('error', 'Chưa có ảnh nào để áp dụng kích thước!');
+        addToast('error', 'Chưa có ảnh để áp dụng');
         return;
       }
       photos.forEach((photo) => {
@@ -791,7 +813,7 @@ export default function App() {
           scale: 1,
         });
       });
-      addToast('success', `Đã đồng bộ tất cả sang kích thước: ${preset.label}`);
+      addToast('success', `Đã đổi tất cả sang cỡ ${getShortPresetLabel(preset.label)}`);
     },
     [photos, settings.smartCrop, handleUpdatePhoto, addToast]
   );
@@ -872,10 +894,13 @@ export default function App() {
           <BatchToolsSidebar
             photos={photos}
             onUpdatePhoto={handleUpdatePhoto}
+            onBatchUpdatePhotos={handleBatchUpdatePhotos}
             onToast={addToast}
             smartCrop={settings.smartCrop}
             activePresetId={activePresetId}
             onChangeActivePresetId={handleActivePresetChange}
+            orientationMode={orientationMode}
+            onChangeOrientationMode={handleOrientationModeChange}
             autoMatchOrientation={autoMatchOrientation}
             onToggleAutoMatchOrientation={handleToggleAutoMatchOrientation}
             customPresets={customPresets}
@@ -900,6 +925,7 @@ export default function App() {
             exportProgress={exportProgress}
             onToast={addToast}
             activePreset={activePreset}
+            orientationMode={orientationMode}
             autoMatchOrientation={autoMatchOrientation}
             customPresets={customPresets}
             onOpenPngSplitter={() => setActiveView('png-splitter')}

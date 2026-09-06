@@ -25,7 +25,7 @@ import {
   RotateCw,
   Plus,
 } from 'lucide-react';
-import { LayoutSettings, SizePreset, FreeformTextTag, CutMarkFeature } from '../types';
+import { LayoutSettings, SizePreset, FreeformTextTag, CutMarkFeature, OrientationMode } from '../types';
 import { Uploader } from './Uploader';
 import { PhotoItem } from '../types';
 import { A4_WIDTH_MM, A4_HEIGHT_MM } from '../utils/packing';
@@ -49,6 +49,7 @@ interface SettingsSidebarProps {
   onToast: (type: 'success' | 'error' | 'info', text: string) => void;
   activePreset: SizePreset;
   autoMatchOrientation: boolean;
+  orientationMode?: OrientationMode;
   customPresets?: SizePreset[];
   onOpenPngSplitter?: () => void;
   isCollapsed?: boolean;
@@ -76,6 +77,7 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
   onToast,
   activePreset,
   autoMatchOrientation,
+  orientationMode,
   customPresets = [],
   onOpenPngSplitter,
   isCollapsed = false,
@@ -294,7 +296,7 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
       printSlug: true,
       textTag: { ...currentPageTag, enabled: true },
     });
-    onToast('success', `Đã áp dụng ghi chú cho toàn bộ ${pageCount} trang`);
+    onToast('success', `Đã áp dụng ghi chú cho ${pageCount} trang`);
   };
 
   // Xóa toàn bộ ghi chú ở tất cả các trang
@@ -311,7 +313,7 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
       textTag: { ...currentPageTag, enabled: false },
       printSlug: false,
     });
-    onToast('info', 'Đã xóa toàn bộ ghi chú trên các trang');
+    onToast('info', 'Đã xóa ghi chú các trang');
   };
 
   return (
@@ -397,6 +399,7 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
               onAddPhotos={onAddPhotos}
               onToast={onToast}
               activePreset={activePreset}
+              orientationMode={orientationMode || settings.orientationMode}
               autoMatchOrientation={autoMatchOrientation}
               smartCrop={settings.smartCrop}
               customPresets={customPresets}
@@ -627,15 +630,6 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
 
               {isBleedEnabled && (
                 <div id="bleed-dropdown-content" className="pt-2 border-t border-slate-100 space-y-2">
-                  <div className="flex items-center justify-between text-[10px]">
-                    <span className="text-slate-500 font-bold uppercase tracking-wider">
-                      Mức bù tràn lề:
-                    </span>
-                    <span className="text-indigo-700 font-bold font-mono text-xs">
-                      +{currentBleed} mm / mép
-                    </span>
-                  </div>
-
                   {/* Nút chọn nhanh */}
                   <div className="grid grid-cols-3 gap-1.5">
                     {[
@@ -668,7 +662,7 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
                   </div>
 
                   {/* Thanh kéo / Tùy chỉnh */}
-                  <div className="flex items-center gap-2 bg-slate-50 px-2 py-1.5 rounded-md border border-slate-200">
+                  <div className="flex items-center gap-1.5 bg-slate-50 px-2.5 py-1.5 rounded-md border border-slate-200">
                     <span className="text-slate-600 font-medium shrink-0 text-[10.5px]">Tùy chỉnh:</span>
                     <input
                       id="range-bleed-custom"
@@ -678,16 +672,12 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
                       step="0.5"
                       value={currentBleed}
                       onChange={(e) => onUpdateSettings({ bleed: parseFloat(e.target.value) || 1 })}
-                      className="flex-1 accent-indigo-600 h-1.5 bg-slate-200 rounded-lg cursor-pointer"
+                      className="flex-1 min-w-0 accent-indigo-600 h-1.5 bg-slate-200 rounded-lg cursor-pointer"
                     />
-                    <span className="text-xs font-mono font-bold text-indigo-700 w-12 text-right">
+                    <span className="text-[11px] font-mono font-bold text-indigo-700 shrink-0 text-right whitespace-nowrap">
                       +{currentBleed}mm
                     </span>
                   </div>
-
-                  <p className="text-[9.5px] text-slate-500 leading-tight bg-indigo-50/50 p-1.5 rounded border border-indigo-100/70">
-                    💡 Tự động mở rộng đều 4 cạnh khi in/xuất PDF 300 DPI, giữ nguyên đường xén và tâm ảnh.
-                  </p>
                 </div>
               )}
             </div>

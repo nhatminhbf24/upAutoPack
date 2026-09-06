@@ -96,16 +96,13 @@ export const PngSplitterModal: React.FC<PngSplitterModalProps> = ({
         setExtractedItems(result.items);
 
         if (result.items.length === 0) {
-          onToast(
-            'info',
-            'Không tìm thấy chi tiết nào tách biệt. Bạn có thể giảm "Độ nhạy Alpha" hoặc "Kích thước tối thiểu" để quét sâu hơn.'
-          );
+          onToast('info', 'Không tìm thấy chi tiết nào tách biệt');
         } else {
-          onToast('success', `Đã tìm và tách thành công ${result.items.length} chi tiết riêng biệt!`);
+          onToast('success', `Đã tách được ${result.items.length} chi tiết`);
         }
       } catch (err) {
         console.error('Split PNG error:', err);
-        onToast('error', 'Có lỗi xảy ra khi xử lý ảnh. Vui lòng thử lại với file PNG hợp lệ.');
+        onToast('error', 'Lỗi xử lý file PNG');
       } finally {
         setIsProcessing(false);
       }
@@ -116,7 +113,7 @@ export const PngSplitterModal: React.FC<PngSplitterModalProps> = ({
   // Load a file from user input
   const handleFile = async (file: File) => {
     if (!file.type.includes('png') && !file.name.toLowerCase().endsWith('.png')) {
-      onToast('info', 'Khuyên dùng file định dạng .PNG có sẵn nền trong suốt để đạt độ chính xác cao nhất.');
+      onToast('info', 'Khuyên dùng file PNG có nền trong suốt');
     }
 
     try {
@@ -128,7 +125,7 @@ export const PngSplitterModal: React.FC<PngSplitterModalProps> = ({
       await analyzeImage(dataUrl, cleanName, undefined, cleanName);
     } catch (e) {
       console.error(e);
-      onToast('error', 'Không thể đọc file hình ảnh.');
+      onToast('error', 'Không thể đọc file ảnh');
     }
   };
 
@@ -198,19 +195,19 @@ export const PngSplitterModal: React.FC<PngSplitterModalProps> = ({
   const handleDownloadZip = async () => {
     const selected = extractedItems.filter((it) => it.selected);
     if (selected.length === 0) {
-      onToast('error', 'Vui lòng chọn ít nhất 1 ảnh để tải về!');
+      onToast('error', 'Chưa chọn ảnh để tải về');
       return;
     }
 
     setIsDownloadingZip(true);
     try {
       const zipName = `${prefixName || 'bo_anh'}_tach_nen_${selected.length}_anh.zip`;
-      onToast('info', `Đang đóng gói ${selected.length} file PNG vào thư mục ZIP...`);
+      onToast('info', `Đang nén ZIP (${selected.length} ảnh)...`);
       await downloadExtractedItemsZip(selected, zipName);
-      onToast('success', `Đã tải về thành công file ${zipName}!`);
+      onToast('success', `Đã tải về file ZIP (${selected.length} ảnh)`);
     } catch (err) {
       console.error('Download ZIP error:', err);
-      onToast('error', 'Có lỗi xảy ra khi nén file ZIP.');
+      onToast('error', 'Lỗi khi nén file ZIP');
     } finally {
       setIsDownloadingZip(false);
     }
@@ -220,7 +217,7 @@ export const PngSplitterModal: React.FC<PngSplitterModalProps> = ({
   const handleImportToProject = async () => {
     const selected = extractedItems.filter((it) => it.selected);
     if (selected.length === 0) {
-      onToast('error', 'Vui lòng chọn ít nhất 1 ảnh để đưa vào trang in!');
+      onToast('error', 'Chưa chọn ảnh để chuyển');
       return;
     }
 
@@ -263,12 +260,12 @@ export const PngSplitterModal: React.FC<PngSplitterModalProps> = ({
 
       if (onAddPhotosToProject) {
         onAddPhotosToProject(addedPhotos);
-        onToast('success', `Đã thêm ${addedPhotos.length} ảnh đã tách vào bàn làm việc in A4!`);
+        onToast('success', `Đã chuyển ${addedPhotos.length} ảnh vào trang in`);
         onClose();
       }
     } catch (err) {
       console.error('Import to project error:', err);
-      onToast('error', 'Có lỗi khi nạp ảnh vào dự án.');
+      onToast('error', 'Lỗi khi nạp ảnh vào dự án');
     } finally {
       setIsProcessing(false);
     }

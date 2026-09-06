@@ -120,7 +120,7 @@ export const ImageListSidebar: React.FC<ImageListSidebarProps> = ({
           cropW: origCrop.cropW,
           cropH: origCrop.cropH,
         });
-        onToast('info', 'Đã khôi phục ảnh gốc ban đầu');
+        onToast('info', 'Đã khôi phục ảnh gốc');
       } else {
         // Base source and raw metrics
         const sourceForEnhancing = photo.rawOriginalSrc || photo.originalSrc;
@@ -176,9 +176,9 @@ export const ImageListSidebar: React.FC<ImageListSidebarProps> = ({
 
         if (factor > 1) {
           const newDpiInfo = calculatePrintDPI(result.newWidth, result.newHeight, photo.targetWidth, photo.targetHeight, photo.scale || 1);
-          onToast('success', `Đã nâng độ phân giải AI ${factor}x (${result.newWidth}×${result.newHeight} px) → ${newDpiInfo.label}!`);
+          onToast('success', `Đã nâng độ phân giải AI ${factor}x (${newDpiInfo.label})`);
         } else {
-          onToast('success', `Đã làm nét & tăng chất lượng ảnh: ${photo.name}`);
+          onToast('success', 'Đã làm nét ảnh');
         }
       }
     } catch (err) {
@@ -213,10 +213,10 @@ export const ImageListSidebar: React.FC<ImageListSidebarProps> = ({
         cropH: crop.cropH,
         scale: 1,
       });
-      onToast('success', `Đã xoay ảnh ${photo.name} 90°`);
+      onToast('success', 'Đã xoay ảnh 90°');
     } catch (err) {
       console.error('Error rotating single photo:', err);
-      onToast('error', 'Không thể xoay ảnh này');
+      onToast('error', 'Không thể xoay ảnh');
     } finally {
       setRotatingId(null);
     }

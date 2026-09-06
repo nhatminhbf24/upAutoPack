@@ -1,7 +1,12 @@
 import JSZip from 'jszip';
-import { PhotoItem, PackedPage, LayoutSettings } from '../types';
+import { PhotoItem, PackedPage, LayoutSettings, SizePreset, OrientationMode, ShapeType } from '../types';
 import { MM_TO_PX_300DPI, A4_WIDTH_MM, A4_HEIGHT_MM } from './packing';
 import { renderTextTagOnCanvas } from './textTagUtils';
+
+export function getShortPresetLabel(label: string): string {
+  if (!label) return '';
+  return label.replace(/\s*\([^)]*\)/g, '').trim();
+}
 
 export function readFileAsDataURL(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -233,6 +238,161 @@ export function getOrientedDimensions(
   }
 
   return { targetWidth, targetHeight, wasSwapped: false };
+}
+
+/**
+ * Applies a size preset and orientation mode to a photo item:
+ * 1. 'rotate_to_fit' (Ép đúng cỡ & Tự xoay ảnh):
+ *    - Frame size is strictly preset.width x preset.height.
+ *    - If photo orientation mismatches the frame orientation (e.g. horizontal photo in vertical 5x7 frame),
+ *      the image is rotated 90° clockwise so it fits the frame perfectly without cropping the sides!
+ * 2. 'auto_match' (Khớp chiều theo ảnh):
+ *    - Frame size adapts to photo: horizontal photo gets horizontal frame (7x5), vertical photo gets vertical frame (5x7).
+ *    - Image is restored to original unrotated angle (0°).
+ * 3. 'fixed_crop' (Cố định khổ - Cắt cúp):
+ *    - Frame size is strictly preset.width x preset.height.
+ *    - Image is restored to original unrotated angle (0°); centered crop is calculated.
+ */
+export async function formatPhotoToPreset(
+  photo: PhotoItem,
+  preset: SizePreset,
+  orientationMode: OrientationMode = 'rotate_to_fit',
+  smartCrop = false
+): Promise<{ photo: PhotoItem; didRotate: boolean }> {
+  let targetW = preset.width;
+  let targetH = preset.height;
+  const targetShape: ShapeType = preset.shape;
+
+  // 1. Identify if this photo was previously auto-rotated by rotate_to_fit
+  const wasAutoRotated =
+    photo.autoRotateAngle === 90 ||
+    (photo.rotation === 90 && Boolean(photo.rawOriginalWidth) && photo.rawOriginalWidth === photo.imgHeight);
+
+  // 2. Identify the unrotated base dimensions
+  let baseW = photo.unrotatedWidth || photo.rawOriginalWidth;
+  let baseH = photo.unrotatedHeight || photo.rawOriginalHeight;
+  if (!baseW || !baseH) {
+    if (wasAutoRotated) {
+      baseW = photo.imgHeight;
+      baseH = photo.imgWidth;
+    } else {
+      baseW = photo.imgWidth;
+      baseH = photo.imgHeight;
+    }
+  }
+
+  // 3. Identify the unrotated base image sources
+  let baseSrc = photo.unrotatedOriginalSrc;
+  let basePreview = photo.unrotatedPreviewSrc;
+
+  if (!baseSrc) {
+    if (wasAutoRotated) {
+      // If photo was rotated, rawOriginalSrc is unrotated
+      baseSrc = photo.rawOriginalSrc || photo.originalSrc;
+      basePreview = photo.rawOriginalSrc
+        ? await createOptimizedPreview(photo.rawOriginalSrc, 800, 0.85)
+        : photo.previewSrc;
+    } else {
+      baseSrc = photo.originalSrc;
+      basePreview = photo.previewSrc;
+    }
+  }
+  if (!basePreview) {
+    basePreview = baseSrc;
+  }
+
+  let finalSrc = baseSrc;
+  let finalPreview = basePreview;
+  let finalW = baseW;
+  let finalH = baseH;
+  let autoRotateAngle = 0;
+  let didRotate = false;
+  let cachedRotatedOriginal = photo.rotatedOriginalSrc;
+  let cachedRotatedPreview = photo.rotatedPreviewSrc;
+
+  if (targetShape === 'rect' && preset.width !== preset.height) {
+    const isPresetPortrait = preset.height > preset.width;
+    const isPresetLandscape = preset.width > preset.height;
+    const isBaseLandscape = baseW > baseH;
+    const isBasePortrait = baseH > baseW;
+
+    if (orientationMode === 'rotate_to_fit') {
+      const needsRotate = (isPresetPortrait && isBaseLandscape) || (isPresetLandscape && isBasePortrait);
+      if (needsRotate) {
+        if (!cachedRotatedOriginal) {
+          cachedRotatedOriginal = await rotateImageBase64(baseSrc, 90);
+          cachedRotatedPreview = basePreview
+            ? await rotateImageBase64(basePreview, 90)
+            : await createOptimizedPreview(cachedRotatedOriginal, 800, 0.85);
+        }
+        finalSrc = cachedRotatedOriginal;
+        finalPreview = cachedRotatedPreview || cachedRotatedOriginal;
+        finalW = baseH;
+        finalH = baseW;
+        autoRotateAngle = 90;
+        didRotate = true;
+      } else {
+        finalSrc = baseSrc;
+        finalPreview = basePreview;
+        finalW = baseW;
+        finalH = baseH;
+        autoRotateAngle = 0;
+      }
+      targetW = preset.width;
+      targetH = preset.height;
+    } else if (orientationMode === 'auto_match') {
+      // Revert to unrotated image!
+      finalSrc = baseSrc;
+      finalPreview = basePreview;
+      finalW = baseW;
+      finalH = baseH;
+      autoRotateAngle = 0;
+
+      const oriented = getOrientedDimensions(baseW, baseH, preset.width, preset.height, true, targetShape);
+      targetW = oriented.targetWidth;
+      targetH = oriented.targetHeight;
+    } else {
+      // 'fixed_crop'
+      // Revert to unrotated image!
+      finalSrc = baseSrc;
+      finalPreview = basePreview;
+      finalW = baseW;
+      finalH = baseH;
+      autoRotateAngle = 0;
+
+      targetW = preset.width;
+      targetH = preset.height;
+    }
+  }
+
+  const crop = calculateCrop(finalW, finalH, targetW, targetH, smartCrop);
+
+  return {
+    photo: {
+      ...photo,
+      originalSrc: finalSrc,
+      previewSrc: finalPreview,
+      unrotatedOriginalSrc: baseSrc,
+      unrotatedPreviewSrc: basePreview,
+      unrotatedWidth: baseW,
+      unrotatedHeight: baseH,
+      rotatedOriginalSrc: cachedRotatedOriginal,
+      rotatedPreviewSrc: cachedRotatedPreview,
+      autoRotateAngle,
+      imgWidth: finalW,
+      imgHeight: finalH,
+      targetWidth: targetW,
+      targetHeight: targetH,
+      shape: targetShape,
+      cropX: crop.cropX,
+      cropY: crop.cropY,
+      cropW: crop.cropW,
+      cropH: crop.cropH,
+      scale: 1,
+      rotation: autoRotateAngle,
+    },
+    didRotate,
+  };
 }
 
 export async function exportPagesToImage(

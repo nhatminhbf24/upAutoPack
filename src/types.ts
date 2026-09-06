@@ -1,5 +1,7 @@
 export type ShapeType = 'rect' | 'circle' | 'heart';
 
+export type OrientationMode = 'rotate_to_fit' | 'auto_match' | 'fixed_crop';
+
 export interface ImageAdjustments {
   // Cân bằng trắng (White balance)
   temperature: number; // -100 to 100 (Nhiệt độ màu)
@@ -42,6 +44,13 @@ export interface PhotoItem {
   rawOriginalWidth?: number; // Dimensions before super-res upscale
   rawOriginalHeight?: number;
   rawOriginalCrop?: { cropX: number; cropY: number; cropW: number; cropH: number };
+  unrotatedOriginalSrc?: string; // Original image before auto-rotation for reversible orientation modes
+  unrotatedPreviewSrc?: string; // Original preview before auto-rotation
+  unrotatedWidth?: number; // Original width before auto-rotation
+  unrotatedHeight?: number; // Original height before auto-rotation
+  rotatedOriginalSrc?: string; // Cached 90° rotated original for instant orientation switching
+  rotatedPreviewSrc?: string; // Cached 90° rotated preview
+  autoRotateAngle?: number; // 0 or 90 (degree rotated to fit portrait/landscape frame)
   upscaleFactor?: number; // 1, 2, 4
   isEnhanced?: boolean;
   adjustments?: ImageAdjustments;
@@ -90,6 +99,7 @@ export interface LayoutSettings {
   pageTextTags?: Record<number, FreeformTextTag>; // Ghi chú riêng biệt theo từng trang (key là số trang: 1, 2, 3... - vị trí & nội dung độc lập)
   duplexMode?: boolean; // Chế độ in 2 mặt: Tự động lật đối xứng trang chẵn (Mirror X) để khớp mặt sau
   smartCrop: boolean;
+  orientationMode?: OrientationMode; // Chế độ định hướng: 'rotate_to_fit' (Ép đúng cỡ & Tự xoay ảnh), 'auto_match' (Khớp chiều theo ảnh), 'fixed_crop' (Cố định khổ)
   autoNesting?: boolean; // Tự động sắp xếp ảnh tối ưu diện tích
   allowRotation?: boolean; // Cho phép xoay 90° lấp khoảng trống (Tiết kiệm giấy tối đa)
   paperOrientation: 'portrait' | 'landscape';

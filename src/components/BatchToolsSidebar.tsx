@@ -13,23 +13,24 @@ import {
   Ruler,
   Plus,
   Scissors,
-  ArrowUpDown,
-  ArrowLeftRight,
 } from 'lucide-react';
-import { PhotoItem, DEFAULT_SIZE_PRESETS, DEFAULT_ADJUSTMENTS, SizePreset } from '../types';
-import { rotateImageBase64, calculateCrop, createOptimizedPreview, getOrientedDimensions } from '../utils/imageUtils';
+import { PhotoItem, DEFAULT_SIZE_PRESETS, DEFAULT_ADJUSTMENTS, SizePreset, OrientationMode } from '../types';
+import { rotateImageBase64, calculateCrop, createOptimizedPreview, getOrientedDimensions, formatPhotoToPreset, getShortPresetLabel } from '../utils/imageUtils';
 import { enhanceImageQuality, getRecommendedUpscaleFactor } from '../utils/imageEnhancer';
 import { calculateAutoAdjustments, applyAdjustmentsToImage } from '../utils/imageAdjustmentEngine';
 
 interface BatchToolsSidebarProps {
   photos: PhotoItem[];
   onUpdatePhoto: (id: string, updates: Partial<PhotoItem>) => void;
+  onBatchUpdatePhotos?: (photos: PhotoItem[]) => void;
   onToast: (type: 'success' | 'error' | 'info', text: string) => void;
   smartCrop: boolean;
   activePresetId: string;
   onChangeActivePresetId: (id: string) => void;
-  autoMatchOrientation: boolean;
-  onToggleAutoMatchOrientation: (enabled: boolean) => void;
+  orientationMode?: OrientationMode;
+  onChangeOrientationMode?: (mode: OrientationMode) => void;
+  autoMatchOrientation?: boolean;
+  onToggleAutoMatchOrientation?: (enabled: boolean) => void;
   customPresets?: SizePreset[];
   onOpenCustomSizeModal?: () => void;
   onOpenPngSplitter?: () => void;
@@ -40,10 +41,13 @@ interface BatchToolsSidebarProps {
 export const BatchToolsSidebar: React.FC<BatchToolsSidebarProps> = ({
   photos,
   onUpdatePhoto,
+  onBatchUpdatePhotos,
   onToast,
   smartCrop,
   activePresetId,
   onChangeActivePresetId,
+  orientationMode,
+  onChangeOrientationMode,
   autoMatchOrientation,
   onToggleAutoMatchOrientation,
   customPresets = [],
@@ -54,6 +58,7 @@ export const BatchToolsSidebar: React.FC<BatchToolsSidebarProps> = ({
 }) => {
   const [batchQuantity, setBatchQuantity] = useState<number>(1);
   const [enhanceStrength, setEnhanceStrength] = useState<number>(50);
+  const [isApplyingSizeAll, setIsApplyingSizeAll] = useState<boolean>(false);
   const [isEnhancingAll, setIsEnhancingAll] = useState<boolean>(false);
   const [isRevertingAll, setIsRevertingAll] = useState<boolean>(false);
   const [isAutoAdjustingAll, setIsAutoAdjustingAll] = useState<boolean>(false);
@@ -67,11 +72,13 @@ export const BatchToolsSidebar: React.FC<BatchToolsSidebarProps> = ({
   // Batch Auto Adjust Colors (White balance, light & vibrancy)
   const handleAutoAdjustAll = async () => {
     if (photos.length === 0 || isAutoAdjustingAll) {
-      if (photos.length === 0) onToast('error', 'Chưa có ảnh nào để cân chỉnh màu!');
+      if (photos.length === 0) onToast('error', 'Chưa có ảnh để cân chỉnh màu');
       return;
     }
     setIsAutoAdjustingAll(true);
-    onToast('info', `Đang tự động cân chỉnh màu sắc & ánh sáng cho ${photos.length} ảnh...`);
+    if (photos.length > 15) {
+      onToast('info', `Đang cân màu ${photos.length} ảnh...`);
+    }
 
     let count = 0;
     for (let i = 0; i < photos.length; i++) {
@@ -99,13 +106,13 @@ export const BatchToolsSidebar: React.FC<BatchToolsSidebarProps> = ({
     }
 
     setIsAutoAdjustingAll(false);
-    onToast('success', `Đã tự động cân chỉnh màu sắc cho ${count} ảnh!`);
+    onToast('success', `Đã cân màu ${count} ảnh`);
   };
 
   // Batch Revert Colors to Original (Khôi phục màu gốc TẤT CẢ)
   const handleRevertColorsAll = async () => {
     if (photos.length === 0 || isRevertingColorsAll) {
-      if (photos.length === 0) onToast('error', 'Chưa có ảnh nào để khôi phục!');
+      if (photos.length === 0) onToast('error', 'Chưa có ảnh để khôi phục');
       return;
     }
     setIsRevertingColorsAll(true);
@@ -130,13 +137,13 @@ export const BatchToolsSidebar: React.FC<BatchToolsSidebarProps> = ({
     }
 
     setIsRevertingColorsAll(false);
-    onToast('success', `Đã khôi phục màu gốc cho ${count} ảnh!`);
+    onToast('success', `Đã đặt lại màu cho ${count} ảnh`);
   };
 
   // Batch 1-Click Print Ready Preset Colors
   const handleApplyPresetColorsAll = async (presetType: 'studio_print' | 'portrait' | 'crisp') => {
     if (photos.length === 0 || isAutoAdjustingAll) {
-      if (photos.length === 0) onToast('error', 'Chưa có ảnh nào để áp dụng!');
+      if (photos.length === 0) onToast('error', 'Chưa có ảnh để áp dụng');
       return;
     }
     setIsAutoAdjustingAll(true);
@@ -154,7 +161,9 @@ export const BatchToolsSidebar: React.FC<BatchToolsSidebarProps> = ({
         ? 'Tông da hồng hào'
         : 'Trong trẻo sắc nét';
 
-    onToast('info', `Đang áp dụng preset "${label}" cho ${photos.length} ảnh...`);
+    if (photos.length > 20) {
+      onToast('info', `Đang áp dụng màu "${label}"...`);
+    }
 
     let count = 0;
     for (let i = 0; i < photos.length; i++) {
@@ -179,88 +188,116 @@ export const BatchToolsSidebar: React.FC<BatchToolsSidebarProps> = ({
       }
     }
     setIsAutoAdjustingAll(false);
-    onToast('success', `Đã áp dụng "${label}" cho ${count} ảnh!`);
+    onToast('success', `Đã áp dụng màu "${label}" (${count} ảnh)`);
   };
 
-  // 1. Batch Size Preset Change
-  const handleApplyPresetToAll = (
+  // 1. Batch Size Preset Change & Auto-Rotate
+  const handleApplyPresetToAll = async (
     presetOverride?: SizePreset,
-    forceOrientation?: 'auto' | 'portrait' | 'landscape'
+    forceOrientation?: 'auto' | 'portrait' | 'landscape',
+    modeOverride?: OrientationMode
   ) => {
-    if (photos.length === 0) {
-      onToast('error', 'Chưa có ảnh nào để áp dụng kích thước!');
+    if (photos.length === 0 || isApplyingSizeAll) {
+      if (photos.length === 0) onToast('error', 'Chưa có ảnh để áp dụng cỡ');
       return;
     }
     const preset = presetOverride || allPresets.find((p) => p.id === activePresetId) || DEFAULT_SIZE_PRESETS[0];
     if (!preset) return;
 
+    setIsApplyingSizeAll(true);
+
+    const currentMode: OrientationMode =
+      modeOverride ||
+      orientationMode ||
+      (autoMatchOrientation ? 'auto_match' : 'rotate_to_fit');
+
+    // Adjust target preset orientation if explicitly forced
+    let effectivePreset: SizePreset = { ...preset };
+    if (forceOrientation === 'portrait') {
+      effectivePreset = {
+        ...preset,
+        width: Math.min(preset.width, preset.height),
+        height: Math.max(preset.width, preset.height),
+      };
+    } else if (forceOrientation === 'landscape') {
+      effectivePreset = {
+        ...preset,
+        width: Math.max(preset.width, preset.height),
+        height: Math.min(preset.width, preset.height),
+      };
+    }
+
+    if (photos.length > 30) {
+      onToast('info', `Đang xử lý ${photos.length} ảnh...`);
+    }
+
+    let rotatedCount = 0;
     let portraitCount = 0;
     let landscapeCount = 0;
+    const updatedPhotos: PhotoItem[] = [];
 
-    photos.forEach((photo) => {
-      let finalW = preset.width;
-      let finalH = preset.height;
-
-      if (preset.shape === 'rect') {
-        const orientationMode = forceOrientation || (autoMatchOrientation ? 'auto' : 'none');
-        if (orientationMode === 'auto') {
-          const oriented = getOrientedDimensions(
-            photo.imgWidth,
-            photo.imgHeight,
-            preset.width,
-            preset.height,
-            true,
-            preset.shape
-          );
-          finalW = oriented.targetWidth;
-          finalH = oriented.targetHeight;
-        } else if (orientationMode === 'portrait') {
-          finalW = Math.min(preset.width, preset.height);
-          finalH = Math.max(preset.width, preset.height);
-        } else if (orientationMode === 'landscape') {
-          finalW = Math.max(preset.width, preset.height);
-          finalH = Math.min(preset.width, preset.height);
+    for (let i = 0; i < photos.length; i++) {
+      const photo = photos[i];
+      try {
+        const res = await formatPhotoToPreset(
+          photo,
+          effectivePreset,
+          currentMode,
+          smartCrop
+        );
+        if (res.didRotate) {
+          rotatedCount++;
         }
+        if (res.photo.targetHeight >= res.photo.targetWidth) {
+          portraitCount++;
+        } else {
+          landscapeCount++;
+        }
+        updatedPhotos.push(res.photo);
+      } catch (err) {
+        console.error('Error formatting photo to preset:', err);
+        updatedPhotos.push(photo);
       }
 
-      if (finalH >= finalW) {
-        portraitCount++;
-      } else {
-        landscapeCount++;
+      if (i % 2 === 0) {
+        await new Promise((r) => setTimeout(r, 0));
       }
+    }
 
-      const crop = calculateCrop(photo.imgWidth, photo.imgHeight, finalW, finalH, smartCrop);
-      onUpdatePhoto(photo.id, {
-        targetWidth: finalW,
-        targetHeight: finalH,
-        shape: preset.shape,
-        cropX: crop.cropX,
-        cropY: crop.cropY,
-        cropW: crop.cropW,
-        cropH: crop.cropH,
-        scale: 1,
+    if (onBatchUpdatePhotos) {
+      onBatchUpdatePhotos(updatedPhotos);
+    } else {
+      updatedPhotos.forEach((p) => {
+        onUpdatePhoto(p.id, p);
       });
-    });
+    }
 
-    const isBoth = portraitCount > 0 && landscapeCount > 0;
-    const detailMsg = isBoth
-      ? ` (${portraitCount} ảnh dọc, ${landscapeCount} ảnh ngang)`
-      : ` (${photos.length} ảnh)`;
+    setIsApplyingSizeAll(false);
 
-    onToast('success', `Đã đồng bộ ${photos.length} ảnh sang khổ ${preset.label}${detailMsg}`);
+    const shortLabel = getShortPresetLabel(effectivePreset.label);
+    onToast('success', `Đã đổi ${photos.length} ảnh sang khổ ${shortLabel}`);
+  };
+
+  const handleSelectOrientationMode = async (newMode: OrientationMode) => {
+    if (onChangeOrientationMode) {
+      onChangeOrientationMode(newMode);
+    }
+    if (photos.length > 0) {
+      await handleApplyPresetToAll(undefined, undefined, newMode);
+    }
   };
 
   // 2. Batch Quantity
   const handleApplyQuantityToAll = (qtyToApply?: number) => {
     if (photos.length === 0) {
-      onToast('error', 'Chưa có ảnh nào để đổi số lượng!');
+      onToast('error', 'Chưa có ảnh để đổi số lượng');
       return;
     }
     const targetQty = Math.max(1, qtyToApply !== undefined ? qtyToApply : batchQuantity);
     photos.forEach((photo) => {
       onUpdatePhoto(photo.id, { qty: targetQty });
     });
-    onToast('success', `Đã đặt số lượng tất cả ảnh thành ${targetQty} bản`);
+    onToast('success', `Đã đặt ${targetQty} bản cho tất cả ảnh`);
   };
 
   const handleAdjustQuantityAll = (delta: number) => {
@@ -269,17 +306,19 @@ export const BatchToolsSidebar: React.FC<BatchToolsSidebarProps> = ({
       const newQty = Math.max(1, (photo.qty || 1) + delta);
       onUpdatePhoto(photo.id, { qty: newQty });
     });
-    onToast('info', `Đã ${delta > 0 ? 'tăng' : 'giảm'} 1 bản in cho tất cả ảnh`);
+    onToast('info', `Đã ${delta > 0 ? 'tăng' : 'giảm'} 1 bản in`);
   };
 
   // 3. Batch Enhance All (Smart Sharpen, Contrast & Super-Resolution Upscale)
   const handleEnhanceAll = async () => {
     if (photos.length === 0 || isEnhancingAll) {
-      if (photos.length === 0) onToast('error', 'Chưa có ảnh nào để làm nét!');
+      if (photos.length === 0) onToast('error', 'Chưa có ảnh để làm nét');
       return;
     }
     setIsEnhancingAll(true);
-    onToast('info', `Đang tối ưu độ nét & nâng DPI cho ${photos.length} ảnh...`);
+    if (photos.length > 10) {
+      onToast('info', `Đang làm nét ${photos.length} ảnh...`);
+    }
 
     const sharpenVal = (enhanceStrength / 100) * 0.85 + 0.1;
     const contrastVal = (enhanceStrength / 100) * 0.16 + 0.04;
@@ -344,7 +383,7 @@ export const BatchToolsSidebar: React.FC<BatchToolsSidebarProps> = ({
     }
 
     setIsEnhancingAll(false);
-    onToast('success', `Đã nâng cao chất lượng & DPI cho ${successCount} ảnh!`);
+    onToast('success', `Đã làm nét & tăng DPI ${successCount} ảnh`);
   };
 
   // 4. Batch Revert All to Raw Original
@@ -386,19 +425,21 @@ export const BatchToolsSidebar: React.FC<BatchToolsSidebarProps> = ({
 
     setIsRevertingAll(false);
     if (revertCount > 0) {
-      onToast('info', `Đã khôi phục ảnh gốc ban đầu cho ${revertCount} ảnh`);
+      onToast('info', `Đã khôi phục ${revertCount} ảnh về gốc`);
     } else {
-      onToast('info', 'Tất cả ảnh hiện tại đều đang ở trạng thái gốc');
+      onToast('info', 'Tất cả ảnh đang ở bản gốc');
     }
   };
 
   // 5. Batch Rotate All 90deg
   const handleRotateAll = async () => {
     if (photos.length === 0) {
-      onToast('error', 'Chưa có ảnh nào để xoay!');
+      onToast('error', 'Chưa có ảnh để xoay');
       return;
     }
-    onToast('info', 'Đang xoay toàn bộ ảnh 90°...');
+    if (photos.length > 20) {
+      onToast('info', 'Đang xoay ảnh 90°...');
+    }
 
     for (let i = 0; i < photos.length; i++) {
       const photo = photos[i];
@@ -427,7 +468,7 @@ export const BatchToolsSidebar: React.FC<BatchToolsSidebarProps> = ({
       }
     }
 
-    onToast('success', 'Đã xoay tất cả ảnh 90° thành công!');
+    onToast('success', 'Đã xoay tất cả ảnh 90°');
   };
 
   const enhancedCount = photos.filter((p) => p.isEnhanced).length;
@@ -532,62 +573,88 @@ export const BatchToolsSidebar: React.FC<BatchToolsSidebarProps> = ({
                 </button>
               )}
 
-              {/* Tùy chọn tự khớp chiều ảnh */}
-              <label className="flex items-start gap-2 bg-white/80 p-2 rounded-lg border border-sky-200 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={autoMatchOrientation}
-                  onChange={(e) => onToggleAutoMatchOrientation(e.target.checked)}
-                  className="mt-0.5 w-3.5 h-3.5 text-blue-600 rounded border-slate-300 focus:ring-blue-500 cursor-pointer"
-                />
-                <div className="flex-1">
-                  <div className="text-[11px] font-bold text-slate-800 flex items-center gap-1">
-                    <span>Tự khớp chiều theo ảnh</span>
-                    <span className="text-[9px] bg-blue-100 text-blue-700 px-1 rounded font-bold">Khuyên dùng</span>
-                  </div>
-                  <div className="text-[10px] text-slate-500 leading-tight">
-                    Ảnh ngang ↔ Khổ ngang, Ảnh dọc ↔ Khổ dọc. Giữ nguyên tỉ lệ kích thước.
-                  </div>
+              {/* Vibrant Blue/Indigo Action Button - ĐƯA LÊN TRÊN ĐỊNH HƯỚNG KHUÔN */}
+              <button
+                type="button"
+                id="btn-apply-size-all"
+                onClick={() => handleApplyPresetToAll()}
+                disabled={photos.length === 0 || isApplyingSizeAll}
+                className="w-full flex items-center justify-center gap-1.5 bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 hover:from-blue-700 hover:to-indigo-800 disabled:opacity-50 text-white px-3 py-2.5 rounded-xl text-xs font-bold shadow-sm shadow-blue-500/20 transition active:scale-95 cursor-pointer mt-1"
+              >
+                {isApplyingSizeAll ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin text-white" />
+                    <span>Đang đồng bộ kích thước & xoay...</span>
+                  </>
+                ) : (
+                  <>
+                    <Check className="w-3.5 h-3.5 text-emerald-300" />
+                    <span>Áp dụng kích thước cho tất cả</span>
+                  </>
+                )}
+              </button>
+
+              {/* Tùy chọn định hướng khuôn in */}
+              <div className="space-y-1 pt-1">
+                {/* 1. Ép đúng khuôn - Tự xoay ảnh */}
+                  <label
+                    onClick={() => handleSelectOrientationMode('rotate_to_fit')}
+                    className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg border transition cursor-pointer select-none text-[11px] font-semibold ${
+                      (orientationMode === 'rotate_to_fit' || (!orientationMode && !autoMatchOrientation))
+                        ? 'bg-blue-50/95 border-blue-500 text-blue-900 shadow-2xs ring-1 ring-blue-400/40'
+                        : 'bg-white/80 border-slate-200 text-slate-700 hover:border-slate-300 hover:bg-white'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="orientationMode"
+                      checked={orientationMode === 'rotate_to_fit' || (!orientationMode && !autoMatchOrientation)}
+                      onChange={() => handleSelectOrientationMode('rotate_to_fit')}
+                      className="text-blue-600 focus:ring-blue-500 cursor-pointer"
+                    />
+                    <span className="truncate">Ép đúng khuôn - Tự xoay ảnh</span>
+                  </label>
+
+                  {/* 2. Ép đúng khuôn - Không xoay ảnh */}
+                  <label
+                    onClick={() => handleSelectOrientationMode('fixed_crop')}
+                    className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg border transition cursor-pointer select-none text-[11px] font-semibold ${
+                      orientationMode === 'fixed_crop'
+                        ? 'bg-blue-50/95 border-blue-500 text-blue-900 shadow-2xs ring-1 ring-blue-400/40'
+                        : 'bg-white/80 border-slate-200 text-slate-700 hover:border-slate-300 hover:bg-white'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="orientationMode"
+                      checked={orientationMode === 'fixed_crop'}
+                      onChange={() => handleSelectOrientationMode('fixed_crop')}
+                      className="text-blue-600 focus:ring-blue-500 cursor-pointer"
+                    />
+                    <span className="truncate">Ép đúng khuôn - Không xoay ảnh</span>
+                  </label>
+
+                  {/* 3. Xoay khuôn theo chiều ảnh */}
+                  <label
+                    onClick={() => handleSelectOrientationMode('auto_match')}
+                    className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg border transition cursor-pointer select-none text-[11px] font-semibold ${
+                      (orientationMode === 'auto_match' || (!orientationMode && autoMatchOrientation))
+                        ? 'bg-blue-50/95 border-blue-500 text-blue-900 shadow-2xs ring-1 ring-blue-400/40'
+                        : 'bg-white/80 border-slate-200 text-slate-700 hover:border-slate-300 hover:bg-white'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="orientationMode"
+                      checked={orientationMode === 'auto_match' || (!orientationMode && autoMatchOrientation)}
+                      onChange={() => handleSelectOrientationMode('auto_match')}
+                      className="text-blue-600 focus:ring-blue-500 cursor-pointer"
+                    />
+                    <span className="truncate">Xoay khuôn theo chiều ảnh</span>
+                  </label>
                 </div>
-              </label>
+              </div>
             </div>
-
-            {/* Vibrant Blue/Indigo Action Button */}
-            <button
-              type="button"
-              id="btn-apply-size-all"
-              onClick={() => handleApplyPresetToAll()}
-              disabled={photos.length === 0}
-              className="w-full flex items-center justify-center gap-1.5 bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 hover:from-blue-700 hover:to-indigo-800 disabled:opacity-50 text-white px-3 py-2.5 rounded-xl text-xs font-bold shadow-sm shadow-blue-500/20 transition active:scale-95 cursor-pointer"
-            >
-              <Check className="w-3.5 h-3.5 text-emerald-300" />
-              <span>Áp dụng kích thước cho tất cả</span>
-            </button>
-
-            {/* Tùy chọn ép cứng Dọc hoặc Ngang khi cần */}
-            <div className="grid grid-cols-2 gap-1.5 pt-0.5">
-              <button
-                type="button"
-                onClick={() => handleApplyPresetToAll(undefined, 'portrait')}
-                disabled={photos.length === 0}
-                className="flex items-center justify-center gap-1 py-1.5 px-2 bg-white hover:bg-slate-100 disabled:opacity-50 border border-sky-200 text-sky-900 rounded-lg text-[10.5px] font-bold transition shadow-2xs cursor-pointer"
-                title="Ép toàn bộ ảnh sang khổ Đứng (Dọc)"
-              >
-                <ArrowUpDown className="w-3 h-3 text-sky-600" />
-                <span>Ép tất cả Dọc</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => handleApplyPresetToAll(undefined, 'landscape')}
-                disabled={photos.length === 0}
-                className="flex items-center justify-center gap-1 py-1.5 px-2 bg-white hover:bg-slate-100 disabled:opacity-50 border border-sky-200 text-sky-900 rounded-lg text-[10.5px] font-bold transition shadow-2xs cursor-pointer"
-                title="Ép toàn bộ ảnh sang khổ Nằm (Ngang)"
-              >
-                <ArrowLeftRight className="w-3 h-3 text-sky-600" />
-                <span>Ép tất cả Ngang</span>
-              </button>
-            </div>
-          </div>
 
           {/* CỤM 2: XOAY & ĐỊNH HƯỚNG (Pastel Indigo) - ĐƯỢC ĐƯA LÊN TRÊN SỐ LƯỢNG */}
           <div className="bg-indigo-50/70 rounded-xl p-3.5 border border-indigo-200/90 shadow-2xs space-y-2 transition hover:border-indigo-300">
