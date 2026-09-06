@@ -535,8 +535,8 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
                 />
               </label>
 
-              {/* Nút 1-Click: Nhân bản Trang 1 làm mặt sau */}
-              {onClonePage1AsBackside && totalPhotos > 0 && (
+              {/* Nút 1-Click: Nhân bản Trang 1 làm mặt sau (Chỉ hiện khi In 2 mặt đối xứng được bật) */}
+              {Boolean(settings.duplexMode) && onClonePage1AsBackside && totalPhotos > 0 && (
                 <button
                   type="button"
                   onClick={onClonePage1AsBackside}
