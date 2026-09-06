@@ -23,11 +23,13 @@ import {
   Type,
   Clock,
   RotateCw,
+  Plus,
 } from 'lucide-react';
 import { LayoutSettings, SizePreset, FreeformTextTag, CutMarkFeature } from '../types';
 import { Uploader } from './Uploader';
 import { PhotoItem } from '../types';
 import { A4_WIDTH_MM, A4_HEIGHT_MM } from '../utils/packing';
+import { getDefaultTextTag, getEffectiveTextTagForPage } from '../utils/textTagUtils';
 
 interface SettingsSidebarProps {
   settings: LayoutSettings;
@@ -91,6 +93,35 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
     }
   });
 
+  const exportPanelRef = useRef<HTMLDivElement>(null);
+
+  // Tự động hạ xuống khi nhấp chuột ra ngoài vùng bảng xuất file & in ấn (cho gọn thanh công cụ)
+  useEffect(() => {
+    if (isExportCollapsed || isExporting) return;
+
+    const handlePointerDown = (event: MouseEvent | TouchEvent) => {
+      if (
+        exportPanelRef.current &&
+        !exportPanelRef.current.contains(event.target as Node)
+      ) {
+        setIsExportCollapsed(true);
+        try {
+          localStorage.setItem('daudau_export_collapsed', 'true');
+        } catch (e) {
+          console.warn(e);
+        }
+      }
+    };
+
+    document.addEventListener('mousedown', handlePointerDown);
+    document.addEventListener('touchstart', handlePointerDown);
+
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+      document.removeEventListener('touchstart', handlePointerDown);
+    };
+  }, [isExportCollapsed, isExporting]);
+
   // Tự động mở lên khi đang xử lý xuất file
   useEffect(() => {
     if (isExporting) {
@@ -114,29 +145,173 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
   const pageW_mm = isLandscape ? A4_HEIGHT_MM : A4_WIDTH_MM;
   const pageH_mm = isLandscape ? A4_WIDTH_MM : A4_HEIGHT_MM;
 
-  const isTagEnabled = Boolean(settings.textTag?.enabled || settings.printSlug);
-  const textTag: FreeformTextTag = settings.textTag || {
-    enabled: isTagEnabled,
-    text: settings.orderSlug || '',
-    includeDateTime: true,
-    includePageNumber: true,
-    fontSizePt: 8,
-    rotation: 0,
-    xMm: Math.max(4, settings.margin || 5),
-    yMm: (settings.slugPosition || 'bottom') === 'top' ? 4 : Math.max(10, pageH_mm - 5.5),
-    color: '#334155',
-  };
+  const [selectedTagPage, setSelectedTagPage] = useState<number>(1);
+  const effectiveSelectedPage = Math.min(Math.max(1, selectedTagPage), Math.max(1, pageCount));
+
+  // Trạng thái mở rộng / thu hẹp của khối Ghi chú theo trang (Mặc định tự động thu hẹp)
+  const [isTextTagSectionExpanded, setIsTextTagSectionExpanded] = useState<boolean>(false);
+  const textTagCardRef = useRef<HTMLDivElement>(null);
+
+  // Tự động thu gọn lại khi nhấp chuột ra ngoài
+  useEffect(() => {
+    if (!isTextTagSectionExpanded) return;
+
+    const handleClickOutside = (e: MouseEvent | TouchEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (!target) return;
+
+      // Không đóng nếu nhấp vào bên trong khối Ghi chú theo trang
+      if (textTagCardRef.current && textTagCardRef.current.contains(target)) {
+        return;
+      }
+
+      // Không đóng nếu nhấp vào các nút/tag kích hoạt mở ghi chú trên trang A4
+      if (target.closest('[data-text-tag-trigger="true"]')) {
+        return;
+      }
+
+      setIsTextTagSectionExpanded(false);
+    };
+
+    // Lắng nghe sự kiện mousedown và touchstart để phản hồi tức thì
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('touchstart', handleClickOutside);
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
+    };
+  }, [isTextTagSectionExpanded]);
+
+  // Lắng nghe sự kiện nhấp đúp (2 lần) vào ghi chú trên trang A4 hoặc bấm thêm ghi chú
+  useEffect(() => {
+    const handleFocusPageTag = (e: Event) => {
+      const customEvent = e as CustomEvent<{ pageNumber?: number }>;
+      const targetPage = customEvent.detail?.pageNumber;
+      if (typeof targetPage === 'number' && targetPage >= 1) {
+        setSelectedTagPage(targetPage);
+      }
+      // Tự động mở rộng khối công cụ nếu đang bị thu hẹp
+      setIsTextTagSectionExpanded(true);
+
+      // Tự động cuộn đến và focus vào ô nhập nội dung
+      setTimeout(() => {
+        const card = document.getElementById('setting-freeform-text-tag-card');
+        const input = document.getElementById('input-tag-custom-text') as HTMLInputElement | null;
+
+        if (card) {
+          card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+          card.classList.add('ring-2', 'ring-blue-500', 'bg-blue-50/50');
+          setTimeout(() => {
+            card.classList.remove('ring-2', 'ring-blue-500', 'bg-blue-50/50');
+          }, 1200);
+        }
+
+        if (input) {
+          input.focus();
+          input.select();
+        }
+      }, 100);
+    };
+
+    window.addEventListener('daudau_focus_page_tag', handleFocusPageTag);
+    return () => {
+      window.removeEventListener('daudau_focus_page_tag', handleFocusPageTag);
+    };
+  }, []);
+
+  // Kiểm tra tag của trang đang được chọn
+  const currentPageTag =
+    getEffectiveTextTagForPage(settings, effectiveSelectedPage, isLandscape) ||
+    getDefaultTextTag(isLandscape, settings.margin);
+
+  const isCurrentPageTagEnabled = Boolean(
+    settings.pageTextTags !== undefined && settings.pageTextTags !== null
+      ? settings.pageTextTags[effectiveSelectedPage]?.enabled
+      : (settings.textTag?.enabled || settings.printSlug)
+  );
+
+  const pagesWithNotesCount =
+    settings.pageTextTags !== undefined && settings.pageTextTags !== null
+      ? Object.values(settings.pageTextTags).filter(
+          (t): t is FreeformTextTag => Boolean(t && (t as FreeformTextTag).enabled)
+        ).length
+      : (settings.textTag?.enabled || settings.printSlug) ? pageCount : 0;
 
   const isBleedEnabled = Boolean(settings.bleed && settings.bleed > 0);
   const currentBleed = isBleedEnabled ? (settings.bleed as number) : 1;
 
-  const handleUpdateTag = (updates: Partial<FreeformTextTag>) => {
-    const updated: FreeformTextTag = { ...textTag, ...updates };
+  // Cập nhật tag của trang đang chọn
+  const handleUpdateCurrentPageTag = (updates: Partial<FreeformTextTag>) => {
+    const updated: FreeformTextTag = { ...currentPageTag, ...updates, enabled: true };
+    const nextPageTextTags = { ...(settings.pageTextTags || {}) };
+    nextPageTextTags[effectiveSelectedPage] = updated;
+
     onUpdateSettings({
+      pageTextTags: nextPageTextTags,
+      printSlug: true,
       textTag: updated,
-      printSlug: updated.enabled,
       orderSlug: updated.text,
     });
+  };
+
+  // Bật/tắt ghi chú cho trang đang chọn
+  const handleToggleCurrentPageTag = (enabled: boolean) => {
+    const nextPageTextTags = { ...(settings.pageTextTags || {}) };
+    if (enabled) {
+      nextPageTextTags[effectiveSelectedPage] = {
+        ...currentPageTag,
+        enabled: true,
+        text: currentPageTag.text || settings.textTag?.text || settings.orderSlug || `Ghi chú Trang ${effectiveSelectedPage}`,
+      };
+    } else {
+      nextPageTextTags[effectiveSelectedPage] = {
+        ...currentPageTag,
+        enabled: false,
+      };
+    }
+    const hasAnyActive = Object.values(nextPageTextTags).some(
+      (t) => Boolean(t && (t as FreeformTextTag).enabled)
+    );
+    onUpdateSettings({
+      pageTextTags: nextPageTextTags,
+      printSlug: hasAnyActive,
+      textTag: { ...(settings.textTag || currentPageTag), enabled: hasAnyActive },
+    });
+  };
+
+  // Áp dụng tag của trang hiện tại cho toàn bộ các trang
+  const handleApplyTagToAllPages = () => {
+    const nextPageTextTags: Record<number, FreeformTextTag> = {};
+    for (let p = 1; p <= Math.max(1, pageCount); p++) {
+      nextPageTextTags[p] = {
+        ...currentPageTag,
+        enabled: true,
+      };
+    }
+    onUpdateSettings({
+      pageTextTags: nextPageTextTags,
+      printSlug: true,
+      textTag: { ...currentPageTag, enabled: true },
+    });
+    onToast('success', `Đã áp dụng ghi chú cho toàn bộ ${pageCount} trang`);
+  };
+
+  // Xóa toàn bộ ghi chú ở tất cả các trang
+  const handleClearAllPageTags = () => {
+    const nextPageTextTags: Record<number, FreeformTextTag> = {};
+    for (let p = 1; p <= Math.max(1, pageCount); p++) {
+      nextPageTextTags[p] = {
+        ...currentPageTag,
+        enabled: false,
+      };
+    }
+    onUpdateSettings({
+      pageTextTags: nextPageTextTags,
+      textTag: { ...currentPageTag, enabled: false },
+      printSlug: false,
+    });
+    onToast('info', 'Đã xóa toàn bộ ghi chú trên các trang');
   };
 
   return (
@@ -549,187 +724,279 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
               )}
             </div>
 
-            {/* 5. Thêm text tự do (In mã đơn / Dòng chữ lề giấy A4) */}
+            {/* 5. Thêm text tự do / Ghi chú riêng từng trang */}
             <div
+              ref={textTagCardRef}
               id="setting-freeform-text-tag-card"
-              className="bg-white rounded-lg border border-slate-300 p-2.5 space-y-2.5 shadow-2xs transition-all duration-300"
+              className="bg-white rounded-lg border border-slate-300 p-2.5 shadow-2xs transition-all duration-300 space-y-2.5"
             >
-              <label className="flex items-center justify-between cursor-pointer select-none">
+              {/* Header: Nhấp vào toàn bộ thanh tiêu đề để thu hẹp hoặc mở rộng */}
+              <div
+                onClick={() => setIsTextTagSectionExpanded((prev) => !prev)}
+                className="flex items-center justify-between cursor-pointer select-none -m-1 p-1 rounded-md hover:bg-slate-50 transition"
+                title={isTextTagSectionExpanded ? 'Nhấp để thu hẹp' : 'Nhấp để mở rộng'}
+              >
                 <div className="flex items-center gap-2">
                   <Type className="w-3.5 h-3.5 text-blue-600 shrink-0" />
                   <div>
-                    <span className="text-xs font-bold text-slate-800 block leading-tight">Thêm text tự do</span>
-                    <span className="text-[10px] text-slate-500 block leading-tight">Kéo thả tự do, xoay dọc/ngang, ngày giờ</span>
+                    <span className="text-xs font-bold text-slate-800 block leading-tight">Ghi chú theo trang</span>
+                    <span className="text-[10px] text-slate-500 block leading-tight">Ghi chú độc lập từng trang in</span>
                   </div>
                 </div>
-                <input
-                  type="checkbox"
-                  checked={isTagEnabled}
-                  onChange={(e) => handleUpdateTag({ enabled: e.target.checked })}
-                  className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500 cursor-pointer shrink-0 ml-2"
-                />
-              </label>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+                    {pagesWithNotesCount}/{Math.max(1, pageCount)} trang
+                  </span>
+                  <ChevronDown
+                    className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ${
+                      isTextTagSectionExpanded ? 'rotate-180' : ''
+                    }`}
+                  />
+                </div>
+              </div>
 
-              {isTagEnabled && (
+              {/* Nội dung chi tiết - chỉ hiện khi mở rộng */}
+              {isTextTagSectionExpanded && (
                 <div className="space-y-2.5 pt-1.5 border-t border-slate-100">
-                  {/* Nhập mã đơn / ghi chú */}
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
-                      Nội dung in:
-                    </label>
+                  {/* Page Selection Tabs (khi có nhiều trang) */}
+                  {pageCount > 1 && (
+                    <div className="space-y-1">
+                      <div className="text-[9.5px] font-bold text-slate-400 uppercase tracking-wider">
+                        Chọn trang để cài đặt:
+                      </div>
+                      <div className="flex items-center gap-1 overflow-x-auto pb-1 scrollbar-thin">
+                        {Array.from({ length: pageCount }).map((_, idx) => {
+                          const pNum = idx + 1;
+                          const hasNote = Boolean(settings.pageTextTags?.[pNum]?.enabled);
+                          const isSelected = effectiveSelectedPage === pNum;
+
+                          return (
+                            <button
+                              key={`page-tab-${pNum}`}
+                              type="button"
+                              onClick={() => setSelectedTagPage(pNum)}
+                              className={`px-2 py-1 rounded-md text-[10.5px] font-bold shrink-0 transition flex items-center gap-1 cursor-pointer ${
+                                isSelected
+                                  ? 'bg-blue-600 text-white shadow-xs'
+                                  : hasNote
+                                  ? 'bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100'
+                                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                              }`}
+                            >
+                              <span>Trang {pNum}</span>
+                              {hasNote && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Toggle switch for current page */}
+                  <label className="flex items-center justify-between cursor-pointer select-none pt-1 border-t border-slate-100">
+                    <span className="text-xs font-semibold text-slate-700">
+                      Bật ghi chú cho <span className="font-bold text-blue-700">Trang {effectiveSelectedPage}</span>
+                    </span>
                     <input
-                      id="input-tag-custom-text"
-                      type="text"
-                      placeholder="Mã đơn / Tên khách (vd: #DH1024 - Khách Hà)"
-                      value={textTag.text || ''}
-                      onChange={(e) => handleUpdateTag({ text: e.target.value })}
-                      className="w-full bg-slate-50 border border-slate-300 rounded-md px-2.5 py-1.5 text-xs text-slate-800 outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white font-medium transition-all"
+                      type="checkbox"
+                      checked={isCurrentPageTagEnabled}
+                      onChange={(e) => handleToggleCurrentPageTag(e.target.checked)}
+                      className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500 cursor-pointer shrink-0 ml-2"
                     />
-                  </div>
+                  </label>
 
-                  {/* Tự động chèn ngày giờ & số trang */}
-                  <div className="grid grid-cols-2 gap-1.5 bg-slate-50 p-1.5 rounded-md border border-slate-200/80">
-                    <label className="flex items-center gap-1.5 cursor-pointer select-none">
-                      <input
-                        type="checkbox"
-                        checked={textTag.includeDateTime}
-                        onChange={(e) => handleUpdateTag({ includeDateTime: e.target.checked })}
-                        className="w-3.5 h-3.5 text-blue-600 rounded cursor-pointer shrink-0"
-                      />
-                      <span className="text-[10.5px] font-medium text-slate-700 leading-tight">
-                        Kèm ngày giờ in
-                      </span>
-                    </label>
-
-                    <label className="flex items-center gap-1.5 cursor-pointer select-none">
-                      <input
-                        type="checkbox"
-                        checked={textTag.includePageNumber}
-                        onChange={(e) => handleUpdateTag({ includePageNumber: e.target.checked })}
-                        className="w-3.5 h-3.5 text-blue-600 rounded cursor-pointer shrink-0"
-                      />
-                      <span className="text-[10.5px] font-medium text-slate-700 leading-tight">
-                        Kèm số trang
-                      </span>
-                    </label>
-                  </div>
-
-                  {/* Góc xoay & Cỡ chữ */}
-                  <div className="grid grid-cols-2 gap-2">
-                    {/* Góc xoay */}
-                    <div className="space-y-1">
-                      <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                        Góc xoay:
+                  {isCurrentPageTagEnabled ? (
+                    <div className="space-y-2.5 pt-1.5 border-t border-slate-100">
+                      {/* Nhập mã đơn / ghi chú của trang này */}
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
+                          Nội dung ghi chú Trang {effectiveSelectedPage}:
+                        </label>
+                        <input
+                          id="input-tag-custom-text"
+                          type="text"
+                          placeholder="VD: #DH1024 - In giấy ảnh bóng..."
+                          value={currentPageTag.text || ''}
+                          onChange={(e) => handleUpdateCurrentPageTag({ text: e.target.value })}
+                          className="w-full bg-slate-50 border border-slate-300 rounded-md px-2.5 py-1.5 text-xs text-slate-800 outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white font-medium transition-all"
+                        />
                       </div>
-                      <div className="grid grid-cols-2 gap-1">
+
+                      {/* Tự động chèn ngày giờ & số trang */}
+                      <div className="grid grid-cols-2 gap-1.5 bg-slate-50 p-1.5 rounded-md border border-slate-200/80">
+                        <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={currentPageTag.includeDateTime}
+                            onChange={(e) => handleUpdateCurrentPageTag({ includeDateTime: e.target.checked })}
+                            className="w-3.5 h-3.5 text-blue-600 rounded cursor-pointer shrink-0"
+                          />
+                          <span className="text-[10.5px] font-medium text-slate-700 leading-tight">
+                            Kèm ngày giờ
+                          </span>
+                        </label>
+
+                        <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={currentPageTag.includePageNumber}
+                            onChange={(e) => handleUpdateCurrentPageTag({ includePageNumber: e.target.checked })}
+                            className="w-3.5 h-3.5 text-blue-600 rounded cursor-pointer shrink-0"
+                          />
+                          <span className="text-[10.5px] font-medium text-slate-700 leading-tight">
+                            Kèm số trang
+                          </span>
+                        </label>
+                      </div>
+
+                      {/* Góc xoay & Cỡ chữ */}
+                      <div className="grid grid-cols-2 gap-2">
+                        {/* Góc xoay */}
+                        <div className="space-y-1">
+                          <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                            Góc xoay:
+                          </div>
+                          <div className="grid grid-cols-2 gap-1">
+                            <button
+                              type="button"
+                              onClick={() => handleUpdateCurrentPageTag({ rotation: 0 })}
+                              className={`py-1 px-1.5 rounded text-center text-[10px] font-bold transition cursor-pointer ${
+                                (currentPageTag.rotation || 0) === 0
+                                  ? 'bg-blue-600 text-white shadow-2xs'
+                                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                              }`}
+                            >
+                              Ngang (0°)
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleUpdateCurrentPageTag({ rotation: 90 })}
+                              className={`py-1 px-1.5 rounded text-center text-[10px] font-bold transition cursor-pointer ${
+                                (currentPageTag.rotation || 0) === 90
+                                  ? 'bg-blue-600 text-white shadow-2xs'
+                                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                              }`}
+                              title="Xoay dọc chữ áp sát mép giấy A4"
+                            >
+                              Dọc (90°)
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Cỡ chữ */}
+                        <div className="space-y-1">
+                          <div className="flex items-center justify-between text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                            <span>Cỡ chữ:</span>
+                            <span className="text-blue-700 font-bold">{currentPageTag.fontSizePt || 8} pt</span>
+                          </div>
+                          <input
+                            type="range"
+                            min={6}
+                            max={16}
+                            step={1}
+                            value={currentPageTag.fontSizePt || 8}
+                            onChange={(e) => handleUpdateCurrentPageTag({ fontSizePt: Number(e.target.value) })}
+                            className="w-full accent-blue-600 cursor-pointer h-1.5 bg-slate-200 rounded-lg"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Vị trí đặt nhanh (Presets) */}
+                      <div className="space-y-1">
+                        <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                          Đặt nhanh vị trí Trang {effectiveSelectedPage}:
+                        </div>
+                        <div className="grid grid-cols-4 gap-1">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handleUpdateCurrentPageTag({
+                                xMm: Math.max(4, settings.margin || 5),
+                                yMm: Math.max(10, pageH_mm - 5.5),
+                                rotation: 0,
+                              })
+                            }
+                            className="py-1 px-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-[9.5px] font-bold text-center transition cursor-pointer"
+                            title="Đặt ở chân trang dưới cùng"
+                          >
+                            Chân trang
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handleUpdateCurrentPageTag({
+                                xMm: Math.max(4, settings.margin || 5),
+                                yMm: 4,
+                                rotation: 0,
+                              })
+                            }
+                            className="py-1 px-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-[9.5px] font-bold text-center transition cursor-pointer"
+                            title="Đặt ở mép trên cùng"
+                          >
+                            Đầu trang
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handleUpdateCurrentPageTag({
+                                xMm: 3.5,
+                                yMm: Math.max(10, pageH_mm - 8),
+                                rotation: 90,
+                              })
+                            }
+                            className="py-1 px-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-[9.5px] font-bold text-center transition cursor-pointer"
+                            title="Xoay dọc chạy dọc theo mép lề trái"
+                          >
+                            Mép trái
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handleUpdateCurrentPageTag({
+                                xMm: pageW_mm - 3.5,
+                                yMm: Math.max(10, pageH_mm - 8),
+                                rotation: 90,
+                              })
+                            }
+                            className="py-1 px-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-[9.5px] font-bold text-center transition cursor-pointer"
+                            title="Xoay dọc chạy dọc theo mép lề phải"
+                          >
+                            Mép phải
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Nút tiện ích: Sao chép cho tất cả / Xóa ghi chú */}
+                      <div className="pt-1 flex items-center justify-between gap-1.5 border-t border-slate-100">
+                        {pageCount > 1 && (
+                          <button
+                            type="button"
+                            onClick={handleApplyTagToAllPages}
+                            className="py-1 px-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-[10px] font-bold flex items-center gap-1 transition cursor-pointer"
+                            title="Sao chép ghi chú này sang tất cả các trang khác"
+                          >
+                            <Copy className="w-3 h-3 text-slate-500" />
+                            <span>Chép cho mọi trang</span>
+                          </button>
+                        )}
+
                         <button
                           type="button"
-                          onClick={() => handleUpdateTag({ rotation: 0 })}
-                          className={`py-1 px-1.5 rounded text-center text-[10px] font-bold transition cursor-pointer ${
-                            (textTag.rotation || 0) === 0
-                              ? 'bg-blue-600 text-white shadow-2xs'
-                              : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                          }`}
+                          onClick={() => handleToggleCurrentPageTag(false)}
+                          className="py-1 px-2 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded text-[10px] font-bold flex items-center gap-1 transition cursor-pointer ml-auto"
+                          title="Xóa ghi chú khỏi trang này"
                         >
-                          Ngang (0°)
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleUpdateTag({ rotation: 90 })}
-                          className={`py-1 px-1.5 rounded text-center text-[10px] font-bold transition cursor-pointer ${
-                            (textTag.rotation || 0) === 90
-                              ? 'bg-blue-600 text-white shadow-2xs'
-                              : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                          }`}
-                          title="Xoay dọc chữ áp sát mép giấy A4"
-                        >
-                          Dọc (90°)
+                          <Trash2 className="w-3 h-3 text-rose-500" />
+                          <span>Xóa khỏi trang {effectiveSelectedPage}</span>
                         </button>
                       </div>
                     </div>
-
-                    {/* Cỡ chữ */}
-                    <div className="space-y-1">
-                      <div className="flex items-center justify-between text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                        <span>Cỡ chữ:</span>
-                        <span className="text-blue-700 font-bold">{textTag.fontSizePt || 8} pt</span>
-                      </div>
-                      <input
-                        type="range"
-                        min={6}
-                        max={16}
-                        step={1}
-                        value={textTag.fontSizePt || 8}
-                        onChange={(e) => handleUpdateTag({ fontSizePt: Number(e.target.value) })}
-                        className="w-full accent-blue-600 cursor-pointer h-1.5 bg-slate-200 rounded-lg"
-                      />
+                  ) : (
+                    <div className="text-[10.5px] text-slate-400 italic bg-slate-50 p-2 rounded-md border border-slate-100">
+                      Trang {effectiveSelectedPage} chưa có ghi chú. Bật công tắc phía trên hoặc bấm nút{' '}
+                      <span className="font-semibold text-blue-600">+ Thêm ghi chú trang này</span> trên đỉnh tờ giấy ở bàn in.
                     </div>
-                  </div>
-
-                  {/* Vị trí đặt nhanh (Presets) */}
-                  <div className="space-y-1">
-                    <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                      Đặt nhanh vị trí:
-                    </div>
-                    <div className="grid grid-cols-4 gap-1">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          handleUpdateTag({
-                            xMm: Math.max(4, settings.margin || 5),
-                            yMm: Math.max(10, pageH_mm - 5.5),
-                            rotation: 0,
-                          })
-                        }
-                        className="py-1 px-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-[9.5px] font-bold text-center transition cursor-pointer"
-                        title="Đặt ở chân trang dưới cùng"
-                      >
-                        Chân trang
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          handleUpdateTag({
-                            xMm: Math.max(4, settings.margin || 5),
-                            yMm: 4,
-                            rotation: 0,
-                          })
-                        }
-                        className="py-1 px-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-[9.5px] font-bold text-center transition cursor-pointer"
-                        title="Đặt ở mép trên cùng"
-                      >
-                        Đầu trang
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          handleUpdateTag({
-                            xMm: 3.5,
-                            yMm: Math.max(10, pageH_mm - 8),
-                            rotation: 90,
-                          })
-                        }
-                        className="py-1 px-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-[9.5px] font-bold text-center transition cursor-pointer"
-                        title="Xoay dọc chạy dọc theo mép lề trái"
-                      >
-                        Mép trái
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          handleUpdateTag({
-                            xMm: pageW_mm - 3.5,
-                            yMm: Math.max(10, pageH_mm - 8),
-                            rotation: 90,
-                          })
-                        }
-                        className="py-1 px-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-[9.5px] font-bold text-center transition cursor-pointer"
-                        title="Xoay dọc chạy dọc theo mép lề phải"
-                      >
-                        Mép phải
-                      </button>
-                    </div>
-                  </div>
+                  )}
                 </div>
               )}
             </div>
@@ -753,7 +1020,10 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
 
       {/* Export & Print Action Footer (Có nút hạ xuống / mở lên để rút gọn) */}
       {!isCollapsed && (
-        <div className="border-t border-slate-200 bg-white sticky bottom-0 z-20 shadow-lg transition-all duration-200">
+        <div
+          ref={exportPanelRef}
+          className="border-t border-slate-200 bg-white sticky bottom-0 z-20 shadow-lg transition-all duration-200"
+        >
           {isExportCollapsed ? (
             /* Trạng thái rút gọn (Hạ xuống) */
             <div className="p-2.5 px-3">

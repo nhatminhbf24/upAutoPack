@@ -12,6 +12,7 @@ interface DraggableTextTagProps {
   zoom?: number;
   pageRef?: React.RefObject<HTMLDivElement | null>;
   onUpdateTag?: (updates: Partial<FreeformTextTag>) => void;
+  onRemoveTag?: () => void;
 }
 
 export const DraggableTextTag: React.FC<DraggableTextTagProps> = ({
@@ -26,6 +27,8 @@ export const DraggableTextTag: React.FC<DraggableTextTagProps> = ({
 }) => {
   const [isDragging, setIsDragging] = useState<boolean>(false);
   const [isHovered, setIsHovered] = useState<boolean>(false);
+  const tagRef = useRef<HTMLDivElement>(null);
+
   const dragStartRef = useRef<{
     clientX: number;
     clientY: number;
@@ -38,29 +41,15 @@ export const DraggableTextTag: React.FC<DraggableTextTagProps> = ({
 
   const textContent = formatTextTagContent(tag, pageNumber, totalPages, isLandscape);
 
-  // Chỉ khi nhấp đúp (double click) mới tự động cuộn và focus vào ô nhập nội dung ở thanh cài đặt bên trái
-  const handleFocusSidebarInput = () => {
-    if (onUpdateTag && !tag.enabled) {
-      onUpdateTag({ enabled: true });
-    }
-
-    setTimeout(() => {
-      const card = document.getElementById('setting-freeform-text-tag-card');
-      const input = document.getElementById('input-tag-custom-text') as HTMLInputElement | null;
-
-      if (card) {
-        card.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        card.classList.add('ring-2', 'ring-blue-500', 'bg-blue-50/60');
-        setTimeout(() => {
-          card.classList.remove('ring-2', 'ring-blue-500', 'bg-blue-50/60');
-        }, 1200);
-      }
-
-      if (input) {
-        input.focus();
-        input.select();
-      }
-    }, 50);
+  // Nhấp đúp (2 lần) để tự động mở rộng và focus vào ô nhập ở cột công cụ
+  const handleDoubleClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    window.dispatchEvent(
+      new CustomEvent('daudau_focus_page_tag', {
+        detail: { pageNumber },
+      })
+    );
   };
 
   const handlePointerDown = (e: React.PointerEvent) => {
@@ -127,12 +116,11 @@ export const DraggableTextTag: React.FC<DraggableTextTagProps> = ({
 
   return (
     <div
-      id="draggable-freeform-text-tag"
+      ref={tagRef}
+      id={`draggable-text-tag-p${pageNumber}`}
+      data-text-tag-trigger="true"
       onPointerDown={handlePointerDown}
-      onDoubleClick={(e) => {
-        e.stopPropagation();
-        handleFocusSidebarInput();
-      }}
+      onDoubleClick={handleDoubleClick}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       style={{
@@ -150,11 +138,11 @@ export const DraggableTextTag: React.FC<DraggableTextTagProps> = ({
           ? 'ring-2 ring-blue-500 bg-blue-50/90 rounded-sm px-1.5 py-0.5 shadow-sm'
           : 'px-1 py-0.5'
       }`}
-      title="Nhấp đúp (2 lần) để sửa chữ ở thanh cài đặt, hoặc bấm giữ chuột để kéo di chuyển"
+      title="Bấm giữ chuột để kéo di chuyển vị trí. Nhấp đúp (2 lần) để sửa chữ bên cột công cụ."
     >
       {/* Nội dung dòng chữ */}
       <span className="font-sans font-semibold tracking-tight whitespace-nowrap leading-none block pointer-events-none">
-        {textContent}
+        {textContent || `[Ghi chú Trang ${pageNumber}]`}
       </span>
     </div>
   );

@@ -17,11 +17,14 @@ import {
   HelpCircle,
   CheckCircle2,
   Loader2,
+  Tag,
+  Plus,
+  X,
 } from 'lucide-react';
 import { PackedPage, LayoutSettings, PhotoItem, ShapeType, PlacedPhotoItem, FreeformTextTag } from '../types';
 import { A4_WIDTH_MM, A4_HEIGHT_MM } from '../utils/packing';
 import { rotateImageBase64, calculateCrop, createOptimizedPreview } from '../utils/imageUtils';
-import { getDefaultTextTag } from '../utils/textTagUtils';
+import { getDefaultTextTag, getEffectiveTextTagForPage } from '../utils/textTagUtils';
 import { DraggableTextTag } from './DraggableTextTag';
 import { calculateAlignmentSnap, AlignmentGuideLine, SnapTarget } from '../utils/alignmentGuides';
 
@@ -89,6 +92,67 @@ export const A4PreviewArea: React.FC<A4PreviewAreaProps> = ({
     const current = settings.textTag || activeTextTag;
     const updated: FreeformTextTag = { ...current, ...updates, enabled: true };
     onUpdateSettings({ textTag: updated, printSlug: true });
+  };
+
+  // Cập nhật nhãn ghi chú cho từng trang độc lập (vị trí, nội dung, cỡ chữ riêng)
+  const handleUpdatePageTag = (pageNumber: number, updates: Partial<FreeformTextTag>) => {
+    if (!onUpdateSettings) return;
+    const currentTag =
+      getEffectiveTextTagForPage(settings, pageNumber, isLandscape) ||
+      getDefaultTextTag(isLandscape, settings.margin);
+    const updatedTag: FreeformTextTag = { ...currentTag, ...updates, enabled: true };
+    const nextPageTextTags = { ...(settings.pageTextTags || {}) };
+    nextPageTextTags[pageNumber] = updatedTag;
+
+    onUpdateSettings({
+      pageTextTags: nextPageTextTags,
+      printSlug: true,
+    });
+  };
+
+  // Thêm mới ghi chú riêng cho trang cụ thể
+  const handleAddPageTag = (pageNumber: number) => {
+    if (!onUpdateSettings) return;
+    const defaultTag = getDefaultTextTag(isLandscape, settings.margin);
+    const nextPageTextTags = { ...(settings.pageTextTags || {}) };
+    nextPageTextTags[pageNumber] = {
+      ...defaultTag,
+      enabled: true,
+      text: settings.textTag?.text || settings.orderSlug || `Ghi chú Trang ${pageNumber}`,
+      xMm: Math.max(4, settings.margin || 5),
+      yMm: Math.max(10, pageH_mm - 5.5),
+    };
+
+    onUpdateSettings({
+      pageTextTags: nextPageTextTags,
+      printSlug: true,
+      textTag: { ...defaultTag, enabled: true },
+    });
+
+    // Mở rộng khối công cụ và focus vào ô nhập
+    window.dispatchEvent(
+      new CustomEvent('daudau_focus_page_tag', {
+        detail: { pageNumber },
+      })
+    );
+  };
+
+  // Xóa ghi chú khỏi trang cụ thể
+  const handleRemovePageTag = (pageNumber: number) => {
+    if (!onUpdateSettings) return;
+    const nextPageTextTags = { ...(settings.pageTextTags || {}) };
+    nextPageTextTags[pageNumber] = {
+      ...(nextPageTextTags[pageNumber] || getDefaultTextTag(isLandscape, settings.margin)),
+      enabled: false,
+    };
+    const hasAnyActive = Object.values(nextPageTextTags).some(
+      (t) => Boolean(t && (t as FreeformTextTag).enabled)
+    );
+    onUpdateSettings({
+      pageTextTags: nextPageTextTags,
+      printSlug: hasAnyActive,
+      textTag: { ...(settings.textTag || getDefaultTextTag(isLandscape, settings.margin)), enabled: hasAnyActive },
+    });
   };
 
   // Inter-item Drag & Drop Swap State
@@ -572,10 +636,10 @@ export const A4PreviewArea: React.FC<A4PreviewAreaProps> = ({
             onClick={onUndo}
             disabled={!canUndo}
             className="flex items-center gap-1 px-2 py-1 rounded text-[11px] font-bold text-slate-700 hover:bg-white disabled:opacity-35 disabled:hover:bg-transparent transition active:scale-95 cursor-pointer disabled:cursor-not-allowed"
-            title="Hoàn tác (Ctrl + Z)"
+            title="Undo (Ctrl + Z)"
           >
             <Undo2 className="w-3.5 h-3.5 text-blue-600" />
-            <span>Hoàn tác {historyCount > 0 ? `(${historyCount})` : ''}</span>
+            <span>Undo {historyCount > 0 ? `(${historyCount})` : ''}</span>
           </button>
 
           <button
@@ -584,10 +648,10 @@ export const A4PreviewArea: React.FC<A4PreviewAreaProps> = ({
             onClick={onRedo}
             disabled={!canRedo}
             className="flex items-center gap-1 px-2 py-1 rounded text-[11px] font-bold text-slate-700 hover:bg-white disabled:opacity-35 disabled:hover:bg-transparent transition active:scale-95 cursor-pointer disabled:cursor-not-allowed"
-            title="Làm lại (Ctrl + Y)"
+            title="Redo (Ctrl + Y)"
           >
             <Redo2 className="w-3.5 h-3.5 text-indigo-600" />
-            <span>Làm lại</span>
+            <span>Redo</span>
           </button>
         </div>
 
@@ -705,7 +769,7 @@ export const A4PreviewArea: React.FC<A4PreviewAreaProps> = ({
               <span className="bg-slate-100 px-1.5 py-0.5 rounded font-mono font-bold text-slate-800 shrink-0">
                 Ctrl + Z / Y
               </span>
-              <span>Hoàn tác / Làm lại thao tác gần nhất</span>
+              <span>Undo / Redo thao tác gần nhất</span>
             </li>
             <li className="flex items-start gap-2">
               <span className="bg-slate-100 px-1.5 py-0.5 rounded font-mono font-bold text-slate-800 shrink-0">
@@ -773,33 +837,90 @@ export const A4PreviewArea: React.FC<A4PreviewAreaProps> = ({
                 >
                   {/* Page Status Badges Header (Được dịch lên trên đỉnh, nằm ngoài tờ giấy A4 để không bao giờ che khuất chi tiết ảnh) */}
                   <div
-                    className="no-print w-full flex items-center justify-end gap-2 pb-2 px-1 pointer-events-none select-none"
+                    className="no-print w-full flex items-center justify-between gap-2 pb-2 px-1 select-none"
                     style={{ width: `${pageW_mm}mm` }}
                   >
-                    {/* Duplex Indicator Badge if enabled */}
-                    {settings.duplexMode && (
-                      <div className="bg-purple-700/95 text-white text-[13px] font-bold px-3 py-1 rounded-full shadow-xs flex items-center gap-1.5">
-                        <span>{page.pageNumber % 2 === 0 ? 'Mặt Sau (Lật đối xứng)' : 'Mặt Trước'}</span>
+                    {/* Per-page Text Tag Control / Ghi chú riêng từng trang */}
+                    {(() => {
+                      const pageTag = getEffectiveTextTagForPage(settings, page.pageNumber, isLandscape);
+                      const hasTag = Boolean(pageTag && pageTag.enabled);
+
+                      return (
+                        <div className="flex items-center gap-2 pointer-events-auto">
+                          {hasTag ? (
+                            <div className="flex items-center gap-1.5 bg-blue-50/95 border border-blue-200 text-blue-800 text-[12px] font-semibold px-2.5 py-1 rounded-full shadow-xs">
+                              <button
+                                type="button"
+                                data-text-tag-trigger="true"
+                                onClick={() => {
+                                  window.dispatchEvent(
+                                    new CustomEvent('daudau_focus_page_tag', {
+                                      detail: { pageNumber: page.pageNumber },
+                                    })
+                                  );
+                                }}
+                                className="flex items-center gap-1.5 hover:underline cursor-pointer"
+                                title="Bấm để mở cài đặt và sửa ghi chú này"
+                              >
+                                <Tag className="w-3.5 h-3.5 text-blue-600" />
+                                <span
+                                  className="max-w-[180px] sm:max-w-[260px] truncate"
+                                  title={pageTag?.text || `Ghi chú Trang ${page.pageNumber}`}
+                                >
+                                  {pageTag?.text ? `[${pageTag.text}]` : `Ghi chú Trang ${page.pageNumber}`}
+                                </span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleRemovePageTag(page.pageNumber)}
+                                className="p-0.5 rounded-full hover:bg-rose-100 text-slate-400 hover:text-rose-600 transition cursor-pointer"
+                                title="Xóa ghi chú khỏi trang này"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              data-text-tag-trigger="true"
+                              onClick={() => handleAddPageTag(page.pageNumber)}
+                              className="flex items-center gap-1.5 bg-white/95 hover:bg-blue-50 border border-slate-300 hover:border-blue-400 text-slate-700 hover:text-blue-700 text-[12px] font-semibold px-2.5 py-1 rounded-full shadow-xs transition cursor-pointer"
+                              title={`Bấm để thêm ghi chú/mã đơn riêng cho Trang ${page.pageNumber}`}
+                            >
+                              <Plus className="w-3.5 h-3.5 text-blue-600" />
+                              <span>Thêm ghi chú trang này</span>
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })()}
+
+                    <div className="flex items-center gap-2 pointer-events-none">
+                      {/* Duplex Indicator Badge if enabled */}
+                      {settings.duplexMode && (
+                        <div className="bg-purple-700/95 text-white text-[13px] font-bold px-3 py-1 rounded-full shadow-xs flex items-center gap-1.5">
+                          <span>{page.pageNumber % 2 === 0 ? 'Mặt Sau (Lật đối xứng)' : 'Mặt Trước'}</span>
+                        </div>
+                      )}
+
+                      {/* Efficiency Badge */}
+                      <div
+                        className={`text-white text-[13px] font-bold px-3 py-1 rounded-full shadow-xs flex items-center gap-1.5 ${
+                          efficiency >= 80
+                            ? 'bg-emerald-600/95'
+                            : efficiency >= 50
+                            ? 'bg-blue-600/95'
+                            : 'bg-slate-800/90'
+                        }`}
+                      >
+                        <CheckCircle2 className="w-4 h-4" />
+                        <span>{efficiency}% diện tích</span>
                       </div>
-                    )}
 
-                    {/* Efficiency Badge */}
-                    <div
-                      className={`text-white text-[13px] font-bold px-3 py-1 rounded-full shadow-xs flex items-center gap-1.5 ${
-                        efficiency >= 80
-                          ? 'bg-emerald-600/95'
-                          : efficiency >= 50
-                          ? 'bg-blue-600/95'
-                          : 'bg-slate-800/90'
-                      }`}
-                    >
-                      <CheckCircle2 className="w-4 h-4" />
-                      <span>{efficiency}% diện tích</span>
-                    </div>
-
-                    {/* Page Number */}
-                    <div className="bg-slate-900/90 backdrop-blur-xs text-white text-[13px] font-bold px-3 py-1 rounded-full shadow-xs">
-                      Trang {page.pageNumber} / {pages.length} (A4 {isLandscape ? 'Ngang' : 'Dọc'})
+                      {/* Page Number */}
+                      <div className="bg-slate-900/90 backdrop-blur-xs text-white text-[13px] font-bold px-3 py-1 rounded-full shadow-xs">
+                        Trang {page.pageNumber} / {pages.length} (A4 {isLandscape ? 'Ngang' : 'Dọc'})
+                      </div>
                     </div>
                   </div>
 
@@ -960,19 +1081,31 @@ export const A4PreviewArea: React.FC<A4PreviewAreaProps> = ({
                     </svg>
                   )}
 
-                  {/* Freeform Text Tag / In thông tin mã đơn lề giấy (Kéo thả, xoay, chỉnh cỡ trực tiếp) */}
-                  {isTagEnabled && (
-                    <DraggableTextTag
-                      tag={activeTextTag}
-                      pageNumber={page.pageNumber}
-                      totalPages={pages.length}
-                      isLandscape={isLandscape}
-                      pageW_mm={pageW_mm}
-                      pageH_mm={pageH_mm}
-                      zoom={zoom}
-                      onUpdateTag={onUpdateSettings ? handleUpdateTextTag : undefined}
-                    />
-                  )}
+                  {/* Freeform Text Tag / In thông tin mã đơn lề giấy riêng từng trang (Kéo thả, xoay, chỉnh cỡ, sửa nội dung độc lập) */}
+                  {(() => {
+                    const pageTag = getEffectiveTextTagForPage(settings, page.pageNumber, isLandscape);
+                    if (!pageTag || !pageTag.enabled) return null;
+                    return (
+                      <DraggableTextTag
+                        key={`tag-p${page.pageNumber}-${pageTag.xMm}-${pageTag.yMm}-${pageTag.rotation}`}
+                        tag={pageTag}
+                        pageNumber={page.pageNumber}
+                        totalPages={pages.length}
+                        isLandscape={isLandscape}
+                        pageW_mm={pageW_mm}
+                        pageH_mm={pageH_mm}
+                        zoom={zoom}
+                        onUpdateTag={
+                          onUpdateSettings
+                            ? (updates) => handleUpdatePageTag(page.pageNumber, updates)
+                            : undefined
+                        }
+                        onRemoveTag={
+                          onUpdateSettings ? () => handleRemovePageTag(page.pageNumber) : undefined
+                        }
+                      />
+                    );
+                  })()}
 
                   {/* Printable Margin Guideline (Subtle dashed, hidden in print) */}
                   <div

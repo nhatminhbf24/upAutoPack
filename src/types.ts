@@ -87,6 +87,7 @@ export interface LayoutSettings {
   printMicroSlugs?: boolean; // In mã đơn mini ngoài mép viền xén từng ảnh (xén dao xong sẽ bay mất, không phạm vào ảnh)
   orderSlug?: string; // Tên khách hoặc mã đơn hàng chung (ví dụ: #DH1024 - Khách: Nguyễn Văn A)
   textTag?: FreeformTextTag; // Dòng chữ / mã đơn tự do (kéo thả, xoay dọc/ngang, cỡ chữ tùy chỉnh, ngày giờ tự động)
+  pageTextTags?: Record<number, FreeformTextTag>; // Ghi chú riêng biệt theo từng trang (key là số trang: 1, 2, 3... - vị trí & nội dung độc lập)
   duplexMode?: boolean; // Chế độ in 2 mặt: Tự động lật đối xứng trang chẵn (Mirror X) để khớp mặt sau
   smartCrop: boolean;
   autoNesting?: boolean; // Tự động sắp xếp ảnh tối ưu diện tích
