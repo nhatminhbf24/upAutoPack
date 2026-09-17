@@ -15,7 +15,7 @@ import {
   Scissors,
 } from 'lucide-react';
 import { PhotoItem, DEFAULT_SIZE_PRESETS, DEFAULT_ADJUSTMENTS, SizePreset, OrientationMode } from '../types';
-import { rotateImageBase64, calculateCrop, createOptimizedPreview, getOrientedDimensions, formatPhotoToPreset, getShortPresetLabel } from '../utils/imageUtils';
+import { rotateImageBase64, calculateCrop, createOptimizedPreview, getOrientedDimensions, formatPhotoToPreset, getShortPresetLabel, getImageDimensions } from '../utils/imageUtils';
 import { enhanceImageQuality, getRecommendedUpscaleFactor } from '../utils/imageEnhancer';
 import { calculateAutoAdjustments, applyAdjustmentsToImage } from '../utils/imageAdjustmentEngine';
 
@@ -69,6 +69,25 @@ export const BatchToolsSidebar: React.FC<BatchToolsSidebarProps> = ({
   // Group presets by category
   const defaultCategories = Array.from(new Set(DEFAULT_SIZE_PRESETS.map((p) => p.category)));
 
+  // Lấy ảnh nguồn sạch chuẩn cho việc cân chỉnh màu (chống bóp méo, đảm bảo khớp đúng tỷ lệ/chiều của ảnh hiện tại)
+  const getSafeBaseForAdjust = async (photo: PhotoItem): Promise<string> => {
+    let candidate = photo.unadjustedSrc || photo.originalSrc;
+    try {
+      const dims = await getImageDimensions(candidate);
+      const isCandidateLandscape = dims.width > dims.height;
+      const isTargetLandscape = photo.imgWidth > photo.imgHeight;
+
+      // Nếu ảnh nguồn bị ngược chiều với khung ảnh hiện tại (do ảnh ban đầu đã tự xoay 90° để khớp khung):
+      // Xoay ảnh 90° để khớp tuyệt đối với imgWidth x imgHeight, ngăn chặn việc ảnh bị bóp méo
+      if (isCandidateLandscape !== isTargetLandscape) {
+        candidate = await rotateImageBase64(candidate, 90);
+      }
+    } catch (e) {
+      console.warn('Could not verify dimensions of candidate', e);
+    }
+    return candidate;
+  };
+
   // Batch Auto Adjust Colors (White balance, light & vibrancy)
   const handleAutoAdjustAll = async () => {
     if (photos.length === 0 || isAutoAdjustingAll) {
@@ -84,7 +103,7 @@ export const BatchToolsSidebar: React.FC<BatchToolsSidebarProps> = ({
     for (let i = 0; i < photos.length; i++) {
       const photo = photos[i];
       try {
-        const sourceForAdjust = photo.rawOriginalSrc || photo.originalSrc;
+        const sourceForAdjust = await getSafeBaseForAdjust(photo);
         const autoAdj = await calculateAutoAdjustments(sourceForAdjust);
         const adjustedSrc = await applyAdjustmentsToImage(sourceForAdjust, autoAdj);
         const previewSrc = await createOptimizedPreview(adjustedSrc, 800, 0.85);
@@ -92,7 +111,7 @@ export const BatchToolsSidebar: React.FC<BatchToolsSidebarProps> = ({
         onUpdatePhoto(photo.id, {
           originalSrc: adjustedSrc,
           previewSrc: previewSrc,
-          rawOriginalSrc: sourceForAdjust,
+          unadjustedSrc: sourceForAdjust,
           adjustments: autoAdj,
         });
         count++;
@@ -120,17 +139,24 @@ export const BatchToolsSidebar: React.FC<BatchToolsSidebarProps> = ({
     let count = 0;
     for (let i = 0; i < photos.length; i++) {
       const photo = photos[i];
-      const originalSource = photo.rawOriginalSrc || photo.originalSrc;
-      let previewSrc = photo.previewSrc;
-      if (photo.rawOriginalSrc) {
-        previewSrc = await createOptimizedPreview(originalSource, 800, 0.85);
+      try {
+        let baseSource = photo.unadjustedSrc || photo.originalSrc;
+        const dims = await getImageDimensions(baseSource);
+        if ((dims.width > dims.height) !== (photo.imgWidth > photo.imgHeight)) {
+          baseSource = await rotateImageBase64(baseSource, 90);
+        }
+        const previewSrc = await createOptimizedPreview(baseSource, 800, 0.85);
+
+        onUpdatePhoto(photo.id, {
+          originalSrc: baseSource,
+          previewSrc: previewSrc,
+          unadjustedSrc: undefined,
+          adjustments: { ...DEFAULT_ADJUSTMENTS },
+        });
+        count++;
+      } catch (err) {
+        console.error('Batch revert color error for', photo.id, err);
       }
-      onUpdatePhoto(photo.id, {
-        originalSrc: originalSource,
-        previewSrc: previewSrc,
-        adjustments: { ...DEFAULT_ADJUSTMENTS },
-      });
-      count++;
       if (i % 3 === 0) {
         await new Promise((r) => setTimeout(r, 0));
       }
@@ -141,7 +167,7 @@ export const BatchToolsSidebar: React.FC<BatchToolsSidebarProps> = ({
   };
 
   // Batch 1-Click Print Ready Preset Colors
-  const handleApplyPresetColorsAll = async (presetType: 'studio_print' | 'portrait' | 'crisp') => {
+  const handleApplyPresetColorsAll = async (presetType: 'studio_print' | 'portrait' | 'fix_red' | 'crisp') => {
     if (photos.length === 0 || isAutoAdjustingAll) {
       if (photos.length === 0) onToast('error', 'Chưa có ảnh để áp dụng');
       return;
@@ -152,6 +178,8 @@ export const BatchToolsSidebar: React.FC<BatchToolsSidebarProps> = ({
         ? { ...DEFAULT_ADJUSTMENTS, brightness: 12, contrast: 8, shadows: 15, whites: 5, highlights: -5, vibrance: 8 }
         : presetType === 'portrait'
         ? { ...DEFAULT_ADJUSTMENTS, brightness: 10, contrast: 4, temperature: 4, tint: 2, shadows: 12, vibrance: 10 }
+        : presetType === 'fix_red'
+        ? { ...DEFAULT_ADJUSTMENTS, tint: -12, temperature: -4, saturation: -6, brightness: 10, shadows: 14, contrast: 4, highlights: -4 }
         : { ...DEFAULT_ADJUSTMENTS, contrast: 12, highlights: 6, whites: 8, blacks: -8, vibrance: 12, saturation: 4 };
 
     const label =
@@ -159,6 +187,8 @@ export const BatchToolsSidebar: React.FC<BatchToolsSidebarProps> = ({
         ? 'Bù sáng in xưởng'
         : presetType === 'portrait'
         ? 'Tông da hồng hào'
+        : presetType === 'fix_red'
+        ? 'Fix đỏ máy in'
         : 'Trong trẻo sắc nét';
 
     if (photos.length > 20) {
@@ -169,14 +199,14 @@ export const BatchToolsSidebar: React.FC<BatchToolsSidebarProps> = ({
     for (let i = 0; i < photos.length; i++) {
       const photo = photos[i];
       try {
-        const sourceForAdjust = photo.rawOriginalSrc || photo.originalSrc;
+        const sourceForAdjust = await getSafeBaseForAdjust(photo);
         const adjustedSrc = await applyAdjustmentsToImage(sourceForAdjust, presetAdj);
         const previewSrc = await createOptimizedPreview(adjustedSrc, 800, 0.85);
 
         onUpdatePhoto(photo.id, {
           originalSrc: adjustedSrc,
           previewSrc: previewSrc,
-          rawOriginalSrc: sourceForAdjust,
+          unadjustedSrc: sourceForAdjust,
           adjustments: presetAdj,
         });
         count++;
@@ -327,9 +357,14 @@ export const BatchToolsSidebar: React.FC<BatchToolsSidebarProps> = ({
     for (let i = 0; i < photos.length; i++) {
       const photo = photos[i];
       try {
-        const sourceForEnhancing = photo.rawOriginalSrc || photo.originalSrc;
-        const rawW = photo.rawOriginalWidth || photo.imgWidth;
-        const rawH = photo.rawOriginalHeight || photo.imgHeight;
+        let sourceForEnhancing = photo.rawOriginalSrc || photo.originalSrc;
+        let rawW = photo.rawOriginalWidth || photo.imgWidth;
+        let rawH = photo.rawOriginalHeight || photo.imgHeight;
+        if ((rawW > rawH) !== (photo.imgWidth > photo.imgHeight)) {
+          sourceForEnhancing = photo.originalSrc;
+          rawW = photo.imgWidth;
+          rawH = photo.imgHeight;
+        }
         const rawCrop = photo.rawOriginalCrop || {
           cropX: photo.cropX,
           cropY: photo.cropY,
@@ -364,6 +399,7 @@ export const BatchToolsSidebar: React.FC<BatchToolsSidebarProps> = ({
           rawOriginalWidth: rawW,
           rawOriginalHeight: rawH,
           rawOriginalCrop: rawCrop,
+          unadjustedSrc: result.enhancedSrc,
           isEnhanced: true,
           upscaleFactor: factor,
           imgWidth: result.newWidth,
@@ -395,18 +431,25 @@ export const BatchToolsSidebar: React.FC<BatchToolsSidebarProps> = ({
     for (let i = 0; i < photos.length; i++) {
       const photo = photos[i];
       if (photo.isEnhanced && photo.rawOriginalSrc) {
-        const origW = photo.rawOriginalWidth || photo.imgWidth;
-        const origH = photo.rawOriginalHeight || photo.imgHeight;
+        let origW = photo.rawOriginalWidth || photo.imgWidth;
+        let origH = photo.rawOriginalHeight || photo.imgHeight;
+        let origSrc = photo.rawOriginalSrc;
+        if ((origW > origH) !== (photo.imgWidth > photo.imgHeight)) {
+          origSrc = await rotateImageBase64(photo.rawOriginalSrc, 90);
+          origW = photo.rawOriginalHeight || photo.imgWidth;
+          origH = photo.rawOriginalWidth || photo.imgHeight;
+        }
         const origCrop = photo.rawOriginalCrop || {
           cropX: photo.cropX,
           cropY: photo.cropY,
           cropW: photo.cropW,
           cropH: photo.cropH,
         };
-        const previewSrc = await createOptimizedPreview(photo.rawOriginalSrc, 800, 0.85);
+        const previewSrc = await createOptimizedPreview(origSrc, 800, 0.85);
         onUpdatePhoto(photo.id, {
-          originalSrc: photo.rawOriginalSrc,
+          originalSrc: origSrc,
           previewSrc: previewSrc,
+          unadjustedSrc: origSrc,
           isEnhanced: false,
           upscaleFactor: 1,
           imgWidth: origW,
@@ -445,6 +488,7 @@ export const BatchToolsSidebar: React.FC<BatchToolsSidebarProps> = ({
       const photo = photos[i];
       const rotatedSrc = await rotateImageBase64(photo.originalSrc, 90);
       const rawRotated = photo.rawOriginalSrc ? await rotateImageBase64(photo.rawOriginalSrc, 90) : undefined;
+      const unadjustedRotated = photo.unadjustedSrc ? await rotateImageBase64(photo.unadjustedSrc, 90) : undefined;
       const previewSrc = await createOptimizedPreview(rotatedSrc, 800, 0.85);
       const newWidth = photo.imgHeight;
       const newHeight = photo.imgWidth;
@@ -454,6 +498,9 @@ export const BatchToolsSidebar: React.FC<BatchToolsSidebarProps> = ({
         originalSrc: rotatedSrc,
         previewSrc: previewSrc,
         rawOriginalSrc: rawRotated,
+        rawOriginalWidth: photo.rawOriginalHeight,
+        rawOriginalHeight: photo.rawOriginalWidth,
+        unadjustedSrc: unadjustedRotated,
         imgWidth: newWidth,
         imgHeight: newHeight,
         cropX: crop.cropX,
@@ -804,12 +851,12 @@ export const BatchToolsSidebar: React.FC<BatchToolsSidebarProps> = ({
               </button>
               <button
                 type="button"
-                onClick={() => handleApplyPresetColorsAll('crisp')}
+                onClick={() => handleApplyPresetColorsAll('fix_red')}
                 disabled={isAutoAdjustingAll || photos.length === 0}
-                className="px-1.5 py-1.5 rounded-lg bg-white hover:bg-sky-100 border border-sky-200 text-sky-900 text-[10px] font-bold transition shadow-2xs text-center cursor-pointer disabled:opacity-50"
-                title="Trong trẻo hàng loạt: Khử đục, tương phản trong suốt"
+                className="px-1.5 py-1.5 rounded-lg bg-white hover:bg-emerald-100 border border-emerald-300 text-emerald-900 text-[10px] font-bold transition shadow-2xs text-center cursor-pointer disabled:opacity-50"
+                title="Fix đỏ hàng loạt: Khử ám đỏ/hồng cho máy in, cân bằng sắc da và bù sáng in chuẩn xác"
               >
-                Trong trẻo
+                Fix đỏ
               </button>
             </div>
           </div>

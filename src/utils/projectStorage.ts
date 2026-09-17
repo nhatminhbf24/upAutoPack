@@ -12,7 +12,7 @@ export interface ProjectMetadata {
   lastUpdated: number;
   settings: LayoutSettings;
   customPresets: SizePreset[];
-  photosMeta: Array<Omit<PhotoItem, 'originalSrc' | 'previewSrc' | 'rawOriginalSrc'>>;
+  photosMeta: Array<Omit<PhotoItem, 'originalSrc' | 'previewSrc' | 'rawOriginalSrc' | 'unadjustedSrc'>>;
 }
 
 export interface ProjectData {
@@ -111,7 +111,7 @@ export async function saveProjectMeta(
 ): Promise<void> {
   try {
     const db = await openDatabase();
-    const photosMeta = photos.map(({ originalSrc, previewSrc, rawOriginalSrc, ...meta }) => meta);
+    const photosMeta = photos.map(({ originalSrc, previewSrc, rawOriginalSrc, unadjustedSrc, ...meta }) => meta);
 
     const projectMeta: ProjectMetadata = {
       id: 'current_session',
@@ -288,7 +288,7 @@ export async function exportProjectToDaudauFile(
 ): Promise<void> {
   const zip = new JSZip();
 
-  const photosMeta = photos.map(({ originalSrc, previewSrc, rawOriginalSrc, ...meta }) => ({
+  const photosMeta = photos.map(({ originalSrc, previewSrc, rawOriginalSrc, unadjustedSrc, ...meta }) => ({
     ...meta,
     fileName: `${meta.id}.jpg`,
   }));

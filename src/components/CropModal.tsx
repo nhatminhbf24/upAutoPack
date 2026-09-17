@@ -942,6 +942,7 @@ export const CropModal: React.FC<CropModalProps> = ({
         rawOriginalWidth: rawW,
         rawOriginalHeight: rawH,
         rawOriginalCrop: rawCrop,
+        unadjustedSrc: currentBaseSrc,
         isEnhanced,
         upscaleFactor,
         adjustments,

@@ -54,6 +54,7 @@ export interface PhotoItem {
   upscaleFactor?: number; // 1, 2, 4
   isEnhanced?: boolean;
   adjustments?: ImageAdjustments;
+  unadjustedSrc?: string; // Clean unadjusted base image matching current working orientation & dimensions
   imgWidth: number;
   imgHeight: number;
   targetWidth: number; // in mm

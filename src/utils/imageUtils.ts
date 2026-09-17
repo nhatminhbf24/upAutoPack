@@ -372,6 +372,13 @@ export async function formatPhotoToPreset(
       ...photo,
       originalSrc: finalSrc,
       previewSrc: finalPreview,
+      unadjustedSrc: finalSrc,
+      rawOriginalSrc: photo.isEnhanced ? photo.rawOriginalSrc : finalSrc,
+      rawOriginalWidth: photo.isEnhanced ? photo.rawOriginalWidth : finalW,
+      rawOriginalHeight: photo.isEnhanced ? photo.rawOriginalHeight : finalH,
+      rawOriginalCrop: photo.isEnhanced
+        ? photo.rawOriginalCrop
+        : { cropX: crop.cropX, cropY: crop.cropY, cropW: crop.cropW, cropH: crop.cropH },
       unrotatedOriginalSrc: baseSrc,
       unrotatedPreviewSrc: basePreview,
       unrotatedWidth: baseW,

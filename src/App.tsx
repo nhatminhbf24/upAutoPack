@@ -120,6 +120,7 @@ export default function App() {
   const [isClearConfirmOpen, setIsClearConfirmOpen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [exportProgress, setExportProgress] = useState<{ current: number; total: number } | null>(null);
+  const [selectedPhotoId, setSelectedPhotoId] = useState<string | null>(null);
 
   // Khổ in mặc định được cài trên ứng dụng (active preset) và tùy chọn tự khớp chiều
   const [activePresetId, setActivePresetId] = useState<string>(() => {
@@ -879,6 +880,8 @@ export default function App() {
           {/* Column 1: Image List Sidebar (Left) */}
           <ImageListSidebar
             photos={photos}
+            selectedPhotoId={selectedPhotoId}
+            onSelectPhoto={setSelectedPhotoId}
             onUpdatePhoto={handleUpdatePhoto}
             onRemovePhoto={handleRemovePhoto}
             onClearAll={handleClearAll}
@@ -938,6 +941,8 @@ export default function App() {
           <A4PreviewArea
             pages={packedPages}
             settings={settings}
+            selectedPhotoId={selectedPhotoId}
+            onSelectPhoto={setSelectedPhotoId}
             onUpdatePhoto={handleUpdatePhoto}
             onReorderPhotos={handleReorderPhotos}
             onOpenCropModal={(photo) => setCropModalConfig({ photo, initialTab: 'size' })}

@@ -166,19 +166,20 @@ export const PhotoAdjustmentsPanel: React.FC<PhotoAdjustmentsPanelProps> = ({
               onClick={() =>
                 onChange({
                   ...DEFAULT_ADJUSTMENTS,
-                  contrast: 12,
-                  highlights: 6,
-                  whites: 8,
-                  blacks: -8,
-                  vibrance: 12,
-                  saturation: 4,
+                  tint: -12,
+                  temperature: -4,
+                  saturation: -6,
+                  brightness: 10,
+                  shadows: 14,
+                  contrast: 4,
+                  highlights: -4,
                 })
               }
-              className="px-2 py-1.5 rounded-xl bg-white hover:bg-sky-50 border border-slate-200 text-slate-800 hover:text-sky-700 text-[11px] font-bold transition shadow-2xs flex flex-col items-center gap-0.5 cursor-pointer text-center leading-tight"
-              title="Trong trẻo / Sắc nét: Khử xỉn, tách bạch chi tiết rực rỡ"
+              className="px-2 py-1.5 rounded-xl bg-white hover:bg-emerald-50 border border-slate-200 text-slate-800 hover:text-emerald-700 text-[11px] font-bold transition shadow-2xs flex flex-col items-center gap-0.5 cursor-pointer text-center leading-tight"
+              title="Fix đỏ máy in: Khử ám đỏ/hồng, cân bằng sắc da và bù sáng in chuyên dụng"
             >
-              <span>Trong trẻo</span>
-              <span className="text-[9px] font-normal text-slate-400">Khử đục</span>
+              <span>Fix đỏ</span>
+              <span className="text-[9px] font-normal text-slate-400">Khử ám đỏ</span>
             </button>
           </div>
         </div>

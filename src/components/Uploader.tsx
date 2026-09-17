@@ -144,15 +144,18 @@ export const Uploader: React.FC<UploaderProps> = ({
 
           const crop = calculateCrop(finalImgWidth, finalImgHeight, targetW, targetH, smartCrop);
 
+          const baseWorkingSrc = finalRotation === 90 ? finalOriginalSrc : dataUrl;
+
           addedPhotos.push({
             id: 'photo_' + Math.random().toString(36).substring(2, 9) + '_' + Date.now() + '_' + i,
             name: file.name || 'Ảnh tải lên',
             originalSrc: finalOriginalSrc,
             previewSrc: finalPreviewSrc,
-            rawOriginalSrc: dataUrl,
-            rawOriginalWidth: dims.width,
-            rawOriginalHeight: dims.height,
-            rawOriginalCrop: { cropX: 0, cropY: 0, cropW: dims.width, cropH: dims.height },
+            rawOriginalSrc: baseWorkingSrc,
+            rawOriginalWidth: finalImgWidth,
+            rawOriginalHeight: finalImgHeight,
+            rawOriginalCrop: { cropX: crop.cropX, cropY: crop.cropY, cropW: crop.cropW, cropH: crop.cropH },
+            unadjustedSrc: baseWorkingSrc,
             unrotatedOriginalSrc: dataUrl,
             unrotatedPreviewSrc: previewSrc,
             unrotatedWidth: dims.width,
@@ -312,15 +315,18 @@ export const Uploader: React.FC<UploaderProps> = ({
         }
 
         const crop = calculateCrop(finalImgWidth, finalImgHeight, targetW, targetH, smartCrop);
+        const baseWorkingSrc = finalRotation === 90 ? finalOriginalSrc : sample.url;
+
         addedPhotos.push({
           id: 'sample_' + Math.random().toString(36).substring(2, 9),
           name: sample.name,
           originalSrc: finalOriginalSrc,
           previewSrc: finalPreviewSrc,
-          rawOriginalSrc: sample.url,
-          rawOriginalWidth: dims.width,
-          rawOriginalHeight: dims.height,
-          rawOriginalCrop: { cropX: 0, cropY: 0, cropW: dims.width, cropH: dims.height },
+          rawOriginalSrc: baseWorkingSrc,
+          rawOriginalWidth: finalImgWidth,
+          rawOriginalHeight: finalImgHeight,
+          rawOriginalCrop: { cropX: crop.cropX, cropY: crop.cropY, cropW: crop.cropW, cropH: crop.cropH },
+          unadjustedSrc: baseWorkingSrc,
           unrotatedOriginalSrc: sample.url,
           unrotatedPreviewSrc: previewSrc,
           unrotatedWidth: dims.width,

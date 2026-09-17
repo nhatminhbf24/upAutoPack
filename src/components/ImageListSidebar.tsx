@@ -23,6 +23,8 @@ import { enhanceImageQuality, calculatePrintDPI, getRecommendedUpscaleFactor } f
 
 interface ImageListSidebarProps {
   photos: PhotoItem[];
+  selectedPhotoId?: string | null;
+  onSelectPhoto?: (id: string | null) => void;
   onUpdatePhoto: (id: string, updates: Partial<PhotoItem>) => void;
   onRemovePhoto: (id: string) => void;
   onClearAll: () => void;
@@ -38,6 +40,8 @@ interface ImageListSidebarProps {
 
 export const ImageListSidebar: React.FC<ImageListSidebarProps> = ({
   photos,
+  selectedPhotoId,
+  onSelectPhoto,
   onUpdatePhoto,
   onRemovePhoto,
   onClearAll,
@@ -54,6 +58,15 @@ export const ImageListSidebar: React.FC<ImageListSidebarProps> = ({
   const [rotatingId, setRotatingId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [upscaleMenuId, setUpscaleMenuId] = useState<string | null>(null);
+
+  // Tự động cuộn đến ảnh tương ứng khi người dùng nhấp chọn trên trang A4
+  useEffect(() => {
+    if (!selectedPhotoId) return;
+    const cardEl = document.getElementById(`photo-card-${selectedPhotoId}`);
+    if (cardEl) {
+      cardEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+  }, [selectedPhotoId]);
 
   // Tự động đóng menu DPI / Upscale khi nhấp chuột ra ngoài hoặc bấm Escape
   useEffect(() => {
@@ -97,20 +110,26 @@ export const ImageListSidebar: React.FC<ImageListSidebarProps> = ({
     try {
       if (photo.isEnhanced && !chosenFactor) {
         // Revert to raw original
-        const origW = photo.rawOriginalWidth || photo.imgWidth;
-        const origH = photo.rawOriginalHeight || photo.imgHeight;
+        let origW = photo.rawOriginalWidth || photo.imgWidth;
+        let origH = photo.rawOriginalHeight || photo.imgHeight;
         const origCrop = photo.rawOriginalCrop || {
           cropX: photo.cropX,
           cropY: photo.cropY,
           cropW: photo.cropW,
           cropH: photo.cropH,
         };
-        const rawSrc = photo.rawOriginalSrc || photo.originalSrc;
+        let rawSrc = photo.rawOriginalSrc || photo.originalSrc;
+        if ((origW > origH) !== (photo.imgWidth > photo.imgHeight)) {
+          rawSrc = await rotateImageBase64(rawSrc, 90);
+          origW = photo.rawOriginalHeight || photo.imgWidth;
+          origH = photo.rawOriginalWidth || photo.imgHeight;
+        }
         const previewSrc = await createOptimizedPreview(rawSrc, 800, 0.85);
 
         onUpdatePhoto(photo.id, {
           originalSrc: rawSrc,
           previewSrc: previewSrc,
+          unadjustedSrc: rawSrc,
           isEnhanced: false,
           upscaleFactor: 1,
           imgWidth: origW,
@@ -123,9 +142,14 @@ export const ImageListSidebar: React.FC<ImageListSidebarProps> = ({
         onToast('info', 'Đã khôi phục ảnh gốc');
       } else {
         // Base source and raw metrics
-        const sourceForEnhancing = photo.rawOriginalSrc || photo.originalSrc;
-        const rawW = photo.rawOriginalWidth || photo.imgWidth;
-        const rawH = photo.rawOriginalHeight || photo.imgHeight;
+        let sourceForEnhancing = photo.rawOriginalSrc || photo.originalSrc;
+        let rawW = photo.rawOriginalWidth || photo.imgWidth;
+        let rawH = photo.rawOriginalHeight || photo.imgHeight;
+        if ((rawW > rawH) !== (photo.imgWidth > photo.imgHeight)) {
+          sourceForEnhancing = photo.originalSrc;
+          rawW = photo.imgWidth;
+          rawH = photo.imgHeight;
+        }
         const rawCrop = photo.rawOriginalCrop || {
           cropX: photo.cropX,
           cropY: photo.cropY,
@@ -164,6 +188,7 @@ export const ImageListSidebar: React.FC<ImageListSidebarProps> = ({
           rawOriginalWidth: rawW,
           rawOriginalHeight: rawH,
           rawOriginalCrop: rawCrop,
+          unadjustedSrc: result.enhancedSrc,
           isEnhanced: true,
           upscaleFactor: factor,
           imgWidth: result.newWidth,
@@ -196,6 +221,7 @@ export const ImageListSidebar: React.FC<ImageListSidebarProps> = ({
     try {
       const rotatedSrc = await rotateImageBase64(photo.originalSrc, 90);
       const rawRotated = photo.rawOriginalSrc ? await rotateImageBase64(photo.rawOriginalSrc, 90) : undefined;
+      const unadjustedRotated = photo.unadjustedSrc ? await rotateImageBase64(photo.unadjustedSrc, 90) : undefined;
       const previewSrc = await createOptimizedPreview(rotatedSrc, 800, 0.85);
       const newWidth = photo.imgHeight;
       const newHeight = photo.imgWidth;
@@ -205,6 +231,9 @@ export const ImageListSidebar: React.FC<ImageListSidebarProps> = ({
         originalSrc: rotatedSrc,
         previewSrc: previewSrc,
         rawOriginalSrc: rawRotated,
+        rawOriginalWidth: photo.rawOriginalHeight,
+        rawOriginalHeight: photo.rawOriginalWidth,
+        unadjustedSrc: unadjustedRotated,
         imgWidth: newWidth,
         imgHeight: newHeight,
         cropX: crop.cropX,
@@ -329,13 +358,18 @@ export const ImageListSidebar: React.FC<ImageListSidebarProps> = ({
                   photo.scale || 1
                 );
 
+                const isSelected = selectedPhotoId === photo.id;
+
                 return (
                   <div
                     key={photo.id}
                     id={`photo-card-${photo.id}`}
-                    className={`bg-white border rounded-xl p-3 shadow-2xs hover:shadow-xs transition-all group flex flex-col gap-2.5 ${
+                    onClick={() => onSelectPhoto?.(photo.id)}
+                    className={`bg-white border rounded-xl p-3 shadow-2xs hover:shadow-xs transition-all group flex flex-col gap-2.5 cursor-pointer ${
                       isConfirmingDelete
                         ? 'border-rose-400 ring-2 ring-rose-200/80 bg-rose-50/15'
+                        : isSelected
+                        ? 'border-orange-500 ring-2 ring-orange-400/90 bg-orange-50/25 shadow-md scale-[1.01]'
                         : photo.isEnhanced
                         ? 'border-amber-300 ring-1 ring-amber-100/80 bg-amber-50/20'
                         : 'border-slate-200/90 hover:border-blue-300'

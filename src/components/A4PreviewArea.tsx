@@ -31,6 +31,8 @@ import { calculateAlignmentSnap, AlignmentGuideLine, SnapTarget } from '../utils
 interface A4PreviewAreaProps {
   pages: PackedPage[];
   settings: LayoutSettings;
+  selectedPhotoId?: string | null;
+  onSelectPhoto?: (id: string | null) => void;
   onUpdatePhoto: (id: string, updates: Partial<PhotoItem>) => void;
   onReorderPhotos?: (sourceId: string, targetId: string) => void;
   onOpenCropModal: (photo: PhotoItem) => void;
@@ -49,6 +51,8 @@ interface A4PreviewAreaProps {
 export const A4PreviewArea: React.FC<A4PreviewAreaProps> = ({
   pages,
   settings,
+  selectedPhotoId,
+  onSelectPhoto,
   onUpdatePhoto,
   onReorderPhotos,
   onOpenCropModal,
@@ -188,6 +192,9 @@ export const A4PreviewArea: React.FC<A4PreviewAreaProps> = ({
       const rawRotated = photo.rawOriginalSrc
         ? await rotateImageBase64(photo.rawOriginalSrc, 90)
         : undefined;
+      const unadjustedRotated = photo.unadjustedSrc
+        ? await rotateImageBase64(photo.unadjustedSrc, 90)
+        : undefined;
 
       // 2. Kích thước pixel ảnh mới sau khi xoay 90°
       const newImgWidth = photo.imgHeight;
@@ -236,6 +243,9 @@ export const A4PreviewArea: React.FC<A4PreviewAreaProps> = ({
         originalSrc: rotatedSrc,
         previewSrc: previewSrc,
         rawOriginalSrc: rawRotated,
+        rawOriginalWidth: photo.rawOriginalHeight,
+        rawOriginalHeight: photo.rawOriginalWidth,
+        unadjustedSrc: unadjustedRotated,
         imgWidth: newImgWidth,
         imgHeight: newImgHeight,
         targetWidth: newTargetWidth,
@@ -262,6 +272,7 @@ export const A4PreviewArea: React.FC<A4PreviewAreaProps> = ({
     pageNumber: number
   ) => {
     if (e.button !== 0) return;
+    onSelectPhoto?.(item.id);
     if ((e.target as HTMLElement).closest('button') || (e.target as HTMLElement).closest('.no-drag')) {
       return;
     }
@@ -461,6 +472,7 @@ export const A4PreviewArea: React.FC<A4PreviewAreaProps> = ({
   ) => {
     // Only drag on primary mouse button
     if (e.button !== 0) return;
+    onSelectPhoto?.(photo.id);
     // Don't pan if clicking the reorder handle
     if ((e.target as HTMLElement).closest('.drag-reorder-handle')) {
       return;
@@ -1344,6 +1356,7 @@ export const A4PreviewArea: React.FC<A4PreviewAreaProps> = ({
                     const isCornerMarks = settings.cutLines && activeCutStyles.includes('corner_marks');
                     const isSolidCut = settings.cutLines && activeCutStyles.includes('solid');
                     const isDashedCut = settings.cutLines && activeCutStyles.includes('dashed');
+                    const isSelected = selectedPhotoId === item.id;
 
                     return (
                       <React.Fragment key={`frag-${item.id}-${item.instanceIndex}`}>
@@ -1388,6 +1401,10 @@ export const A4PreviewArea: React.FC<A4PreviewAreaProps> = ({
                               ? handleFreeformMouseDown(e, item, page.pageNumber)
                               : handlePhotoMouseDown(e, item)
                           }
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onSelectPhoto?.(item.id);
+                          }}
                           onDoubleClick={() => onOpenCropModal(item)}
                           title={
                             isFreeformMode
@@ -1413,7 +1430,7 @@ export const A4PreviewArea: React.FC<A4PreviewAreaProps> = ({
                             !isFreeformMode && isDragOverThis
                               ? 'ring-4 ring-emerald-500 ring-offset-2 scale-105 z-30 shadow-lg'
                               : ''
-                          }`}
+                          } ${isSelected ? 'ring-3 ring-orange-500 ring-offset-2 z-40 shadow-xl' : ''}`}
                         >
                         {/* Image Content */}
                         {item.isRotated ? (
