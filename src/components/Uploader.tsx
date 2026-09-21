@@ -101,8 +101,8 @@ export const Uploader: React.FC<UploaderProps> = ({
           const dataUrl = await readFileAsDataURL(file);
           const dims = await getImageDimensions(dataUrl);
 
-          // Generate lightweight preview for buttery smooth UI rendering (60fps)
-          let previewSrc = await createOptimizedPreview(dataUrl, 800, 0.85);
+          // Generate lightweight display proxy (420px) for buttery smooth UI rendering (60fps)
+          let previewSrc = await createOptimizedPreview(dataUrl, 420, 0.82);
 
           // Determine target dimensions based on active preset configured on the app
           let targetW = activePreset.width;
@@ -124,7 +124,7 @@ export const Uploader: React.FC<UploaderProps> = ({
               if ((isPresetPortrait && isImgLandscape) || (isPresetLandscape && isImgPortrait)) {
                 // Auto rotate 90 degrees to fit frame perfectly
                 finalOriginalSrc = await rotateImageBase64(dataUrl, 90);
-                finalPreviewSrc = await createOptimizedPreview(finalOriginalSrc, 800, 0.85);
+                finalPreviewSrc = await createOptimizedPreview(finalOriginalSrc, 420, 0.82);
                 finalImgWidth = dims.height;
                 finalImgHeight = dims.width;
                 finalRotation = 90;
@@ -278,7 +278,7 @@ export const Uploader: React.FC<UploaderProps> = ({
       const addedPhotos: PhotoItem[] = [];
       for (const sample of sampleUrls) {
         const dims = await getImageDimensions(sample.url);
-        let previewSrc = await createOptimizedPreview(sample.url, 800, 0.85);
+        let previewSrc = await createOptimizedPreview(sample.url, 420, 0.82);
         let targetW = activePreset.width;
         let targetH = activePreset.height;
         const targetShape: ShapeType = activePreset.shape;
@@ -297,7 +297,7 @@ export const Uploader: React.FC<UploaderProps> = ({
           if (effectiveMode === 'rotate_to_fit') {
             if ((isPresetPortrait && isImgLandscape) || (isPresetLandscape && isImgPortrait)) {
               finalOriginalSrc = await rotateImageBase64(sample.url, 90);
-              finalPreviewSrc = await createOptimizedPreview(finalOriginalSrc, 800, 0.85);
+              finalPreviewSrc = await createOptimizedPreview(finalOriginalSrc, 420, 0.82);
               finalImgWidth = dims.height;
               finalImgHeight = dims.width;
               finalRotation = 90;

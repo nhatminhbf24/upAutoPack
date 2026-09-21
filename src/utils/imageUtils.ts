@@ -47,13 +47,14 @@ export async function getImageDimensions(src: string): Promise<{ width: number; 
 }
 
 /**
- * Creates a lightweight, optimized preview image (maxDim around 800px, compressed WebP/JPEG)
- * to prevent DOM and GPU memory lag when working with dozens of 20MB+ high-res photos.
+ * Creates a lightweight, optimized display proxy image (maxDim default 420px, compressed WebP/JPEG)
+ * to prevent DOM, GPU VRAM, and canvas memory lag when working with dozens of 800+ DPI high-res photos.
+ * Reduces GPU texture footprint by ~75% while maintaining retina-crisp sharpness on A4 sheets.
  */
 export async function createOptimizedPreview(
   src: string,
-  maxDimension = 800,
-  quality = 0.85
+  maxDimension = 420,
+  quality = 0.82
 ): Promise<string> {
   try {
     const img = await loadImage(src);
@@ -290,7 +291,7 @@ export async function formatPhotoToPreset(
       // If photo was rotated, rawOriginalSrc is unrotated
       baseSrc = photo.rawOriginalSrc || photo.originalSrc;
       basePreview = photo.rawOriginalSrc
-        ? await createOptimizedPreview(photo.rawOriginalSrc, 800, 0.85)
+        ? await createOptimizedPreview(photo.rawOriginalSrc, 420, 0.82)
         : photo.previewSrc;
     } else {
       baseSrc = photo.originalSrc;
@@ -323,7 +324,7 @@ export async function formatPhotoToPreset(
           cachedRotatedOriginal = await rotateImageBase64(baseSrc, 90);
           cachedRotatedPreview = basePreview
             ? await rotateImageBase64(basePreview, 90)
-            : await createOptimizedPreview(cachedRotatedOriginal, 800, 0.85);
+            : await createOptimizedPreview(cachedRotatedOriginal, 420, 0.82);
         }
         finalSrc = cachedRotatedOriginal;
         finalPreview = cachedRotatedPreview || cachedRotatedOriginal;

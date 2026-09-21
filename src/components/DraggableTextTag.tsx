@@ -62,20 +62,24 @@ export const DraggableTextTag: React.FC<DraggableTextTagProps> = ({
     if (!pageEl) return;
 
     const rect = pageEl.getBoundingClientRect();
-    const pxPerMmX = rect.width / pageW_mm;
-    const pxPerMmY = rect.height / pageH_mm;
+    const viewportPxPerMmX = rect.width / pageW_mm;
+    const viewportPxPerMmY = rect.height / pageH_mm;
+    const unscaledPxPerMmX = (pageEl.offsetWidth || (pageW_mm * 96) / 25.4) / pageW_mm;
+    const unscaledPxPerMmY = (pageEl.offsetHeight || (pageH_mm * 96) / 25.4) / pageH_mm;
 
     dragStartRef.current = {
       clientX: e.clientX,
       clientY: e.clientY,
       startX_mm: tag.xMm,
       startY_mm: tag.yMm,
-      pxPerMmX,
-      pxPerMmY,
+      pxPerMmX: viewportPxPerMmX,
+      pxPerMmY: viewportPxPerMmY,
       hasMoved: false,
     };
 
     setIsDragging(true);
+    let latestX = tag.xMm;
+    let latestY = tag.yMm;
 
     const handlePointerMove = (moveEvent: PointerEvent) => {
       if (!dragStartRef.current) return;
@@ -96,18 +100,35 @@ export const DraggableTextTag: React.FC<DraggableTextTagProps> = ({
       // Giới hạn trong trang A4
       newX = Math.max(1, Math.min(pageW_mm - 5, newX));
       newY = Math.max(1, Math.min(pageH_mm - 5, newY));
+      latestX = newX;
+      latestY = newY;
 
-      onUpdateTag({
-        xMm: Math.round(newX * 10) / 10,
-        yMm: Math.round(newY * 10) / 10,
-      });
+      // Cập nhật tọa độ phần cứng mượt mà 60 FPS khớp chuẩn 100% với zoom scale của trang A4
+      if (tagRef.current) {
+        const dxPx = (newX - startX_mm) * unscaledPxPerMmX;
+        const dyPx = (newY - startY_mm) * unscaledPxPerMmY;
+        tagRef.current.style.transform = `translate3d(${dxPx}px, ${dyPx}px, 0) rotate(${tag.rotation || 0}deg)`;
+      }
     };
 
     const handlePointerUp = () => {
       setIsDragging(false);
       dragStartRef.current = null;
+      if (tagRef.current) {
+        tagRef.current.style.left = `${latestX}mm`;
+        tagRef.current.style.top = `${latestY}mm`;
+        tagRef.current.style.transform = `rotate(${tag.rotation || 0}deg)`;
+      }
       window.removeEventListener('pointermove', handlePointerMove);
       window.removeEventListener('pointerup', handlePointerUp);
+
+      // Lưu tọa độ cuối cùng khi nhả chuột
+      if (Math.abs(latestX - tag.xMm) > 0.05 || Math.abs(latestY - tag.yMm) > 0.05) {
+        onUpdateTag({
+          xMm: Math.round(latestX * 10) / 10,
+          yMm: Math.round(latestY * 10) / 10,
+        });
+      }
     };
 
     window.addEventListener('pointermove', handlePointerMove);

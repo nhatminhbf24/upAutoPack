@@ -106,7 +106,7 @@ export const BatchToolsSidebar: React.FC<BatchToolsSidebarProps> = ({
         const sourceForAdjust = await getSafeBaseForAdjust(photo);
         const autoAdj = await calculateAutoAdjustments(sourceForAdjust);
         const adjustedSrc = await applyAdjustmentsToImage(sourceForAdjust, autoAdj);
-        const previewSrc = await createOptimizedPreview(adjustedSrc, 800, 0.85);
+        const previewSrc = await createOptimizedPreview(adjustedSrc, 420, 0.82);
 
         onUpdatePhoto(photo.id, {
           originalSrc: adjustedSrc,
@@ -145,7 +145,7 @@ export const BatchToolsSidebar: React.FC<BatchToolsSidebarProps> = ({
         if ((dims.width > dims.height) !== (photo.imgWidth > photo.imgHeight)) {
           baseSource = await rotateImageBase64(baseSource, 90);
         }
-        const previewSrc = await createOptimizedPreview(baseSource, 800, 0.85);
+        const previewSrc = await createOptimizedPreview(baseSource, 420, 0.82);
 
         onUpdatePhoto(photo.id, {
           originalSrc: baseSource,
@@ -201,7 +201,7 @@ export const BatchToolsSidebar: React.FC<BatchToolsSidebarProps> = ({
       try {
         const sourceForAdjust = await getSafeBaseForAdjust(photo);
         const adjustedSrc = await applyAdjustmentsToImage(sourceForAdjust, presetAdj);
-        const previewSrc = await createOptimizedPreview(adjustedSrc, 800, 0.85);
+        const previewSrc = await createOptimizedPreview(adjustedSrc, 420, 0.82);
 
         onUpdatePhoto(photo.id, {
           originalSrc: adjustedSrc,
@@ -384,7 +384,7 @@ export const BatchToolsSidebar: React.FC<BatchToolsSidebarProps> = ({
           upscaleFactor: factor,
         });
 
-        const previewSrc = await createOptimizedPreview(result.enhancedSrc, 800, 0.85);
+        const previewSrc = await createOptimizedPreview(result.enhancedSrc, 420, 0.82);
 
         // Scale crop coordinates proportionally
         const newCropX = Math.round(rawCrop.cropX * factor);
@@ -445,7 +445,7 @@ export const BatchToolsSidebar: React.FC<BatchToolsSidebarProps> = ({
           cropW: photo.cropW,
           cropH: photo.cropH,
         };
-        const previewSrc = await createOptimizedPreview(origSrc, 800, 0.85);
+        const previewSrc = await createOptimizedPreview(origSrc, 420, 0.82);
         onUpdatePhoto(photo.id, {
           originalSrc: origSrc,
           previewSrc: previewSrc,
@@ -489,7 +489,7 @@ export const BatchToolsSidebar: React.FC<BatchToolsSidebarProps> = ({
       const rotatedSrc = await rotateImageBase64(photo.originalSrc, 90);
       const rawRotated = photo.rawOriginalSrc ? await rotateImageBase64(photo.rawOriginalSrc, 90) : undefined;
       const unadjustedRotated = photo.unadjustedSrc ? await rotateImageBase64(photo.unadjustedSrc, 90) : undefined;
-      const previewSrc = await createOptimizedPreview(rotatedSrc, 800, 0.85);
+      const previewSrc = await createOptimizedPreview(rotatedSrc, 420, 0.82);
       const newWidth = photo.imgHeight;
       const newHeight = photo.imgWidth;
       const crop = calculateCrop(newWidth, newHeight, photo.targetWidth, photo.targetHeight, smartCrop);

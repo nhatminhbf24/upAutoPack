@@ -20,6 +20,12 @@
     outline: 1px dashed #9ca3af;
     outline-offset: 0px;
   }
+
+  /* Virtualization for multiple A4 pages (Zero overhead for off-screen sheets) */
+  .a4-page-sheet {
+    content-visibility: auto;
+    contain-intrinsic-size: 210mm 297mm;
+  }
 }
 
 /* Hide number input spinners (up/down arrows) completely */
@@ -135,6 +141,7 @@ input[type="number"] {
   }
 
   .a4-page-sheet {
+    content-visibility: visible !important;
     display: block !important;
     margin: 0 auto !important;
     padding: 0 !important;

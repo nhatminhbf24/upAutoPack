@@ -124,7 +124,7 @@ export const ImageListSidebar: React.FC<ImageListSidebarProps> = ({
           origW = photo.rawOriginalHeight || photo.imgWidth;
           origH = photo.rawOriginalWidth || photo.imgHeight;
         }
-        const previewSrc = await createOptimizedPreview(rawSrc, 800, 0.85);
+        const previewSrc = await createOptimizedPreview(rawSrc, 420, 0.82);
 
         onUpdatePhoto(photo.id, {
           originalSrc: rawSrc,
@@ -173,7 +173,7 @@ export const ImageListSidebar: React.FC<ImageListSidebarProps> = ({
           upscaleFactor: factor,
         });
 
-        const previewSrc = await createOptimizedPreview(result.enhancedSrc, 800, 0.85);
+        const previewSrc = await createOptimizedPreview(result.enhancedSrc, 420, 0.82);
 
         // Scale crop coordinates to new dimensions proportionally
         const newCropX = Math.round(rawCrop.cropX * factor);
@@ -222,7 +222,7 @@ export const ImageListSidebar: React.FC<ImageListSidebarProps> = ({
       const rotatedSrc = await rotateImageBase64(photo.originalSrc, 90);
       const rawRotated = photo.rawOriginalSrc ? await rotateImageBase64(photo.rawOriginalSrc, 90) : undefined;
       const unadjustedRotated = photo.unadjustedSrc ? await rotateImageBase64(photo.unadjustedSrc, 90) : undefined;
-      const previewSrc = await createOptimizedPreview(rotatedSrc, 800, 0.85);
+      const previewSrc = await createOptimizedPreview(rotatedSrc, 420, 0.82);
       const newWidth = photo.imgHeight;
       const newHeight = photo.imgWidth;
       const crop = calculateCrop(newWidth, newHeight, photo.targetWidth, photo.targetHeight, smartCrop);

@@ -48,6 +48,63 @@ interface A4PreviewAreaProps {
   onResetFreeformPositions?: () => void;
 }
 
+// Trình hiển thị vạch gióng nam châm trực tiếp qua DOM để đạt 60 FPS, không re-render React
+function renderSnapGuidesOverlay(
+  pageNumber: number,
+  guides: AlignmentGuideLine[],
+  pageW_mm: number,
+  pageH_mm: number
+) {
+  const container = document.getElementById(`active-guides-overlay-${pageNumber}`);
+  if (!container) return;
+
+  if (!guides || guides.length === 0) {
+    container.innerHTML = '';
+    return;
+  }
+
+  let svgLines = '';
+  let badges = '';
+
+  for (const guide of guides) {
+    const isVert = guide.type === 'vertical';
+    const guideColor = guide.isCenter ? '#0284c7' : '#ec4899';
+    const bgBadge = guide.isCenter ? 'rgba(2, 132, 199, 0.95)' : 'rgba(236, 72, 153, 0.95)';
+
+    svgLines += `
+      <g>
+        <line x1="${isVert ? guide.pos : 0}" y1="${isVert ? 0 : guide.pos}" x2="${isVert ? guide.pos : pageW_mm}" y2="${isVert ? pageH_mm : guide.pos}" stroke="${guideColor}" stroke-width="0.15" stroke-dasharray="1.5 1.5" opacity="0.4" />
+        <line x1="${isVert ? guide.pos : guide.start}" y1="${isVert ? guide.start : guide.pos}" x2="${isVert ? guide.pos : guide.end}" y2="${isVert ? guide.end : guide.pos}" stroke="${guideColor}" stroke-width="0.4" />
+        <circle cx="${isVert ? guide.pos : guide.start}" cy="${isVert ? guide.start : guide.pos}" r="0.5" fill="${guideColor}" />
+        <circle cx="${isVert ? guide.pos : guide.end}" cy="${isVert ? guide.end : guide.pos}" r="0.5" fill="${guideColor}" />
+      </g>
+    `;
+
+    const leftPos = isVert ? `${guide.pos}mm` : `${(guide.start + guide.end) / 2}mm`;
+    const topPos = isVert ? `${(guide.start + guide.end) / 2}mm` : `${guide.pos}mm`;
+
+    badges += `
+      <div style="position: absolute; left: ${leftPos}; top: ${topPos}; transform: translate(-50%, -50%); background-color: ${bgBadge}; padding: 2px 4px; border-radius: 4px; font-size: 7.5px; line-height: 1; font-weight: 600; color: white; white-space: nowrap; pointer-events: none; z-index: 50;">
+        <span>${guide.label}</span>
+      </div>
+    `;
+  }
+
+  container.innerHTML = `
+    <svg class="w-full h-full overflow-visible pointer-events-none" viewBox="0 0 ${pageW_mm} ${pageH_mm}">
+      ${svgLines}
+    </svg>
+    ${badges}
+  `;
+}
+
+function clearSnapGuidesOverlay(pageNumber: number) {
+  const container = document.getElementById(`active-guides-overlay-${pageNumber}`);
+  if (container) {
+    container.innerHTML = '';
+  }
+}
+
 export const A4PreviewArea: React.FC<A4PreviewAreaProps> = ({
   pages,
   settings,
@@ -165,16 +222,6 @@ export const A4PreviewArea: React.FC<A4PreviewAreaProps> = ({
 
   // Chế độ Di chuyển tự do & Tự động gióng nam châm (Smart Alignment & Snapping)
   const isFreeformMode = settings.layoutMode === 'freeform';
-  const [freeDraggingItem, setFreeDraggingItem] = useState<{
-    id: string;
-    instanceIndex: number;
-    pageNumber: number;
-    currentX: number;
-    currentY: number;
-    w: number;
-    h: number;
-  } | null>(null);
-  const [activeGuides, setActiveGuides] = useState<AlignmentGuideLine[]>([]);
 
   const [rotatingPhotoId, setRotatingPhotoId] = useState<string | null>(null);
 
@@ -188,7 +235,7 @@ export const A4PreviewArea: React.FC<A4PreviewAreaProps> = ({
       const rotatedSrc = await rotateImageBase64(photo.originalSrc, 90);
       const previewSrc = photo.previewSrc
         ? await rotateImageBase64(photo.previewSrc, 90)
-        : await createOptimizedPreview(rotatedSrc, 800, 0.85);
+        : await createOptimizedPreview(rotatedSrc, 420, 0.82);
       const rawRotated = photo.rawOriginalSrc
         ? await rotateImageBase64(photo.rawOriginalSrc, 90)
         : undefined;
@@ -266,6 +313,7 @@ export const A4PreviewArea: React.FC<A4PreviewAreaProps> = ({
   };
 
   // Kéo thả di chuyển tự do trên trang A4 kèm tự động gióng nam châm (3mm)
+  // Tối ưu hóa GPU Hardware-accelerated (translate3d) chuẩn xác 1:1 theo zoom màn hình, 0 giật lệch
   const handleFreeformMouseDown = (
     e: React.MouseEvent,
     item: PlacedPhotoItem,
@@ -283,80 +331,112 @@ export const A4PreviewArea: React.FC<A4PreviewAreaProps> = ({
     const pageElement = document.getElementById(`a4-page-${pageNumber}`);
     if (!pageElement) return;
 
+    const boxElement = document.getElementById(`img-box-${item.id}-${item.instanceIndex}`);
+    const cropMarksElement = document.getElementById(`crop-marks-${item.id}-${item.instanceIndex}`);
+
+    // Kích thước thực tế trên màn hình (đã nhân zoom scale)
     const pageRect = pageElement.getBoundingClientRect();
-    const pxToMmX = pageW_mm / pageRect.width;
-    const pxToMmY = pageH_mm / pageRect.height;
+    const viewportPxToMmX = pageW_mm / pageRect.width;
+    const viewportPxToMmY = pageH_mm / pageRect.height;
+
+    // Tỉ lệ pixel CSS chuẩn nội tại của phần tử A4 (chưa nhân zoom scale)
+    // Cực kỳ quan trọng để translate3d bên trong container có zoom scale di chuyển chính xác 1:1 với chuột
+    const unscaledPxPerMmX = (pageElement.offsetWidth || (pageW_mm * 96) / 25.4) / pageW_mm;
+    const unscaledPxPerMmY = (pageElement.offsetHeight || (pageH_mm * 96) / 25.4) / pageH_mm;
 
     const startClientX = e.clientX;
     const startClientY = e.clientY;
-    const startItemX = item.x;
-    const startItemY = item.y;
+
+    const isSquareShape = item.shape === 'circle' || item.shape === 'heart';
+    const diam = isSquareShape ? Math.min(item.w, item.h) : 0;
+    const itemW = isSquareShape ? diam : item.w;
+    const itemH = isSquareShape ? diam : item.h;
+    const offsetDiffX = isSquareShape ? (item.w - diam) / 2 : 0;
+    const offsetDiffY = isSquareShape ? (item.h - diam) / 2 : 0;
+
+    const startRenderX = item.x + offsetDiffX;
+    const startRenderY = item.y + offsetDiffY;
 
     const targetPage = pages.find((p) => p.pageNumber === pageNumber);
     const otherItems: SnapTarget[] = (targetPage ? targetPage.items : [])
       .filter((it) => !(it.id === item.id && it.instanceIndex === item.instanceIndex))
       .map((it) => {
         const isSquare = it.shape === 'circle' || it.shape === 'heart';
-        const diam = isSquare ? Math.min(it.w, it.h) : 0;
+        const d = isSquare ? Math.min(it.w, it.h) : 0;
         return {
           id: it.id,
           instanceIndex: it.instanceIndex,
-          x: isSquare ? it.x + (it.w - diam) / 2 : it.x,
-          y: isSquare ? it.y + (it.h - diam) / 2 : it.y,
-          w: isSquare ? diam : it.w,
-          h: isSquare ? diam : it.h,
+          x: isSquare ? it.x + (it.w - d) / 2 : it.x,
+          y: isSquare ? it.y + (it.h - d) / 2 : it.y,
+          w: isSquare ? d : it.w,
+          h: isSquare ? d : it.h,
         };
       });
 
-    const isSquareShape = item.shape === 'circle' || item.shape === 'heart';
-    const diam = isSquareShape ? Math.min(item.w, item.h) : 0;
-    const itemW = isSquareShape ? diam : item.w;
-    const itemH = isSquareShape ? diam : item.h;
+    // Bật hiệu năng GPU và style kéo thả tức thì trên phần tử DOM
+    if (boxElement) {
+      boxElement.style.willChange = 'transform';
+      boxElement.style.zIndex = '50';
+      boxElement.classList.add('shadow-2xl', 'opacity-95');
+    }
+    if (cropMarksElement) {
+      cropMarksElement.style.willChange = 'transform';
+      cropMarksElement.style.zIndex = '45';
+    }
 
-    setFreeDraggingItem({
-      id: item.id,
-      instanceIndex: item.instanceIndex,
-      pageNumber,
-      currentX: startItemX,
-      currentY: startItemY,
-      w: itemW,
-      h: itemH,
-    });
-
-    let latestSnappedX = startItemX;
-    let latestSnappedY = startItemY;
+    let latestSnappedRenderX = startRenderX;
+    let latestSnappedRenderY = startRenderY;
+    let latestMoveEvent: MouseEvent | null = null;
     let rafId: number | null = null;
 
+    const applyPosition = (moveEvent: MouseEvent) => {
+      const deltaPxX = moveEvent.clientX - startClientX;
+      const deltaPxY = moveEvent.clientY - startClientY;
+
+      const rawRenderX = startRenderX + deltaPxX * viewportPxToMmX;
+      const rawRenderY = startRenderY + deltaPxY * viewportPxToMmY;
+
+      // Tự động gióng với các ảnh xung quanh và lề trang A4 với lực hút nam châm 3mm
+      const snapResult = calculateAlignmentSnap(
+        { x: rawRenderX, y: rawRenderY, w: itemW, h: itemH },
+        otherItems,
+        pageW_mm,
+        pageH_mm,
+        settings.margin,
+        settings.gap,
+        3.0 // 3mm magnetic snapping
+      );
+
+      latestSnappedRenderX = snapResult.x;
+      latestSnappedRenderY = snapResult.y;
+
+      // Di chuyển phần cứng trực tiếp bằng translate3d sử dụng unscaled CSS pixel để khớp 100% với zoom
+      const moveMmX = latestSnappedRenderX - startRenderX;
+      const moveMmY = latestSnappedRenderY - startRenderY;
+      const moveCssPxX = moveMmX * unscaledPxPerMmX;
+      const moveCssPxY = moveMmY * unscaledPxPerMmY;
+
+      if (boxElement) {
+        boxElement.style.transform = `translate3d(${moveCssPxX}px, ${moveCssPxY}px, 0)`;
+      }
+      if (cropMarksElement) {
+        cropMarksElement.style.transform = `translate3d(${moveCssPxX}px, ${moveCssPxY}px, 0)`;
+      }
+
+      // Cập nhật các đường vạch gióng thông minh trực tiếp lên overlay của trang
+      renderSnapGuidesOverlay(pageNumber, snapResult.guides, pageW_mm, pageH_mm);
+    };
+
     const handleMouseMove = (moveEvent: MouseEvent) => {
-      if (rafId) return;
-      rafId = requestAnimationFrame(() => {
-        rafId = null;
-
-        const deltaPxX = moveEvent.clientX - startClientX;
-        const deltaPxY = moveEvent.clientY - startClientY;
-
-        const rawX = startItemX + deltaPxX * pxToMmX;
-        const rawY = startItemY + deltaPxY * pxToMmY;
-
-        // Tự động gióng với các ảnh xung quanh và lề trang A4 với lực hút nam châm 3mm
-        const snapResult = calculateAlignmentSnap(
-          { x: rawX, y: rawY, w: itemW, h: itemH },
-          otherItems,
-          pageW_mm,
-          pageH_mm,
-          settings.margin,
-          settings.gap,
-          3.0 // 3mm magnetic snapping
-        );
-
-        latestSnappedX = snapResult.x;
-        latestSnappedY = snapResult.y;
-
-        setFreeDraggingItem((prev) =>
-          prev ? { ...prev, currentX: snapResult.x, currentY: snapResult.y } : null
-        );
-        setActiveGuides(snapResult.guides);
-      });
+      latestMoveEvent = moveEvent;
+      if (!rafId) {
+        rafId = requestAnimationFrame(() => {
+          rafId = null;
+          if (latestMoveEvent) {
+            applyPosition(latestMoveEvent);
+          }
+        });
+      }
     };
 
     const handleMouseUp = () => {
@@ -367,13 +447,40 @@ export const A4PreviewArea: React.FC<A4PreviewAreaProps> = ({
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
 
-      setFreeDraggingItem(null);
-      setActiveGuides([]);
+      // Đảm bảo tọa độ của sự kiện di chuyển cuối cùng được áp dụng chính xác tuyệt đối
+      if (latestMoveEvent) {
+        applyPosition(latestMoveEvent);
+      }
 
-      if (onUpdateFreeformPosition) {
+      // Thiết lập ngay tọa độ left/top trực tiếp trên DOM trước khi xóa transform để tránh hiện tượng giật vị trí
+      if (boxElement) {
+        boxElement.style.willChange = '';
+        boxElement.style.left = `${latestSnappedRenderX}mm`;
+        boxElement.style.top = `${latestSnappedRenderY}mm`;
+        boxElement.style.transform = '';
+        boxElement.style.zIndex = '';
+        boxElement.classList.remove('shadow-2xl', 'opacity-95');
+      }
+      if (cropMarksElement) {
+        cropMarksElement.style.willChange = '';
+        cropMarksElement.style.left = `${latestSnappedRenderX - 4}mm`;
+        cropMarksElement.style.top = `${latestSnappedRenderY - 4}mm`;
+        cropMarksElement.style.transform = '';
+        cropMarksElement.style.zIndex = '';
+      }
+      clearSnapGuidesOverlay(pageNumber);
+
+      const finalItemX = latestSnappedRenderX - offsetDiffX;
+      const finalItemY = latestSnappedRenderY - offsetDiffY;
+
+      // Cập nhật vị trí mới vào State một lần duy nhất khi nhả chuột
+      if (
+        onUpdateFreeformPosition &&
+        (Math.abs(finalItemX - item.x) > 0.05 || Math.abs(finalItemY - item.y) > 0.05)
+      ) {
         onUpdateFreeformPosition(item.id, item.instanceIndex, {
-          x: latestSnappedX,
-          y: latestSnappedY,
+          x: Math.round(finalItemX * 100) / 100,
+          y: Math.round(finalItemY * 100) / 100,
           pageNumber,
         });
       }
@@ -483,6 +590,7 @@ export const A4PreviewArea: React.FC<A4PreviewAreaProps> = ({
 
     const targetEl = e.currentTarget as HTMLElement;
     const rect = targetEl.getBoundingClientRect();
+    const imgEl = targetEl.querySelector('img');
 
     setPanningPhotoId(photo.id);
     panInfoRef.current = {
@@ -496,6 +604,8 @@ export const A4PreviewArea: React.FC<A4PreviewAreaProps> = ({
       isRotated: Boolean(photo.isRotated),
     };
 
+    let latestCropX = photo.cropX;
+    let latestCropY = photo.cropY;
     let rafId: number | null = null;
 
     const handleMouseMove = (moveEvent: MouseEvent) => {
@@ -543,7 +653,16 @@ export const A4PreviewArea: React.FC<A4PreviewAreaProps> = ({
         newX = Math.max(0, Math.min(newX, p.imgWidth - actualCropW));
         newY = Math.max(0, Math.min(newY, p.imgHeight - actualCropH));
 
-        onUpdatePhoto(p.id, { cropX: newX, cropY: newY });
+        latestCropX = newX;
+        latestCropY = newY;
+
+        // Cập nhật tọa độ hiển thị trực tiếp lên DOM ảnh, 0 re-render React khi dịch tâm
+        if (imgEl) {
+          const percentX = (-newX / actualCropW) * 100;
+          const percentY = (-newY / actualCropH) * 100;
+          imgEl.style.left = `${percentX}%`;
+          imgEl.style.top = `${percentY}%`;
+        }
       });
     };
 
@@ -556,6 +675,11 @@ export const A4PreviewArea: React.FC<A4PreviewAreaProps> = ({
       panInfoRef.current = null;
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
+
+      // Lưu tọa độ crop mới vào state lịch sử một lần duy nhất khi nhả chuột
+      if (latestCropX !== photo.cropX || latestCropY !== photo.cropY) {
+        onUpdatePhoto(photo.id, { cropX: latestCropX, cropY: latestCropY });
+      }
     };
 
     window.addEventListener('mousemove', handleMouseMove);
@@ -1246,77 +1370,11 @@ export const A4PreviewArea: React.FC<A4PreviewAreaProps> = ({
                     );
                   })()}
 
-                  {/* Smart Alignment Guides Overlay (Visible during freeform dragging) */}
-                  {isFreeformMode && freeDraggingItem && freeDraggingItem.pageNumber === page.pageNumber && activeGuides.length > 0 && (
-                    <div className="absolute inset-0 pointer-events-none z-40 overflow-visible">
-                      <svg
-                        className="w-full h-full overflow-visible"
-                        viewBox={`0 0 ${pageW_mm} ${pageH_mm}`}
-                      >
-                        {activeGuides.map((guide) => {
-                          const isVert = guide.type === 'vertical';
-                          const guideColor = guide.isCenter ? '#0284c7' : '#ec4899';
-                          return (
-                            <g key={guide.id}>
-                              {/* Đường vạch gióng xuyên trang mờ nhẹ */}
-                              <line
-                                x1={isVert ? guide.pos : 0}
-                                y1={isVert ? 0 : guide.pos}
-                                x2={isVert ? guide.pos : pageW_mm}
-                                y2={isVert ? pageH_mm : guide.pos}
-                                stroke={guideColor}
-                                strokeWidth="0.15"
-                                strokeDasharray="1.5 1.5"
-                                opacity="0.4"
-                              />
-                              {/* Vạch gióng nam châm chính xác nối giữa các ảnh */}
-                              <line
-                                x1={isVert ? guide.pos : guide.start}
-                                y1={isVert ? guide.start : guide.pos}
-                                x2={isVert ? guide.pos : guide.end}
-                                y2={isVert ? guide.end : guide.pos}
-                                stroke={guideColor}
-                                strokeWidth="0.4"
-                              />
-                              {/* Điểm neo hai đầu vạch gióng */}
-                              <circle
-                                cx={isVert ? guide.pos : guide.start}
-                                cy={isVert ? guide.start : guide.pos}
-                                r="0.5"
-                                fill={guideColor}
-                              />
-                              <circle
-                                cx={isVert ? guide.pos : guide.end}
-                                cy={isVert ? guide.end : guide.pos}
-                                r="0.5"
-                                fill={guideColor}
-                              />
-                            </g>
-                          );
-                        })}
-                      </svg>
-
-                      {/* Huy hiệu thông báo điểm gióng (Mép, Tâm, Lề, Gap...) */}
-                      {activeGuides.map((guide) => {
-                        const isVert = guide.type === 'vertical';
-                        const leftPos = isVert ? `${guide.pos}mm` : `${(guide.start + guide.end) / 2}mm`;
-                        const topPos = isVert ? `${(guide.start + guide.end) / 2}mm` : `${guide.pos}mm`;
-                        return (
-                          <div
-                            key={`badge-${guide.id}`}
-                            className="absolute -translate-x-1/2 -translate-y-1/2 px-1 py-0.5 rounded text-[7.5px] leading-none font-semibold text-white shadow-xs backdrop-blur-xs whitespace-nowrap flex items-center gap-0.5 z-50 pointer-events-none"
-                            style={{
-                              left: leftPos,
-                              top: topPos,
-                              backgroundColor: guide.isCenter ? 'rgba(2, 132, 199, 0.95)' : 'rgba(236, 72, 153, 0.95)',
-                            }}
-                          >
-                            <span>{guide.label}</span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
+                  {/* Smart Alignment Guides Overlay Container (Direct DOM manipulated for 60 FPS performance) */}
+                  <div
+                    id={`active-guides-overlay-${page.pageNumber}`}
+                    className="absolute inset-0 pointer-events-none z-40 overflow-visible"
+                  />
 
                   {/* Placed Photo Items */}
                   {page.items.map((item) => {
@@ -1336,13 +1394,8 @@ export const A4PreviewArea: React.FC<A4PreviewAreaProps> = ({
                     const renderX = isSquareShape ? item.x + (item.w - diam) / 2 : item.x;
                     const renderY = isSquareShape ? item.y + (item.h - diam) / 2 : item.y;
 
-                    const isFreeDraggingThis =
-                      Boolean(freeDraggingItem) &&
-                      freeDraggingItem?.id === item.id &&
-                      freeDraggingItem?.instanceIndex === item.instanceIndex;
-
-                    const currentItemX = isFreeDraggingThis && freeDraggingItem ? freeDraggingItem.currentX : renderX;
-                    const currentItemY = isFreeDraggingThis && freeDraggingItem ? freeDraggingItem.currentY : renderY;
+                    const currentItemX = renderX;
+                    const currentItemY = renderY;
 
                     const isDraggingThis = draggedPhotoId === item.id;
                     const isDragOverThis = dragOverPhotoId === item.id;
@@ -1363,6 +1416,7 @@ export const A4PreviewArea: React.FC<A4PreviewAreaProps> = ({
                         {/* Corner Crop Marks for Precision Cutting (SVG Overlay) */}
                         {isCornerMarks && (
                           <div
+                            id={`crop-marks-${item.id}-${item.instanceIndex}`}
                             className="pointer-events-none absolute z-20"
                             style={{
                               left: `${currentItemX - 4}mm`,
@@ -1419,9 +1473,7 @@ export const A4PreviewArea: React.FC<A4PreviewAreaProps> = ({
                             height: `${renderH}mm`,
                           }}
                           className={`bg-white z-20 overflow-hidden select-none group/box ${
-                            isFreeDraggingThis
-                              ? 'z-50 shadow-2xl cursor-grabbing opacity-95'
-                              : isFreeformMode
+                            isFreeformMode
                               ? 'cursor-move transition-shadow'
                               : 'cursor-grab active:cursor-grabbing transition-all'
                           } ${isCircle ? 'shape-circle' : isHeart ? 'shape-heart' : ''} ${
@@ -1430,7 +1482,7 @@ export const A4PreviewArea: React.FC<A4PreviewAreaProps> = ({
                             !isFreeformMode && isDragOverThis
                               ? 'ring-4 ring-emerald-500 ring-offset-2 scale-105 z-30 shadow-lg'
                               : ''
-                          } ${isSelected ? 'ring-3 ring-orange-500 ring-offset-2 z-40 shadow-xl' : ''}`}
+                          } ${isSelected ? 'z-30' : ''}`}
                         >
                         {/* Image Content */}
                         {item.isRotated ? (
@@ -1451,6 +1503,7 @@ export const A4PreviewArea: React.FC<A4PreviewAreaProps> = ({
                               alt={item.name}
                               draggable={false}
                               decoding="async"
+                              loading="lazy"
                               className="absolute max-w-none pointer-events-none transition-none"
                               style={{
                                 width: `${percentW}%`,
@@ -1466,6 +1519,7 @@ export const A4PreviewArea: React.FC<A4PreviewAreaProps> = ({
                             alt={item.name}
                             draggable={false}
                             decoding="async"
+                            loading="lazy"
                             className="absolute max-w-none pointer-events-none transition-none"
                             style={{
                               width: `${percentW}%`,
@@ -1533,9 +1587,7 @@ export const A4PreviewArea: React.FC<A4PreviewAreaProps> = ({
                         {/* Viền nhận diện BÊN TRONG lòng ảnh (Inset Border) - Không phình mép ra ngoài, vạch thước và mép ảnh khớp chuẩn 100% */}
                         <div
                           className={`no-print pointer-events-none absolute inset-0 z-15 transition-all duration-150 ${
-                            isFreeDraggingThis
-                              ? 'border-2 border-indigo-500 shadow-inner'
-                              : isFreeformMode
+                            isFreeformMode
                               ? 'opacity-0 group-hover/box:opacity-100 border-2 border-indigo-400/90'
                               : 'opacity-0 group-hover/box:opacity-100 border border-blue-400/80'
                           }`}
