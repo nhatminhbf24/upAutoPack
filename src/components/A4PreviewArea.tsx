@@ -1507,8 +1507,8 @@ export const A4PreviewArea: React.FC<A4PreviewAreaProps> = ({
                             <div
                               className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full overflow-hidden pointer-events-none shadow-xs"
                               style={{
-                                width: `${Math.min(100, (item.badgeFaceDiameter / (item.targetWidth || 55)) * 100)}%`,
-                                height: `${Math.min(100, (item.badgeFaceDiameter / (item.targetHeight || 55)) * 100)}%`,
+                                width: `${Math.min(100, (item.badgeFaceDiameter / (item.targetWidth || 54)) * 100)}%`,
+                                height: `${Math.min(100, (item.badgeFaceDiameter / (item.targetHeight || 54)) * 100)}%`,
                               }}
                             >
                               <img
@@ -1532,8 +1532,8 @@ export const A4PreviewArea: React.FC<A4PreviewAreaProps> = ({
                               <div
                                 className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full border border-dashed border-white/80 pointer-events-none"
                                 style={{
-                                  width: `${Math.min(100, (item.badgeFaceDiameter / (item.targetWidth || 55)) * 100)}%`,
-                                  height: `${Math.min(100, (item.badgeFaceDiameter / (item.targetHeight || 55)) * 100)}%`,
+                                  width: `${Math.min(100, (item.badgeFaceDiameter / (item.targetWidth || 54)) * 100)}%`,
+                                  height: `${Math.min(100, (item.badgeFaceDiameter / (item.targetHeight || 54)) * 100)}%`,
                                 }}
                               />
                             )}

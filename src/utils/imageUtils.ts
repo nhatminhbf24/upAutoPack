@@ -415,7 +415,7 @@ export async function formatPhotoToPreset(
       scale: 1,
       rotation: autoRotateAngle,
       badgeMode: isBadge,
-      badgeFaceDiameter: isBadge ? (preset.badgeFaceDiameter || 44) : undefined,
+      badgeFaceDiameter: isBadge ? (preset.badgeFaceDiameter || 43) : undefined,
       badgeBleedColor: isBadge ? (badgeBleedColor || '#ffffff') : undefined,
       badgeBleedPalette: isBadge ? badgeBleedPalette : undefined,
       badgeGuideLines: false,

@@ -7,15 +7,16 @@ export interface BadgeColorAnalysis {
 
 export interface BadgeSpec {
   id: string;
+  name: string;
   label: string;
   faceDiameter: number; // mm
   cutDiameter: number;  // mm
 }
 
 export const STANDARD_BADGE_SPECS: BadgeSpec[] = [
-  { id: 'badge_44_to_55', label: 'Huy hiệu 4.4 cm (Khuôn 5.5 cm)', faceDiameter: 44, cutDiameter: 55 },
-  { id: 'badge_58_to_70', label: 'Huy hiệu 5.8 cm (Khuôn 7.0 cm)', faceDiameter: 58, cutDiameter: 70 },
-  { id: 'badge_100_to_115', label: 'Huy hiệu 10.0 cm (Khuôn 11.5 cm)', faceDiameter: 100, cutDiameter: 115 },
+  { id: 'badge_44_to_55', name: 'Huy hiệu 4.4 cm', label: 'Huy hiệu 4.4 cm (Khuôn 5.4 cm)', faceDiameter: 43, cutDiameter: 54 },
+  { id: 'badge_58_to_70', name: 'Huy hiệu 5.8 cm', label: 'Huy hiệu 5.8 cm (Khuôn 6.9 cm)', faceDiameter: 57, cutDiameter: 69 },
+  { id: 'badge_100_to_115', name: 'Huy hiệu 10.0 cm', label: 'Huy hiệu 10.0 cm (Khuôn 11.4 cm)', faceDiameter: 99, cutDiameter: 114 },
 ];
 
 /**

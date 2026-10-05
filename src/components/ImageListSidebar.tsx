@@ -447,7 +447,7 @@ export const ImageListSidebar: React.FC<ImageListSidebarProps> = ({
       cropH: crop.cropH,
       scale: 1,
       badgeMode: isBadge,
-      badgeFaceDiameter: isBadge ? (preset.badgeFaceDiameter || 44) : undefined,
+      badgeFaceDiameter: isBadge ? (preset.badgeFaceDiameter || 43) : undefined,
       badgeBleedColor: isBadge ? (badgeBleedColor || '#ffffff') : undefined,
       badgeBleedPalette: isBadge ? badgeBleedPalette : undefined,
       badgeGuideLines: false,
@@ -623,13 +623,13 @@ export const ImageListSidebar: React.FC<ImageListSidebarProps> = ({
                     data-photo-item-index={index}
                     id={`photo-card-${photo.id}`}
                     onPointerDown={(e) => handleCardPointerDown(e, index, photo)}
-                    className={`bg-white border rounded-xl p-3 shadow-2xs hover:shadow-xs transition-all group flex flex-col gap-2.5 cursor-grab active:cursor-grabbing relative select-none ${
+                    className={`bg-white border rounded-xl p-3 shadow-sm hover:shadow-md transition-all duration-200 group flex flex-col gap-2.5 cursor-grab active:cursor-grabbing relative select-none ${
                       isConfirmingDelete
-                        ? 'border-rose-400 ring-2 ring-rose-200/80 bg-rose-50/15'
+                        ? 'border-rose-400 ring-2 ring-rose-200/80 bg-rose-50/15 shadow-sm'
                         : isSelected
                         ? 'border-orange-500 ring-2 ring-orange-400/90 bg-orange-50/25 shadow-md scale-[1.01]'
                         : photo.isEnhanced
-                        ? 'border-amber-300 ring-1 ring-amber-100/80 bg-amber-50/20'
+                        ? 'border-amber-300 ring-1 ring-amber-100/80 bg-amber-50/20 shadow-sm hover:shadow-md'
                         : 'border-slate-200/90 hover:border-blue-300'
                     }`}
                   >
@@ -673,8 +673,8 @@ export const ImageListSidebar: React.FC<ImageListSidebarProps> = ({
                               <div
                                 className="rounded-full overflow-hidden relative shadow-xs"
                                 style={{
-                                  width: `${Math.min(100, (photo.badgeFaceDiameter / (photo.targetWidth || 55)) * 100)}%`,
-                                  height: `${Math.min(100, (photo.badgeFaceDiameter / (photo.targetHeight || 55)) * 100)}%`,
+                                  width: `${Math.min(100, (photo.badgeFaceDiameter / (photo.targetWidth || 54)) * 100)}%`,
+                                  height: `${Math.min(100, (photo.badgeFaceDiameter / (photo.targetHeight || 54)) * 100)}%`,
                                 }}
                               >
                                 <div

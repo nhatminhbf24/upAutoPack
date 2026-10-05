@@ -403,7 +403,7 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
           </div>
 
           {/* 1. Uploader Box (Tải ảnh vào trang) (Pastel Rose) */}
-          <div className="bg-rose-50/60 rounded-xl p-3 border border-rose-200/80 shadow-2xs">
+          <div className="bg-rose-50/60 rounded-xl p-3 border border-rose-200/80 shadow-sm hover:shadow-md transition-all duration-200">
             <Uploader
               onAddPhotos={onAddPhotos}
               onToast={onToast}
@@ -419,7 +419,7 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
           </div>
 
           {/* 2. General Settings (Cài đặt lề & khoảng cách) (Pastel Slate/Indigo) */}
-          <div className="bg-indigo-50/50 rounded-xl p-3 border border-indigo-200/80 shadow-2xs space-y-2.5">
+          <div className="bg-indigo-50/50 rounded-xl p-3 border border-indigo-200/80 shadow-sm hover:shadow-md transition-all duration-200 space-y-2.5">
             <div className="grid grid-cols-2 gap-2">
               <div className="bg-white px-2.5 py-1.5 rounded-lg border border-indigo-200 shadow-2xs flex items-center justify-between gap-1.5">
                 <label className="text-xs text-indigo-900 font-bold tracking-tight whitespace-nowrap">
@@ -454,7 +454,7 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
 
             {/* 1. Tự động sắp xếp ảnh (Bin Packing) */}
             <div className="space-y-1.5">
-              <label className="flex items-center justify-between p-2.5 bg-white rounded-lg border border-emerald-300 cursor-pointer hover:bg-emerald-50/60 transition select-none shadow-2xs">
+              <label className="flex items-center justify-between p-2.5 bg-white rounded-lg border border-emerald-300 cursor-pointer hover:bg-emerald-50/60 transition-all duration-200 select-none shadow-xs hover:shadow-sm">
                 <div className="flex items-center gap-2">
                   <LayoutGrid className="w-4 h-4 text-emerald-600" />
                   <span className="text-xs font-bold text-emerald-950">Tự động sắp xếp ảnh</span>
@@ -573,7 +573,7 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
             </div>
 
             {/* 2. Đường cắt ảnh & Dấu góc chữ thập */}
-            <div className="bg-white rounded-lg border border-slate-300 p-2.5 space-y-2 shadow-2xs">
+            <div className="bg-white rounded-lg border border-slate-300 p-2.5 space-y-2 shadow-xs hover:shadow-sm transition-all duration-200">
               <label className="flex items-center justify-between cursor-pointer select-none">
                 <div className="flex items-center gap-2">
                   <Scissors className="w-4 h-4 text-slate-600" />
@@ -679,7 +679,7 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
             {/* 3. Bù xén tràn lề (Bleed) */}
             <div
               id="setting-bleed-card"
-              className="bg-white rounded-lg border border-indigo-200 p-2.5 space-y-2 shadow-2xs"
+              className="bg-white rounded-lg border border-indigo-200 p-2.5 space-y-2 shadow-xs hover:shadow-sm transition-all duration-200"
             >
               <label className="flex items-center justify-between cursor-pointer select-none">
                 <div className="flex items-center gap-2">
@@ -760,7 +760,7 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
             </div>
 
             {/* 4. In 2 mặt đối xứng (Duplex Alignment) */}
-            <div className="bg-white rounded-lg border border-purple-200 p-2.5 shadow-2xs space-y-2">
+            <div className="bg-white rounded-lg border border-purple-200 p-2.5 shadow-xs hover:shadow-sm transition-all duration-200 space-y-2">
               <label className="flex items-center justify-between cursor-pointer select-none">
                 <div className="flex items-center gap-2">
                   <FlipHorizontal className="w-4 h-4 text-purple-600 shrink-0" />
@@ -795,7 +795,7 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
             <div
               ref={textTagCardRef}
               id="setting-freeform-text-tag-card"
-              className="bg-white rounded-lg border border-slate-300 p-2.5 shadow-2xs transition-all duration-300 space-y-2.5"
+              className="bg-white rounded-lg border border-slate-300 p-2.5 shadow-xs hover:shadow-sm transition-all duration-200 space-y-2.5"
             >
               {/* Header: Nhấp vào toàn bộ thanh tiêu đề để thu hẹp hoặc mở rộng */}
               <div
@@ -1098,7 +1098,7 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
                 type="button"
                 id="btn-expand-export-panel"
                 onClick={handleToggleExportCollapsed}
-                className="w-full flex items-center justify-between p-2 rounded-xl bg-gradient-to-r from-pink-50 to-rose-50 hover:from-pink-100/90 hover:to-rose-100/90 border border-pink-200/90 transition cursor-pointer group shadow-2xs"
+                className="w-full flex items-center justify-between p-2 rounded-xl bg-gradient-to-r from-pink-50 to-rose-50 hover:from-pink-100/90 hover:to-rose-100/90 border border-pink-200/90 transition-all duration-200 cursor-pointer group shadow-sm hover:shadow-md"
                 title="Bấm để mở bảng công cụ Xuất file & In ấn"
               >
                 <div className="flex items-center gap-2 min-w-0">

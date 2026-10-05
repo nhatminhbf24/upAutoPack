@@ -166,7 +166,7 @@ export const CropModal: React.FC<CropModalProps> = ({
 
   // 🏅 Chế độ phôi huy hiệu cài áo (Badge Pin) state
   const [badgeMode, setBadgeMode] = useState<boolean>(() => Boolean(photo.badgeMode));
-  const [badgeFaceDiameter, setBadgeFaceDiameter] = useState<number>(() => photo.badgeFaceDiameter || 44);
+  const [badgeFaceDiameter, setBadgeFaceDiameter] = useState<number>(() => photo.badgeFaceDiameter || 43);
   const [badgeBleedColor, setBadgeBleedColor] = useState<string>(() => photo.badgeBleedColor || '#ffffff');
   const [badgeBleedPalette, setBadgeBleedPalette] = useState<string[]>(() =>
     photo.badgeBleedPalette && photo.badgeBleedPalette.length > 0
@@ -1848,6 +1848,266 @@ export const CropModal: React.FC<CropModalProps> = ({
                     </div>
                   </div>
 
+                  {/* 🏅 Box riêng biệt: Chế độ phôi huy hiệu cài áo chuyên dụng */}
+                  <div className={`rounded-2xl p-3.5 space-y-3 border transition-all duration-200 shadow-sm hover:shadow-md ${
+                    badgeMode
+                      ? 'bg-rose-50/80 border-rose-200/90'
+                      : 'bg-slate-50 border-slate-200/90'
+                  }`}>
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-base">🏅</span>
+                        <span className="text-xs font-bold text-slate-900">Chế độ phôi huy hiệu cài áo:</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const nextMode = !badgeMode;
+                          if (nextMode) {
+                            if (shape !== 'circle') handleShapeChange('circle');
+                            handleSelectBadgePreset(43, 54);
+                          }
+                          setBadgeMode(nextMode);
+                        }}
+                        className={`group relative text-[11px] font-bold px-3 py-1.5 rounded-full transition-all duration-200 cursor-pointer flex items-center gap-1.5 border select-none shadow-xs hover:shadow-md hover:scale-105 active:scale-95 ${
+                          badgeMode
+                            ? 'bg-rose-600 hover:bg-rose-700 text-white border-rose-600 ring-2 ring-rose-300 hover:ring-rose-400'
+                            : 'bg-white hover:bg-rose-50 text-slate-700 hover:text-rose-700 border-slate-300 hover:border-rose-400'
+                        }`}
+                        title={badgeMode ? 'Nhấp để TẮT chế độ phôi huy hiệu' : 'Nhấp để BẬT chế độ phôi huy hiệu'}
+                      >
+                        <span className={`w-2.5 h-2.5 rounded-full transition-all duration-200 ${badgeMode ? 'bg-white animate-pulse' : 'bg-slate-300 group-hover:bg-rose-500'}`} />
+                        <span>{badgeMode ? 'Đang bật' : 'Chưa bật'}</span>
+                        <span className={`text-[9.5px] px-1.5 py-0.5 rounded-full font-semibold transition-colors ${
+                          badgeMode
+                            ? 'bg-white/20 text-white group-hover:bg-white/30'
+                            : 'bg-slate-100 text-slate-500 group-hover:bg-rose-100 group-hover:text-rose-700'
+                        }`}>
+                          {badgeMode ? 'Tắt' : 'Bật'}
+                        </span>
+                      </button>
+                    </div>
+
+                    {/* Preset buttons: 3 cái chung 1 hàng siêu gọn */}
+                    <div className="space-y-1.5">
+                      <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
+                        Cỡ huy hiệu chuẩn:
+                      </span>
+                      <div className="grid grid-cols-3 gap-1.5">
+                        {STANDARD_BADGE_SPECS.map((spec) => {
+                          const isSelected =
+                            badgeMode &&
+                            curTargetWidth === spec.cutDiameter &&
+                            badgeFaceDiameter === spec.faceDiameter;
+                          return (
+                            <button
+                              key={spec.id}
+                              type="button"
+                              onClick={() => {
+                                if (!badgeMode) {
+                                  setBadgeMode(true);
+                                  if (shape !== 'circle') handleShapeChange('circle');
+                                }
+                                handleSelectBadgePreset(spec.faceDiameter, spec.cutDiameter);
+                              }}
+                              className={`px-1.5 py-1.5 rounded-xl text-center border transition-all duration-150 cursor-pointer flex flex-col items-center justify-center hover:scale-[1.02] active:scale-95 shadow-2xs ${
+                                isSelected
+                                  ? 'bg-rose-600 text-white border-rose-600 shadow-xs ring-2 ring-rose-300'
+                                  : 'bg-white text-slate-800 border-slate-200 hover:border-rose-300 hover:bg-rose-50/70'
+                              }`}
+                              title={`${spec.name} • Mặt ${(spec.faceDiameter / 10).toFixed(1)} cm • Cắt ${(spec.cutDiameter / 10).toFixed(1)} cm`}
+                            >
+                              <span className="text-[11px] font-bold leading-tight truncate w-full">
+                                {spec.name.replace('Huy hiệu ', '')}
+                              </span>
+                              <span className={`text-[9.5px] mt-0.5 leading-tight ${isSelected ? 'text-rose-100 font-medium' : 'text-slate-500'}`}>
+                                {(spec.faceDiameter / 10).toFixed(1)} ➔ {(spec.cutDiameter / 10).toFixed(1)} cm
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {badgeMode && (
+                      <div className="space-y-2.5 pt-1 border-t border-rose-200/70">
+                        {/* Diameters display & edit */}
+                        <div className="grid grid-cols-2 gap-2 text-xs">
+                          <div className="bg-white p-2 rounded-xl border border-rose-200/80 space-y-1 shadow-2xs">
+                            <span className="text-[10px] font-bold text-slate-600 block">
+                              Mặt trước hiển thị (Ø)
+                            </span>
+                            <div className="flex items-center gap-1">
+                              <input
+                                type="number"
+                                step="0.1"
+                                min="1"
+                                max="20"
+                                value={(badgeFaceDiameter / 10).toFixed(1)}
+                                onChange={(e) => {
+                                  const val = parseFloat(e.target.value);
+                                  if (!isNaN(val) && val > 0) {
+                                    setBadgeFaceDiameter(Math.round(val * 10));
+                                  }
+                                }}
+                                className="w-16 px-1.5 py-0.5 border border-slate-300 rounded font-bold text-xs font-mono"
+                              />
+                              <span className="text-slate-500 text-[10px] font-bold">cm</span>
+                            </div>
+                          </div>
+
+                          <div className="bg-white p-2 rounded-xl border border-rose-200/80 space-y-1 shadow-2xs">
+                            <span className="text-[10px] font-bold text-slate-600 block">
+                              Khuôn cắt dập in (Ø)
+                            </span>
+                            <div className="flex items-center gap-1">
+                              <input
+                                type="number"
+                                step="0.1"
+                                min="1"
+                                max="25"
+                                value={(curTargetWidth / 10).toFixed(1)}
+                                onChange={(e) => {
+                                  const val = parseFloat(e.target.value);
+                                  if (!isNaN(val) && val > 0) {
+                                    const mm = Math.round(val * 10);
+                                    updateTargetDimensions(mm, mm);
+                                    setCustomWidthInput(e.target.value);
+                                    setCustomHeightInput(e.target.value);
+                                  }
+                                }}
+                                className="w-16 px-1.5 py-0.5 border border-slate-300 rounded font-bold text-xs font-mono"
+                              />
+                              <span className="text-slate-500 text-[10px] font-bold">cm</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Kiểu nền viền tràn mép (Bleed) - Gọn gàng, giảm text thừa */}
+                        <div className="bg-white p-2.5 rounded-xl border border-rose-200/80 space-y-2 shadow-2xs">
+                          <div className="flex items-center justify-between gap-1.5">
+                            <span className="text-[11px] font-bold text-slate-700 shrink-0">
+                              Kiểu tràn viền:
+                            </span>
+                            <div className="flex items-center gap-1 bg-rose-100/60 p-0.5 rounded-lg border border-rose-200/80">
+                              <button
+                                type="button"
+                                onClick={() => setBadgeBleedMode('solid')}
+                                className={`py-1 px-2.5 text-[11px] font-bold rounded-md transition cursor-pointer flex items-center gap-1 ${
+                                  badgeBleedMode === 'solid'
+                                    ? 'bg-white text-rose-900 shadow-2xs'
+                                    : 'text-rose-700 hover:bg-rose-100/50'
+                                }`}
+                              >
+                                <Palette className="w-3 h-3 text-rose-600" />
+                                <span>Màu bệt</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setBadgeBleedMode('blur_expand')}
+                                className={`py-1 px-2.5 text-[11px] font-bold rounded-md transition cursor-pointer flex items-center gap-1 ${
+                                  badgeBleedMode === 'blur_expand'
+                                    ? 'bg-rose-600 text-white shadow-2xs'
+                                    : 'text-rose-700 hover:bg-rose-100/50'
+                                }`}
+                              >
+                                <Sparkles className="w-3 h-3" />
+                                <span>Mờ Blur</span>
+                              </button>
+                            </div>
+                          </div>
+
+                          {badgeBleedMode === 'blur_expand' ? (
+                            /* Giao diện khi chọn Nền Mờ Blur - Ngắn gọn, súc tích */
+                            <div className="p-2 rounded-lg bg-rose-50/80 border border-rose-200/80 text-[11px] text-rose-800 flex items-center gap-1.5 font-medium">
+                              <Sparkles className="w-3.5 h-3.5 text-rose-600 shrink-0" />
+                              <span>Nền ảnh tự động mở rộng & làm mờ viền ngoài</span>
+                            </div>
+                          ) : (
+                            /* Giao diện khi chọn Màu Bệt */
+                            <div className="pt-0.5 space-y-1.5">
+                              <div className="flex items-center justify-between gap-1">
+                                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">
+                                  Bảng màu viền:
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={handleRescanBadgeColors}
+                                  disabled={isScanningBadgeColors}
+                                  className="text-[10px] font-bold text-rose-700 hover:text-rose-900 bg-rose-50 hover:bg-rose-100 border border-rose-200 px-2 py-0.5 rounded transition cursor-pointer shadow-2xs active:scale-95 flex items-center gap-0.5"
+                                  title="Tự động phân tích ảnh và chọn màu nền chuẩn xác"
+                                >
+                                  {isScanningBadgeColors ? <Loader2 className="w-2.5 h-2.5 animate-spin" /> : <Sparkles className="w-2.5 h-2.5 text-rose-500" />}
+                                  <span>Auto màu</span>
+                                </button>
+                              </div>
+
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                {badgeBleedPalette.map((col, idx) => (
+                                  <button
+                                    key={`palette-${col}-${idx}`}
+                                    type="button"
+                                    onClick={() => setBadgeBleedColor(col)}
+                                    style={{ backgroundColor: col }}
+                                    className={`w-6 h-6 rounded-full border-2 transition-all cursor-pointer shadow-xs ${
+                                      badgeBleedColor.toLowerCase() === col.toLowerCase()
+                                        ? 'border-rose-600 ring-2 ring-rose-400 scale-110'
+                                        : 'border-white hover:scale-105'
+                                    }`}
+                                    title={`Chọn màu ${col}`}
+                                  />
+                                ))}
+
+                                {/* Native Color Picker */}
+                                <label
+                                  className="relative w-6 h-6 rounded-full border border-slate-300 overflow-hidden cursor-pointer shadow-xs flex items-center justify-center hover:scale-105"
+                                  title="Chọn màu tự do"
+                                >
+                                  <input
+                                    type="color"
+                                    value={badgeBleedColor}
+                                    onChange={(e) => setBadgeBleedColor(e.target.value)}
+                                    className="opacity-0 absolute inset-0 w-full h-full cursor-pointer"
+                                  />
+                                  <span
+                                    className="w-full h-full rounded-full"
+                                    style={{ backgroundColor: badgeBleedColor }}
+                                  />
+                                </label>
+
+                                {typeof window !== 'undefined' && 'EyeDropper' in window && (
+                                  <button
+                                    type="button"
+                                    onClick={handleEyedropper}
+                                    className="text-[10px] font-bold text-slate-600 hover:text-slate-900 p-1 rounded hover:bg-slate-100 cursor-pointer flex items-center"
+                                    title="Dùng ống hút màu trên màn hình"
+                                  >
+                                    <Pipette className="w-3.5 h-3.5 text-blue-600" />
+                                  </button>
+                                )}
+
+                                <span className="text-[10px] font-mono text-slate-600 font-bold ml-auto">
+                                  {badgeBleedColor.toUpperCase()}
+                                </span>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Toggle guide marks */}
+                          <label className="flex items-center gap-1.5 pt-1.5 border-t border-slate-100 text-[11px] text-slate-700 cursor-pointer select-none">
+                            <input
+                              type="checkbox"
+                              checked={badgeGuideLines}
+                              onChange={(e) => setBadgeGuideLines(e.target.checked)}
+                              className="rounded text-rose-600 focus:ring-rose-500 w-3.5 h-3.5 cursor-pointer"
+                            />
+                            <span>Vạch căn dập mặt trước (Ø {(badgeFaceDiameter/10).toFixed(1)} cm)</span>
+                          </label>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
                   {/* 2. Kích thước in tùy chỉnh (Custom Dimensions) */}
                   <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200/90 space-y-3">
                     <div className="flex items-center justify-between">
@@ -1977,255 +2237,6 @@ export const CropModal: React.FC<CropModalProps> = ({
                     ) : (
                       /* Circular / Heart diameter input & presets */
                       <div className="space-y-3">
-                        {shape === 'circle' && (
-                          /* 🏅 Chế độ phôi huy hiệu cài áo chuyên dụng (Badge Pin Pro) */
-                          <div className="bg-pink-50/70 border border-pink-200/90 rounded-2xl p-3 space-y-3">
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-1.5">
-                                <span className="text-sm">🏅</span>
-                                <span className="text-xs font-bold text-pink-950">Chế độ phôi huy hiệu cài áo:</span>
-                              </div>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  const nextMode = !badgeMode;
-                                  setBadgeMode(nextMode);
-                                  if (nextMode) {
-                                    handleSelectBadgePreset(44, 55);
-                                  }
-                                }}
-                                className={`text-[11px] font-bold px-2.5 py-1 rounded-full transition cursor-pointer flex items-center gap-1 shadow-2xs ${
-                                  badgeMode
-                                    ? 'bg-pink-600 text-white'
-                                    : 'bg-white text-slate-700 border border-slate-300 hover:bg-slate-100'
-                                }`}
-                              >
-                                <span>{badgeMode ? 'Đang bật' : 'Bật chế độ'}</span>
-                              </button>
-                            </div>
-
-                            {/* Preset buttons */}
-                            <div className="space-y-1.5">
-                              <span className="text-[10px] font-bold text-pink-900/80 uppercase tracking-wider block">
-                                Cỡ huy hiệu chuẩn:
-                              </span>
-                              <div className="grid grid-cols-2 gap-1.5">
-                                {STANDARD_BADGE_SPECS.map((spec) => {
-                                  const isSelected =
-                                    badgeMode &&
-                                    curTargetWidth === spec.cutDiameter &&
-                                    badgeFaceDiameter === spec.faceDiameter;
-                                  return (
-                                    <button
-                                      key={spec.id}
-                                      type="button"
-                                      onClick={() => handleSelectBadgePreset(spec.faceDiameter, spec.cutDiameter)}
-                                      className={`px-2 py-1.5 rounded-xl text-left border transition cursor-pointer flex flex-col ${
-                                        isSelected
-                                          ? 'bg-pink-600 text-white border-pink-600 shadow-2xs'
-                                          : 'bg-white text-slate-800 border-pink-200/80 hover:bg-pink-100/50'
-                                      }`}
-                                    >
-                                      <span className="text-[11px] font-bold">
-                                        Huy hiệu {spec.faceDiameter / 10} cm
-                                      </span>
-                                      <span className={`text-[9.5px] ${isSelected ? 'text-pink-100' : 'text-slate-500'}`}>
-                                        Khuôn cắt {spec.cutDiameter / 10} cm
-                                      </span>
-                                    </button>
-                                  );
-                                })}
-                              </div>
-                            </div>
-
-                            {badgeMode && (
-                              <div className="space-y-3 pt-1 border-t border-pink-200/70">
-                                {/* Diameters display & edit */}
-                                <div className="grid grid-cols-2 gap-2 text-xs">
-                                  <div className="bg-white p-2 rounded-xl border border-pink-200/80 space-y-1">
-                                    <span className="text-[9.5px] font-bold text-slate-500 block">
-                                      Mặt trước hiển thị (Ø)
-                                    </span>
-                                    <div className="flex items-center gap-1">
-                                      <input
-                                        type="number"
-                                        step="0.1"
-                                        min="1"
-                                        max="20"
-                                        value={(badgeFaceDiameter / 10).toFixed(1)}
-                                        onChange={(e) => {
-                                          const val = parseFloat(e.target.value);
-                                          if (!isNaN(val) && val > 0) {
-                                            setBadgeFaceDiameter(Math.round(val * 10));
-                                          }
-                                        }}
-                                        className="w-16 px-1.5 py-0.5 border border-slate-300 rounded font-bold text-xs font-mono"
-                                      />
-                                      <span className="text-slate-500 text-[10px] font-bold">cm</span>
-                                    </div>
-                                  </div>
-
-                                  <div className="bg-white p-2 rounded-xl border border-pink-200/80 space-y-1">
-                                    <span className="text-[9.5px] font-bold text-slate-500 block">
-                                      Khuôn cắt dập in (Ø)
-                                    </span>
-                                    <div className="flex items-center gap-1">
-                                      <input
-                                        type="number"
-                                        step="0.1"
-                                        min="1"
-                                        max="25"
-                                        value={(curTargetWidth / 10).toFixed(1)}
-                                        onChange={(e) => {
-                                          const val = parseFloat(e.target.value);
-                                          if (!isNaN(val) && val > 0) {
-                                            const mm = Math.round(val * 10);
-                                            updateTargetDimensions(mm, mm);
-                                            setCustomWidthInput(e.target.value);
-                                            setCustomHeightInput(e.target.value);
-                                          }
-                                        }}
-                                        className="w-16 px-1.5 py-0.5 border border-slate-300 rounded font-bold text-xs font-mono"
-                                      />
-                                      <span className="text-slate-500 text-[10px] font-bold">cm</span>
-                                    </div>
-                                  </div>
-                                </div>
-
-                                {/* Bleed Mode Switch & Color/Blur Controls */}
-                                <div className="bg-white p-2.5 rounded-xl border border-pink-200/80 space-y-2.5">
-                                  <div className="flex items-center justify-between">
-                                    <span className="text-[11px] font-bold text-slate-800">
-                                      Kiểu nền viền tràn mép (Bleed):
-                                    </span>
-                                  </div>
-
-                                  {/* Segmented Switch: Màu đơn sắc vs Nền mờ Blur */}
-                                  <div className="grid grid-cols-2 gap-1 bg-pink-100/60 p-1 rounded-lg border border-pink-200/80">
-                                    <button
-                                      type="button"
-                                      onClick={() => setBadgeBleedMode('solid')}
-                                      className={`py-1.5 px-2 text-xs font-bold rounded-md transition cursor-pointer flex items-center justify-center gap-1.5 ${
-                                        badgeBleedMode === 'solid'
-                                          ? 'bg-white text-pink-900 shadow-2xs'
-                                          : 'text-pink-700 hover:bg-pink-100/50'
-                                      }`}
-                                    >
-                                      <Palette className="w-3.5 h-3.5 text-pink-600" />
-                                      <span>Màu đơn sắc</span>
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => setBadgeBleedMode('blur_expand')}
-                                      className={`py-1.5 px-2 text-xs font-bold rounded-md transition cursor-pointer flex items-center justify-center gap-1.5 ${
-                                        badgeBleedMode === 'blur_expand'
-                                          ? 'bg-pink-600 text-white shadow-2xs'
-                                          : 'text-pink-700 hover:bg-pink-100/50'
-                                      }`}
-                                    >
-                                      <Sparkles className="w-3.5 h-3.5" />
-                                      <span>Nền mờ Blur</span>
-                                    </button>
-                                  </div>
-
-                                  {badgeBleedMode === 'blur_expand' ? (
-                                    /* Giao diện khi chọn Nền Mờ Blur */
-                                    <div className="p-2.5 rounded-lg bg-pink-50/70 border border-pink-200/80 text-[11px] text-pink-950 space-y-1">
-                                      <div className="flex items-center gap-1.5 font-bold text-pink-800">
-                                        <Sparkles className="w-3.5 h-3.5 text-pink-600 shrink-0" />
-                                        <span>Tràn lề mờ nghệ thuật (Blurred Bleed)</span>
-                                      </div>
-                                      <p className="text-[10.5px] text-pink-700 leading-relaxed">
-                                        Ảnh gốc được tự động mở rộng và làm mờ mềm mại quanh viền ngoài. Giúp sườn phôi huy hiệu sau khi dập liền mạch và chuyển màu tự nhiên 100% với mặt trước!
-                                      </p>
-                                    </div>
-                                  ) : (
-                                    /* Giao diện khi chọn Màu Đơn Sắc */
-                                    <div className="space-y-2 pt-0.5">
-                                      <div className="flex items-center justify-between">
-                                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">
-                                          Chọn màu bệt:
-                                        </span>
-                                        <div className="flex items-center gap-1">
-                                          <button
-                                            type="button"
-                                            onClick={handleRescanBadgeColors}
-                                            disabled={isScanningBadgeColors}
-                                            className="text-[10px] font-bold text-pink-700 hover:text-pink-900 bg-pink-50 hover:bg-pink-100 border border-pink-200 px-2 py-0.5 rounded transition cursor-pointer shadow-2xs active:scale-95"
-                                            title="Tự động phân tích ảnh và chọn màu nền chuẩn xác"
-                                          >
-                                            Auto màu
-                                          </button>
-                                          {typeof window !== 'undefined' && 'EyeDropper' in window && (
-                                            <button
-                                              type="button"
-                                              onClick={handleEyedropper}
-                                              className="text-[10px] font-bold text-slate-600 hover:text-slate-900 p-1 rounded hover:bg-slate-100 cursor-pointer flex items-center"
-                                              title="Dùng ống hút màu trên màn hình"
-                                            >
-                                              <Pipette className="w-3 h-3 text-blue-600" />
-                                            </button>
-                                          )}
-                                        </div>
-                                      </div>
-
-                                      {/* Swatch palette */}
-                                      <div className="flex items-center gap-1.5 flex-wrap">
-                                        {badgeBleedPalette.map((col, idx) => (
-                                          <button
-                                            key={`palette-${col}-${idx}`}
-                                            type="button"
-                                            onClick={() => setBadgeBleedColor(col)}
-                                            style={{ backgroundColor: col }}
-                                            className={`w-6 h-6 rounded-full border-2 transition-all cursor-pointer shadow-xs ${
-                                              badgeBleedColor.toLowerCase() === col.toLowerCase()
-                                                ? 'border-pink-600 ring-2 ring-pink-400 scale-110'
-                                                : 'border-white hover:scale-105'
-                                            }`}
-                                            title={`Chọn màu ${col}`}
-                                          />
-                                        ))}
-
-                                        {/* Native Color Picker */}
-                                        <label
-                                          className="relative w-6 h-6 rounded-full border border-slate-300 overflow-hidden cursor-pointer shadow-xs flex items-center justify-center hover:scale-105"
-                                          title="Chọn màu tự do"
-                                        >
-                                          <input
-                                            type="color"
-                                            value={badgeBleedColor}
-                                            onChange={(e) => setBadgeBleedColor(e.target.value)}
-                                            className="opacity-0 absolute inset-0 w-full h-full cursor-pointer"
-                                          />
-                                          <span
-                                            className="w-full h-full rounded-full"
-                                            style={{ backgroundColor: badgeBleedColor }}
-                                          />
-                                        </label>
-
-                                        <span className="text-[10px] font-mono text-slate-600 font-bold ml-1">
-                                          {badgeBleedColor.toUpperCase()}
-                                        </span>
-                                      </div>
-                                    </div>
-                                  )}
-
-                                  {/* Toggle guide marks */}
-                                  <label className="flex items-center gap-2 pt-1 border-t border-slate-100 text-[11px] text-slate-700 cursor-pointer select-none">
-                                    <input
-                                      type="checkbox"
-                                      checked={badgeGuideLines}
-                                      onChange={(e) => setBadgeGuideLines(e.target.checked)}
-                                      className="rounded text-pink-600 focus:ring-pink-500 w-3.5 h-3.5"
-                                    />
-                                    <span>In vòng nét đứt căn dập mặt trước (Ø {(badgeFaceDiameter/10).toFixed(1)} cm)</span>
-                                  </label>
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        )}
-
                         <div className="space-y-1">
                           <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
                             {shape === 'circle' ? `Đường kính khuôn in Ø (${sizeUnit})` : `Kích thước (${sizeUnit})`}

@@ -609,7 +609,7 @@ export const BatchToolsSidebar: React.FC<BatchToolsSidebarProps> = ({
         /* Scrollable Container */
         <div className="flex-1 overflow-y-auto p-3 space-y-3.5">
           {/* CỤM 1: ĐỒNG BỘ KÍCH THƯỚC (Pastel Sky) */}
-          <div className="bg-sky-50/80 rounded-xl p-3 border border-sky-200/90 shadow-2xs space-y-2 transition hover:border-sky-300">
+          <div className="bg-sky-50/80 rounded-xl p-3 border border-sky-200/90 shadow-sm hover:shadow-md space-y-2 transition-all duration-200 hover:border-sky-300">
             {/* Dòng 1 : Text: "KÍCH THƯỚC" - nút: "Tùy chỉnh" */}
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-1.5 text-sky-950 font-extrabold">
@@ -746,7 +746,7 @@ export const BatchToolsSidebar: React.FC<BatchToolsSidebarProps> = ({
 
           {/* CỤM VIỀN HUY HIỆU BLUR & MÀU ĐƠN SẮC HÀNG LOẠT */}
           {photos.some((p) => p.badgeMode) && (
-            <div className="bg-rose-50/60 rounded-xl p-3 border border-rose-200/80 shadow-2xs space-y-2 transition hover:border-rose-300">
+            <div className="bg-rose-50/60 rounded-xl p-3 border border-rose-200/80 shadow-sm hover:shadow-md space-y-2 transition-all duration-200 hover:border-rose-300">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-1.5 text-rose-950 font-bold">
                   <Sparkles className="w-3.5 h-3.5 text-rose-500" />
@@ -788,7 +788,7 @@ export const BatchToolsSidebar: React.FC<BatchToolsSidebarProps> = ({
           )}
 
           {/* CỤM 2: XOAY & ĐỊNH HƯỚNG (Pastel Indigo) - ĐƯỢC ĐƯA LÊN TRÊN SỐ LƯỢNG */}
-          <div className="bg-indigo-50/70 rounded-xl p-3.5 border border-indigo-200/90 shadow-2xs space-y-2 transition hover:border-indigo-300">
+          <div className="bg-indigo-50/70 rounded-xl p-3.5 border border-indigo-200/90 shadow-sm hover:shadow-md space-y-2 transition-all duration-200 hover:border-indigo-300">
             <button
               type="button"
               id="btn-rotate-all"
@@ -802,7 +802,7 @@ export const BatchToolsSidebar: React.FC<BatchToolsSidebarProps> = ({
           </div>
 
           {/* CỤM 3: NHÂN BẢN HÀNG LOẠT (Pastel Emerald) */}
-          <div className="bg-emerald-50/70 rounded-xl p-3.5 border border-emerald-200/90 shadow-2xs space-y-2.5 transition hover:border-emerald-300">
+          <div className="bg-emerald-50/70 rounded-xl p-3.5 border border-emerald-200/90 shadow-sm hover:shadow-md space-y-2.5 transition-all duration-200 hover:border-emerald-300">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-1.5 text-emerald-950 font-bold">
                 <Layers className="w-3.5 h-3.5 text-emerald-600" />
@@ -874,7 +874,7 @@ export const BatchToolsSidebar: React.FC<BatchToolsSidebarProps> = ({
           </div>
 
           {/* CỤM 4: TỰ ĐỘNG CÂN CHỈNH MÀU SẮC & ÁNH SÁNG (Pastel Purple) */}
-          <div className="bg-purple-50/70 rounded-xl p-3 border border-purple-200/90 shadow-2xs transition hover:border-purple-300">
+          <div className="bg-purple-50/70 rounded-xl p-3 border border-purple-200/90 shadow-sm hover:shadow-md transition-all duration-200 hover:border-purple-300">
             <div className="flex items-center gap-1.5">
               <button
                 type="button"
@@ -946,7 +946,7 @@ export const BatchToolsSidebar: React.FC<BatchToolsSidebarProps> = ({
           </div>
 
           {/* CỤM 5: CHẤT LƯỢNG & ĐỘ NÉT (LÀM NÉT & PHỤC HỒI) (Pastel Amber) */}
-          <div className="bg-amber-50/70 rounded-xl p-3 border border-amber-200/90 shadow-2xs space-y-2.5 transition hover:border-amber-300">
+          <div className="bg-amber-50/70 rounded-xl p-3 border border-amber-200/90 shadow-sm hover:shadow-md space-y-2.5 transition-all duration-200 hover:border-amber-300">
             {/* Main Enhance Button + Revert Icon Button on 1 row */}
             <div className="flex items-center gap-1.5">
               <button
@@ -987,7 +987,7 @@ export const BatchToolsSidebar: React.FC<BatchToolsSidebarProps> = ({
             </div>
 
             {/* Sharpness & Quality Intensity Slider Box */}
-            <div className="bg-white border border-amber-200 rounded-lg p-2.5 space-y-2">
+            <div className="bg-white border border-amber-200 rounded-lg p-2.5 space-y-2 shadow-xs">
               <label className="flex items-center gap-2 text-[11px] font-medium text-slate-700 bg-amber-100/60 p-2 rounded-lg cursor-pointer select-none border border-amber-200/80">
                 <input
                   type="checkbox"

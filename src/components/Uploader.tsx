@@ -190,7 +190,7 @@ export const Uploader: React.FC<UploaderProps> = ({
             cropH: crop.cropH,
             rotation: finalRotation,
             badgeMode: isBadge,
-            badgeFaceDiameter: isBadge ? (activePreset.badgeFaceDiameter || 44) : undefined,
+            badgeFaceDiameter: isBadge ? (activePreset.badgeFaceDiameter || 43) : undefined,
             badgeBleedColor: isBadge ? (badgeBleedColor || '#ffffff') : undefined,
             badgeBleedPalette: isBadge ? badgeBleedPalette : undefined,
             badgeGuideLines: false,

@@ -70,7 +70,7 @@ export interface PhotoItem {
   orderTag?: string; // Nhãn mã đơn hoặc tên khách riêng cho ảnh này (ví dụ: #DH01, Khách Tuấn)
   freePositions?: Record<number, { x: number; y: number; pageNumber?: number }>; // Vị trí tự do trên trang A4 theo từng bản in (instanceIndex)
   badgeMode?: boolean; // Kích hoạt chế độ phôi huy hiệu chuyên dụng
-  badgeFaceDiameter?: number; // Đường kính mặt chính diện huy hiệu (mm), ví dụ 44mm (cho khuôn cắt 55mm)
+  badgeFaceDiameter?: number; // Đường kính mặt chính diện huy hiệu (mm), ví dụ 43mm (cho khuôn cắt 54mm)
   badgeBleedColor?: string; // Mã màu HEX đổ nền viền bọc mép (tự động nhận diện từ ảnh khách)
   badgeBleedPalette?: string[]; // 5 màu gợi ý từ biên ảnh
   badgeGuideLines?: boolean; // Hiển thị vòng căn dập mặt chính (mặc định false)
@@ -143,9 +143,9 @@ export interface SizePreset {
 
 export const DEFAULT_SIZE_PRESETS: SizePreset[] = [
   // 🏅 Huy hiệu cài áo chuyên dụng (Badge Pin - Tự động đổ nền viền bọc mép)
-  { id: 'badge_44_to_55', label: 'Huy hiệu 4.4 cm (Khuôn 5.5 cm)', category: '🏅 Huy hiệu cài áo (Badge Pin)', width: 55, height: 55, shape: 'circle', isBadgePreset: true, badgeFaceDiameter: 44 },
-  { id: 'badge_58_to_70', label: 'Huy hiệu 5.8 cm (Khuôn 7.0 cm)', category: '🏅 Huy hiệu cài áo (Badge Pin)', width: 70, height: 70, shape: 'circle', isBadgePreset: true, badgeFaceDiameter: 58 },
-  { id: 'badge_100_to_115', label: 'Huy hiệu 10.0 cm (Khuôn 11.5 cm)', category: '🏅 Huy hiệu cài áo (Badge Pin)', width: 115, height: 115, shape: 'circle', isBadgePreset: true, badgeFaceDiameter: 100 },
+  { id: 'badge_44_to_55', label: 'Huy hiệu 4.4 cm (Khuôn 5.4 cm)', category: '🏅 Huy hiệu cài áo (Badge Pin)', width: 54, height: 54, shape: 'circle', isBadgePreset: true, badgeFaceDiameter: 43 },
+  { id: 'badge_58_to_70', label: 'Huy hiệu 5.8 cm (Khuôn 6.9 cm)', category: '🏅 Huy hiệu cài áo (Badge Pin)', width: 69, height: 69, shape: 'circle', isBadgePreset: true, badgeFaceDiameter: 57 },
+  { id: 'badge_100_to_115', label: 'Huy hiệu 10.0 cm (Khuôn 11.4 cm)', category: '🏅 Huy hiệu cài áo (Badge Pin)', width: 114, height: 114, shape: 'circle', isBadgePreset: true, badgeFaceDiameter: 99 },
 
   // Ảnh tiêu chuẩn & Phổ biến (Standard & Popular)
   { id: '30x80_rect', label: '3 x 8 cm (Bookmark / Photostrip)', category: 'Cơ bản & Phổ biến', width: 30, height: 80, shape: 'rect' },
