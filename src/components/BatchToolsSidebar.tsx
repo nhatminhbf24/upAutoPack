@@ -14,7 +14,8 @@ import {
   Plus,
   Scissors,
   Download,
-  FolderArchive,
+  ChevronsLeft,
+  ChevronsRight,
 } from 'lucide-react';
 import { PhotoItem, DEFAULT_SIZE_PRESETS, DEFAULT_ADJUSTMENTS, SizePreset, OrientationMode } from '../types';
 import { rotateImageBase64, calculateCrop, createOptimizedPreview, getOrientedDimensions, formatPhotoToPreset, getShortPresetLabel, getImageDimensions } from '../utils/imageUtils';
@@ -528,38 +529,81 @@ export const BatchToolsSidebar: React.FC<BatchToolsSidebarProps> = ({
     <aside
       id="batch-tools-sidebar"
       className={`no-print transition-all duration-300 flex flex-col bg-slate-50/80 border-r border-slate-200/90 h-full overflow-hidden z-20 ${
-        isCollapsed ? 'w-12 shrink-0' : 'w-76 shrink-0'
+        isCollapsed ? 'w-11 shrink-0' : 'w-76 shrink-0'
       }`}
     >
       {/* Header */}
-      <div className="p-3.5 border-b border-slate-200/80 bg-white sticky top-0 flex items-center justify-between z-10">
-        <div className="flex items-center gap-2 overflow-hidden">
-          <div className="p-1.5 rounded-lg bg-blue-50 text-blue-600 shrink-0">
-            <Wand2 className="w-4 h-4" />
-          </div>
-          {!isCollapsed && (
-            <h2 className="text-[13px] font-bold text-slate-800 uppercase tracking-wide truncate">
-              Thao tác hàng loạt
-            </h2>
-          )}
-        </div>
-        {!isCollapsed && photos.length > 0 && (
-          <span className="text-[10px] bg-blue-50 text-blue-700 border border-blue-200 px-1.5 py-0.5 rounded-full font-bold">
-            {photos.length} ảnh
-          </span>
-        )}
-      </div>
-
       {isCollapsed ? (
-        <div className="flex-1 flex flex-col items-center py-4 gap-3 text-slate-400">
+        /* Header khi thu gọn: Nút mở rộng trên đỉnh */
+        <div className="p-2 border-b border-slate-200/80 bg-white flex items-center justify-center">
           <button
             type="button"
             onClick={onToggleCollapse}
-            className="p-2 hover:bg-slate-200 rounded-lg text-slate-600 transition"
-            title="Mở rộng bảng Thao tác hàng loạt"
+            className="p-1.5 rounded-lg text-slate-500 hover:text-blue-700 hover:bg-blue-50 transition cursor-pointer"
+            title="Bấm để mở rộng Thao tác hàng loạt"
           >
-            <Wand2 className="w-5 h-5 text-blue-600" />
+            <ChevronsRight className="w-4 h-4 text-blue-600" />
           </button>
+        </div>
+      ) : (
+        /* Header khi mở rộng */
+        <div className="p-3 border-b border-slate-200/80 bg-white sticky top-0 flex items-center justify-between z-10">
+          <div className="flex items-center gap-2 overflow-hidden">
+            <div className="p-1.5 rounded-lg bg-blue-50 text-blue-600 shrink-0">
+              <Wand2 className="w-4 h-4" />
+            </div>
+            <h2 className="text-[13px] font-bold text-slate-800 uppercase tracking-wide truncate">
+              Thao tác hàng loạt
+            </h2>
+          </div>
+
+          <div className="flex items-center gap-1.5 shrink-0">
+            {photos.length > 0 && (
+              <span className="text-[10px] bg-blue-50 text-blue-700 border border-blue-200 px-1.5 py-0.5 rounded-full font-bold">
+                {photos.length} ảnh
+              </span>
+            )}
+            {onToggleCollapse && (
+              <button
+                type="button"
+                onClick={onToggleCollapse}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition cursor-pointer"
+                title="Thu gọn bảng Thao tác hàng loạt"
+              >
+                <ChevronsLeft className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {isCollapsed ? (
+        /* Thân cột khi thu gọn: Tiêu đề chạy dọc theo cột (như hình mẫu Kanban) */
+        <div
+          onClick={onToggleCollapse}
+          className="flex-1 flex flex-col items-center justify-between py-6 cursor-pointer hover:bg-blue-50/40 transition group select-none"
+          title={`Bấm để mở rộng Thao tác hàng loạt (${photos.length} ảnh)`}
+        >
+          <div className="p-1.5 rounded-lg bg-blue-100/70 text-blue-700 group-hover:scale-110 transition shadow-2xs">
+            <Wand2 className="w-4 h-4" />
+          </div>
+
+          {/* Dải chữ chạy dọc theo thân cột */}
+          <div
+            style={{ writingMode: 'vertical-rl' }}
+            className="text-[11px] font-extrabold uppercase tracking-widest text-slate-700 group-hover:text-blue-700 flex items-center gap-2 py-4 transition"
+          >
+            <span>Thao tác hàng loạt</span>
+            {photos.length > 0 && (
+              <span className="text-[10px] font-bold text-blue-700 bg-blue-100 border border-blue-300 px-1.5 py-0.5 rounded-full shadow-2xs">
+                {photos.length} ảnh
+              </span>
+            )}
+          </div>
+
+          <span className="text-[9px] font-mono font-bold text-slate-400 group-hover:text-blue-600">
+            Kích thước • Xoay
+          </span>
         </div>
       ) : (
         /* Scrollable Container */
@@ -699,6 +743,49 @@ export const BatchToolsSidebar: React.FC<BatchToolsSidebarProps> = ({
                   </label>
                 </div>
               </div>
+
+          {/* CỤM VIỀN HUY HIỆU BLUR & MÀU ĐƠN SẮC HÀNG LOẠT */}
+          {photos.some((p) => p.badgeMode) && (
+            <div className="bg-pink-50/75 rounded-xl p-3 border border-pink-200/90 shadow-2xs space-y-2 transition hover:border-pink-300">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5 text-pink-950 font-bold">
+                  <Sparkles className="w-3.5 h-3.5 text-pink-600" />
+                  <span className="text-[11px] uppercase tracking-wide">VIỀN PHÔI HUY HIỆU</span>
+                </div>
+                <span className="text-[10px] text-pink-700 font-bold bg-pink-100 border border-pink-200 px-1.5 py-0.5 rounded">
+                  {photos.filter((p) => p.badgeMode).length} phôi
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    photos.forEach((p) => {
+                      if (p.badgeMode) onUpdatePhoto(p.id, { badgeBleedMode: 'blur_expand' });
+                    });
+                    onToast('success', 'Đã bật viền mờ Blur cho tất cả phôi huy hiệu');
+                  }}
+                  className="py-1.5 px-2 bg-pink-600 hover:bg-pink-700 text-white rounded-lg text-xs font-bold transition flex items-center justify-center gap-1 shadow-2xs cursor-pointer active:scale-95"
+                >
+                  <Sparkles className="w-3 h-3" />
+                  <span>Nền mờ Blur</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    photos.forEach((p) => {
+                      if (p.badgeMode) onUpdatePhoto(p.id, { badgeBleedMode: 'solid' });
+                    });
+                    onToast('info', 'Đã chuyển tất cả phôi huy hiệu sang Màu đơn sắc');
+                  }}
+                  className="py-1.5 px-2 bg-white hover:bg-pink-100 text-pink-800 border border-pink-300 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1 shadow-2xs cursor-pointer active:scale-95"
+                >
+                  <span>Màu đơn sắc</span>
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* CỤM 2: XOAY & ĐỊNH HƯỚNG (Pastel Indigo) - ĐƯỢC ĐƯA LÊN TRÊN SỐ LƯỢNG */}
           <div className="bg-indigo-50/70 rounded-xl p-3.5 border border-indigo-200/90 shadow-2xs space-y-2 transition hover:border-indigo-300">
@@ -940,33 +1027,6 @@ export const BatchToolsSidebar: React.FC<BatchToolsSidebarProps> = ({
               </div>
             </div>
           </div>
-
-          {/* CỤM 6: TẢI PNG TÁCH NỀN HÀNG LOẠT (Pastel Violet/Purple) */}
-          {onExportAllPhotosZip && (
-            <div className="bg-purple-50/70 rounded-xl p-3 border border-purple-200/90 shadow-2xs space-y-2 transition hover:border-purple-300">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1.5 text-purple-950 font-bold">
-                  <Sparkles className="w-3.5 h-3.5 text-purple-600" />
-                  <span className="text-[11px] uppercase tracking-wide">TẢI PNG TÁCH NỀN</span>
-                </div>
-                <span className="text-[10px] text-purple-700 font-bold bg-purple-100 border border-purple-200 px-1.5 py-0.5 rounded">
-                  Trong suốt
-                </span>
-              </div>
-
-              <button
-                type="button"
-                id="btn-batch-download-zip-transparent"
-                onClick={onExportAllPhotosZip}
-                disabled={photos.length === 0}
-                className="w-full flex items-center justify-center gap-1.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 disabled:opacity-50 text-white px-3 py-2.5 rounded-xl text-xs font-bold shadow-sm transition active:scale-95 cursor-pointer"
-                title="Đóng gói tất cả ảnh đã cắt/tách nền với độ phân giải cao 300 DPI vào file ZIP"
-              >
-                <FolderArchive className="w-3.5 h-3.5" />
-                <span>Tải trọn bộ PNG tách nền (.ZIP)</span>
-              </button>
-            </div>
-          )}
         </div>
       )}
     </aside>

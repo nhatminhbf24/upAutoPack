@@ -1471,7 +1471,10 @@ export const A4PreviewArea: React.FC<A4PreviewAreaProps> = ({
                             top: `${currentItemY}mm`,
                             width: `${renderW}mm`,
                             height: `${renderH}mm`,
-                            backgroundColor: item.badgeMode ? (item.badgeBleedColor || '#ffffff') : undefined,
+                            backgroundColor:
+                              item.badgeMode && item.badgeBleedMode !== 'blur_expand'
+                                ? item.badgeBleedColor || '#ffffff'
+                                : undefined,
                           }}
                           className={`bg-white z-20 overflow-hidden select-none group/box ${
                             isFreeformMode
@@ -1488,27 +1491,52 @@ export const A4PreviewArea: React.FC<A4PreviewAreaProps> = ({
                         {/* Image Content */}
                         {item.badgeMode && item.badgeFaceDiameter ? (
                           /* 🏅 Chế độ phôi huy hiệu cài áo: Mặt chính diện nằm lọt lòng giữa viền bọc */
-                          <div
-                            className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full overflow-hidden pointer-events-none"
-                            style={{
-                              width: `${Math.min(100, (item.badgeFaceDiameter / (item.targetWidth || 55)) * 100)}%`,
-                              height: `${Math.min(100, (item.badgeFaceDiameter / (item.targetHeight || 55)) * 100)}%`,
-                            }}
-                          >
-                            <img
-                              src={item.previewSrc || item.originalSrc}
-                              alt={item.name}
-                              draggable={false}
-                              decoding="async"
-                              loading="lazy"
-                              className="absolute max-w-none pointer-events-none transition-none"
+                          <div className="w-full h-full relative overflow-hidden rounded-full">
+                            {/* Nền tràn lề: Làm mờ mở rộng (Blurred Bleed) */}
+                            {item.badgeBleedMode === 'blur_expand' && (
+                              <div className="absolute inset-0 overflow-hidden pointer-events-none">
+                                <img
+                                  src={item.previewSrc || item.originalSrc}
+                                  alt=""
+                                  className="w-full h-full object-cover pointer-events-none scale-135 filter blur-[3.5px] brightness-95"
+                                />
+                              </div>
+                            )}
+
+                            {/* Mặt chính diện sắc nét nằm chính giữa */}
+                            <div
+                              className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full overflow-hidden pointer-events-none shadow-xs"
                               style={{
-                                width: `${percentW}%`,
-                                height: `${percentH}%`,
-                                left: `${percentX}%`,
-                                top: `${percentY}%`,
+                                width: `${Math.min(100, (item.badgeFaceDiameter / (item.targetWidth || 55)) * 100)}%`,
+                                height: `${Math.min(100, (item.badgeFaceDiameter / (item.targetHeight || 55)) * 100)}%`,
                               }}
-                            />
+                            >
+                              <img
+                                src={item.previewSrc || item.originalSrc}
+                                alt={item.name}
+                                draggable={false}
+                                decoding="async"
+                                loading="lazy"
+                                className="absolute max-w-none pointer-events-none transition-none"
+                                style={{
+                                  width: `${percentW}%`,
+                                  height: `${percentH}%`,
+                                  left: `${percentX}%`,
+                                  top: `${percentY}%`,
+                                }}
+                              />
+                            </div>
+
+                            {/* Vòng nét đứt căn dập mặt trước (nếu bật) */}
+                            {item.badgeGuideLines && (
+                              <div
+                                className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full border border-dashed border-white/80 pointer-events-none"
+                                style={{
+                                  width: `${Math.min(100, (item.badgeFaceDiameter / (item.targetWidth || 55)) * 100)}%`,
+                                  height: `${Math.min(100, (item.badgeFaceDiameter / (item.targetHeight || 55)) * 100)}%`,
+                                }}
+                              />
+                            )}
                           </div>
                         ) : item.isRotated ? (
                           <div

@@ -222,9 +222,31 @@ export async function exportPagesToPdf(
             ctx.arc(centerX, centerY, cutRadius, 0, Math.PI * 2);
             ctx.clip();
 
-            // Đổ màu nền viền bọc (Bleed margin)
-            ctx.fillStyle = item.badgeBleedColor || '#ffffff';
-            ctx.fillRect(centerX - cutRadius, centerY - cutRadius, cutRadius * 2, cutRadius * 2);
+            // Đổ nền viền bọc (Bleed margin: Màu đơn sắc hoặc Nền mở rộng làm mờ Blur)
+            if (item.badgeBleedMode === 'blur_expand') {
+              // 🌟 CHẾ ĐỘ NỀN MỜ BLUR MỞ RỘNG (Blurred Image Bleed)
+              ctx.save();
+              ctx.filter = 'blur(18px)';
+              const bgScale = 1.35;
+              const bgW = cutRadius * 2 * bgScale;
+              const bgH = cutRadius * 2 * bgScale;
+              ctx.drawImage(
+                img,
+                item.cropX,
+                item.cropY,
+                actualCropW,
+                actualCropH,
+                centerX - bgW / 2,
+                centerY - bgH / 2,
+                bgW,
+                bgH
+              );
+              ctx.restore();
+            } else {
+              // Đổ màu nền viền bọc (Bleed margin) - Màu đơn sắc
+              ctx.fillStyle = item.badgeBleedColor || '#ffffff';
+              ctx.fillRect(centerX - cutRadius, centerY - cutRadius, cutRadius * 2, cutRadius * 2);
+            }
 
             // Mặt trước chính diện
             const faceRatio = Math.min(1, item.badgeFaceDiameter / (item.targetWidth || 55));
@@ -247,6 +269,18 @@ export async function exportPagesToPdf(
               faceDiam
             );
             ctx.restore();
+
+            // Nếu bật vẽ vòng căn dập mặt trước
+            if (item.badgeGuideLines) {
+              ctx.save();
+              ctx.beginPath();
+              ctx.arc(centerX, centerY, faceRadius, 0, Math.PI * 2);
+              ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+              ctx.lineWidth = 1;
+              ctx.setLineDash([8, 8]);
+              ctx.stroke();
+              ctx.restore();
+            }
           } else {
             // Apply Shape Clip with Bleed
             if (item.shape === 'circle') {

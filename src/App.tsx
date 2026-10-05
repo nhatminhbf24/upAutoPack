@@ -94,6 +94,10 @@ export default function App() {
   const [pendingRestoreMeta, setPendingRestoreMeta] = useState<ProjectMetadata | null>(null);
   const [isAutoSaved, setIsAutoSaved] = useState<boolean>(false);
 
+  // Sidebar Collapse States (Mặc định cả 2 cột đều mở rộng như hiện tại)
+  const [isListSidebarCollapsed, setIsListSidebarCollapsed] = useState<boolean>(false);
+  const [isBatchSidebarCollapsed, setIsBatchSidebarCollapsed] = useState<boolean>(false);
+
   // Custom Size Presets & Modal State
   const [customPresets, setCustomPresets] = useState<SizePreset[]>(() => {
     try {
@@ -948,6 +952,8 @@ export default function App() {
             onToast={addToast}
             smartCrop={settings.smartCrop}
             onMovePhoto={handleMovePhoto}
+            isCollapsed={isListSidebarCollapsed}
+            onToggleCollapse={() => setIsListSidebarCollapsed((c) => !c)}
           />
 
           {/* Column 2: Batch Actions / Tools Sidebar */}
@@ -966,6 +972,8 @@ export default function App() {
             customPresets={customPresets}
             onOpenCustomSizeModal={() => setCustomSizeModalConfig({ isOpen: true, targetPhoto: null })}
             onExportAllPhotosZip={handleExportAllPhotosZip}
+            isCollapsed={isBatchSidebarCollapsed}
+            onToggleCollapse={() => setIsBatchSidebarCollapsed((c) => !c)}
           />
 
           {/* Column 3: Settings Sidebar */}

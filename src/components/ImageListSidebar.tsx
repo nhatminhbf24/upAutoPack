@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Trash2,
   RotateCw,
@@ -10,13 +11,13 @@ import {
   Loader2,
   Sliders,
   Ruler,
-  ChevronUp,
   ChevronDown,
-  GripVertical,
   AlertTriangle,
   Zap,
   Check,
   SlidersHorizontal,
+  ChevronsLeft,
+  ChevronsRight,
 } from 'lucide-react';
 import { PhotoItem, DEFAULT_SIZE_PRESETS, SizePreset } from '../types';
 import { rotateImageBase64, calculateCrop, createOptimizedPreview } from '../utils/imageUtils';
@@ -60,6 +61,163 @@ export const ImageListSidebar: React.FC<ImageListSidebarProps> = ({
   const [rotatingId, setRotatingId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [upscaleMenuId, setUpscaleMenuId] = useState<string | null>(null);
+
+  // Hệ thống kéo thả thẻ Kanban: Thẻ nhấc nghiêng 3° + SIZED SLOT (ô trống bằng chiều cao thẻ)
+  interface DragState {
+    dragIndex: number;
+    hoverIndex: number;
+    cardHeight: number;
+    cardWidth: number;
+    photo: PhotoItem;
+    offsetX: number;
+    offsetY: number;
+    pointerPos: { x: number; y: number };
+  }
+
+  const [dragState, setDragState] = useState<DragState | null>(null);
+  const dragStateRef = useRef<DragState | null>(null);
+  dragStateRef.current = dragState;
+  const listContainerRef = useRef<HTMLDivElement | null>(null);
+
+  const handleCardPointerDown = (
+    e: React.PointerEvent<HTMLDivElement>,
+    index: number,
+    photo: PhotoItem
+  ) => {
+    if (!onMovePhoto || photos.length <= 1) return;
+    const target = e.target as HTMLElement | null;
+    if (target?.closest('button, select, input, label, a, textarea')) {
+      return;
+    }
+
+    const cardEl = e.currentTarget;
+    const rect = cardEl.getBoundingClientRect();
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const offsetX = startX - rect.left;
+    const offsetY = startY - rect.top;
+
+    // Đo tọa độ các thẻ ban đầu một lần duy nhất trước khi bắt đầu kéo
+    // Mốc tọa độ này bất biến trong suốt quá trình kéo, loại bỏ 100% hiện tượng giật do DOM bị dạt
+    const scrollContainer = listContainerRef.current;
+    const rootNode: ParentNode = scrollContainer || document;
+    const cardElements = Array.from(rootNode.querySelectorAll('[data-photo-item-index]')) as HTMLElement[];
+
+    const initialMidpoints = cardElements
+      .map((el) => {
+        const r = el.getBoundingClientRect();
+        return {
+          idx: parseInt(el.getAttribute('data-photo-item-index') || '0', 10),
+          midY: r.top + r.height / 2,
+        };
+      })
+      .sort((a, b) => a.midY - b.midY);
+
+    let hasStartedDrag = false;
+
+    const onPointerMove = (moveEvent: PointerEvent) => {
+      const dist = Math.hypot(moveEvent.clientX - startX, moveEvent.clientY - startY);
+      if (!hasStartedDrag && dist > 5) {
+        hasStartedDrag = true;
+        document.body.style.userSelect = 'none';
+        document.body.style.cursor = 'grabbing';
+      }
+
+      if (hasStartedDrag) {
+        // Tự động cuộn danh sách khi rê sát mép trên/dưới
+        if (scrollContainer) {
+          const containerRect = scrollContainer.getBoundingClientRect();
+          if (moveEvent.clientY < containerRect.top + 45) {
+            scrollContainer.scrollTop -= 6;
+          } else if (moveEvent.clientY > containerRect.bottom - 45) {
+            scrollContainer.scrollTop += 6;
+          }
+        }
+
+        // Xác định vị trí mục tiêu tuyệt đối chuẩn xác dựa trên danh sách mốc tọa độ cố định
+        let targetIdx = initialMidpoints.length - 1;
+        for (let i = 0; i < initialMidpoints.length; i++) {
+          if (moveEvent.clientY < initialMidpoints[i].midY) {
+            targetIdx = i;
+            break;
+          }
+        }
+
+        targetIdx = Math.max(0, Math.min(photos.length - 1, targetIdx));
+
+        setDragState({
+          dragIndex: index,
+          hoverIndex: targetIdx,
+          cardHeight: rect.height,
+          cardWidth: rect.width,
+          photo,
+          offsetX,
+          offsetY,
+          pointerPos: { x: moveEvent.clientX, y: moveEvent.clientY },
+        });
+      }
+    };
+
+    const onPointerUp = () => {
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('pointerup', onPointerUp);
+      window.removeEventListener('pointercancel', onPointerUp);
+      document.body.style.userSelect = '';
+      document.body.style.cursor = '';
+
+      const current = dragStateRef.current;
+      if (hasStartedDrag && current) {
+        if (current.dragIndex !== current.hoverIndex && onMovePhoto) {
+          onMovePhoto(current.dragIndex, current.hoverIndex);
+        }
+        setDragState(null);
+      } else {
+        onSelectPhoto?.(photo.id);
+      }
+    };
+
+    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointerup', onPointerUp);
+    window.addEventListener('pointercancel', onPointerUp);
+  };
+
+  // Tạo danh sách hiển thị với SIZED SLOT (ô trống kích thước bằng thẻ thật) tại vị trí hover
+  const displayItems = useMemo(() => {
+    if (!dragState) {
+      return photos.map((p, i) => ({ type: 'card' as const, photo: p, index: i }));
+    }
+
+    const itemsWithoutDragged = photos
+      .map((p, i) => ({ photo: p, index: i }))
+      .filter((item) => item.index !== dragState.dragIndex);
+
+    const result: Array<
+      | { type: 'card'; photo: PhotoItem; index: number }
+      | { type: 'placeholder'; height: number; dragIndex: number; targetIndex: number }
+    > = [];
+
+    const insertIdx = Math.max(0, Math.min(itemsWithoutDragged.length, dragState.hoverIndex));
+
+    for (let i = 0; i <= itemsWithoutDragged.length; i++) {
+      if (i === insertIdx) {
+        result.push({
+          type: 'placeholder',
+          height: dragState.cardHeight,
+          dragIndex: dragState.dragIndex,
+          targetIndex: insertIdx,
+        });
+      }
+      if (i < itemsWithoutDragged.length) {
+        result.push({
+          type: 'card',
+          photo: itemsWithoutDragged[i].photo,
+          index: itemsWithoutDragged[i].index,
+        });
+      }
+    }
+
+    return result;
+  }, [photos, dragState]);
 
   // Tự động cuộn đến ảnh tương ứng khi người dùng nhấp chọn trên trang A4
   useEffect(() => {
@@ -318,53 +476,93 @@ export const ImageListSidebar: React.FC<ImageListSidebarProps> = ({
     <aside
       id="list-sidebar"
       className={`no-print transition-all duration-300 flex flex-col bg-slate-50/80 border-r border-slate-200/90 h-full overflow-hidden z-20 ${
-        isCollapsed ? 'w-12 shrink-0' : 'w-80 shrink-0'
+        isCollapsed ? 'w-11 shrink-0' : 'w-[335px] shrink-0'
       }`}
     >
       {/* Sidebar Header */}
-      <div className="p-3.5 border-b border-slate-200/80 bg-white sticky top-0 flex justify-between items-center z-10">
-        <div className="flex items-center gap-2 overflow-hidden">
-          <div className="p-1.5 rounded-lg bg-emerald-50 text-emerald-600 shrink-0">
-            <Layers className="w-4 h-4" />
-          </div>
-          {!isCollapsed && (
-            <span className="text-[13px] font-bold text-slate-800 uppercase tracking-wide truncate">
-              Danh sách ({photos.length})
-            </span>
-          )}
-          {!isCollapsed && photos.length > 0 && (
-            <span className="text-[11px] bg-emerald-50 text-emerald-700 border border-emerald-200 px-1.5 py-0.5 rounded font-bold">
-              {totalCopies} bản
-            </span>
-          )}
-        </div>
-
-        {!isCollapsed && photos.length > 0 && (
-          <button
-            id="btn-clear-all"
-            type="button"
-            onClick={onClearAll}
-            className="text-[11px] font-bold text-rose-600 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 px-2 py-1 rounded transition cursor-pointer"
-          >
-            Xóa hết
-          </button>
-        )}
-      </div>
-
       {isCollapsed ? (
-        <div className="flex-1 flex flex-col items-center py-4 gap-3 text-slate-400">
+        /* Header khi thu gọn: Nút mở rộng trên đỉnh */
+        <div className="p-2 border-b border-slate-200/80 bg-white flex items-center justify-center">
           <button
             type="button"
             onClick={onToggleCollapse}
-            className="p-2 hover:bg-slate-200 rounded-lg text-slate-600 transition"
-            title="Mở rộng danh sách ảnh"
+            className="p-1.5 rounded-lg text-slate-500 hover:text-emerald-700 hover:bg-emerald-50 transition cursor-pointer"
+            title="Bấm để mở rộng Danh sách ảnh"
           >
-            <Layers className="w-5 h-5 text-emerald-600" />
+            <ChevronsRight className="w-4 h-4 text-emerald-600" />
           </button>
         </div>
       ) : (
+        /* Header khi mở rộng */
+        <div className="p-3 border-b border-slate-200/80 bg-white sticky top-0 flex justify-between items-center z-10">
+          <div className="flex items-center gap-2 overflow-hidden">
+            <div className="p-1.5 rounded-lg bg-emerald-50 text-emerald-600 shrink-0">
+              <Layers className="w-4 h-4" />
+            </div>
+            <span className="text-[13px] font-bold text-slate-800 uppercase tracking-wide truncate">
+              Danh sách ({photos.length})
+            </span>
+            {photos.length > 0 && (
+              <span className="text-[11px] bg-emerald-50 text-emerald-700 border border-emerald-200 px-1.5 py-0.5 rounded font-bold shrink-0">
+                {totalCopies} bản
+              </span>
+            )}
+          </div>
+
+          <div className="flex items-center gap-1 shrink-0">
+            {photos.length > 0 && (
+              <button
+                id="btn-clear-all"
+                type="button"
+                onClick={onClearAll}
+                className="text-[11px] font-bold text-rose-600 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 px-2 py-1 rounded transition cursor-pointer"
+              >
+                Xóa hết
+              </button>
+            )}
+            {onToggleCollapse && (
+              <button
+                type="button"
+                onClick={onToggleCollapse}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition cursor-pointer"
+                title="Thu gọn danh sách ảnh"
+              >
+                <ChevronsLeft className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {isCollapsed ? (
+        /* Thân cột khi thu gọn: Tiêu đề chạy dọc theo cột (như hình mẫu Kanban) */
+        <div
+          onClick={onToggleCollapse}
+          className="flex-1 flex flex-col items-center justify-between py-6 cursor-pointer hover:bg-emerald-50/40 transition group select-none"
+          title={`Bấm để mở rộng Danh sách (${photos.length} ảnh • ${totalCopies} bản in)`}
+        >
+          <div className="p-1.5 rounded-lg bg-emerald-100/70 text-emerald-700 group-hover:scale-110 transition shadow-2xs">
+            <Layers className="w-4 h-4" />
+          </div>
+
+          {/* Dải chữ chạy dọc theo thân cột */}
+          <div
+            style={{ writingMode: 'vertical-rl' }}
+            className="text-[11px] font-extrabold uppercase tracking-widest text-slate-700 group-hover:text-emerald-700 flex items-center gap-2 py-4 transition"
+          >
+            <span>Danh sách ảnh</span>
+            <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 border border-emerald-300 px-1.5 py-0.5 rounded-full shadow-2xs">
+              {photos.length} ảnh • {totalCopies} bản
+            </span>
+          </div>
+
+          <span className="text-[9px] font-mono font-bold text-slate-400 group-hover:text-emerald-600">
+            #{photos.length}
+          </span>
+        </div>
+      ) : (
         /* Sidebar Content */
-        <div className="flex-1 overflow-y-auto p-3 space-y-2.5">
+        <div ref={listContainerRef} className="flex-1 overflow-y-auto p-3 space-y-2.5">
           {/* Empty State */}
           {photos.length === 0 ? (
             <div className="text-center py-16 px-4 border-2 border-dashed border-emerald-200/80 rounded-xl bg-emerald-50/30 space-y-2.5">
@@ -379,7 +577,30 @@ export const ImageListSidebar: React.FC<ImageListSidebarProps> = ({
           ) : (
             /* Image Cards List */
             <div className="space-y-2.5">
-              {photos.map((photo, index) => {
+              {displayItems.map((item) => {
+                if (item.type === 'placeholder') {
+                  return (
+                    <div
+                      key={`placeholder-slot-${item.targetIndex}`}
+                      style={{ minHeight: item.height || 140 }}
+                      className="w-full border-2 border-dashed border-emerald-500 bg-emerald-50/60 rounded-xl flex flex-col items-center justify-center gap-2 text-emerald-700 transition-all select-none animate-pulse shadow-inner p-4"
+                    >
+                      <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 shadow-xs">
+                        <Layers className="w-5 h-5" />
+                      </div>
+                      <div className="text-center">
+                        <div className="text-xs font-bold text-emerald-800">
+                          Vị trí đặt ảnh #{item.dragIndex + 1}
+                        </div>
+                        <div className="text-[10px] text-emerald-600 font-medium">
+                          (Vị trí #{item.targetIndex + 1} trên trang in)
+                        </div>
+                      </div>
+                    </div>
+                  );
+                }
+
+                const { photo, index } = item;
                 const isConfirmingDelete = confirmDeleteId === photo.id;
                 const currentPresetId = `${photo.targetWidth}x${photo.targetHeight}_${photo.shape}`;
                 const matchedPreset = allPresets.find(
@@ -399,9 +620,10 @@ export const ImageListSidebar: React.FC<ImageListSidebarProps> = ({
                 return (
                   <div
                     key={photo.id}
+                    data-photo-item-index={index}
                     id={`photo-card-${photo.id}`}
-                    onClick={() => onSelectPhoto?.(photo.id)}
-                    className={`bg-white border rounded-xl p-3 shadow-2xs hover:shadow-xs transition-all group flex flex-col gap-2.5 cursor-pointer ${
+                    onPointerDown={(e) => handleCardPointerDown(e, index, photo)}
+                    className={`bg-white border rounded-xl p-3 shadow-2xs hover:shadow-xs transition-all group flex flex-col gap-2.5 cursor-grab active:cursor-grabbing relative select-none ${
                       isConfirmingDelete
                         ? 'border-rose-400 ring-2 ring-rose-200/80 bg-rose-50/15'
                         : isSelected
@@ -411,50 +633,64 @@ export const ImageListSidebar: React.FC<ImageListSidebarProps> = ({
                         : 'border-slate-200/90 hover:border-blue-300'
                     }`}
                   >
-                    {/* Top: Reorder handles + Thumbnail & Size Selector */}
-                    <div className="flex items-center gap-2">
-                      {/* Reorder Buttons */}
-                      {onMovePhoto && (
-                        <div className="flex flex-col gap-0.5 shrink-0 text-slate-400">
-                          <button
-                            type="button"
-                            disabled={index === 0}
-                            onClick={() => onMovePhoto(index, index - 1)}
-                            className="p-0.5 hover:text-blue-600 disabled:opacity-20 transition cursor-pointer"
-                            title="Di chuyển lên"
+                    {/* Top: Thumbnail & Size Selector (Đã bỏ cột 6 dấu chấm, thumbnail to rõ nét 64px) */}
+                    <div className="flex items-center gap-2.5">
+                      {/* Thumbnail with Shape Mask Preview (To rõ nét w-16 h-16 = 64px) */}
+                      <div className="relative w-16 h-16 rounded-xl bg-slate-100 border border-slate-200 shrink-0 overflow-hidden flex items-center justify-center shadow-xs">
+                        {photo.badgeMode && photo.badgeFaceDiameter ? (
+                          /* Preview phôi huy hiệu có viền (Solid hoặc Blur mở rộng) */
+                          <div
+                            className="w-full h-full rounded-full relative overflow-hidden flex items-center justify-center"
+                            style={{
+                              backgroundColor:
+                                photo.badgeBleedMode !== 'blur_expand'
+                                  ? photo.badgeBleedColor || '#ffffff'
+                                  : '#f8fafc',
+                            }}
                           >
-                            <ChevronUp className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            type="button"
-                            disabled={index === photos.length - 1}
-                            onClick={() => onMovePhoto(index, index + 1)}
-                            className="p-0.5 hover:text-blue-600 disabled:opacity-20 transition cursor-pointer"
-                            title="Di chuyển xuống"
-                          >
-                            <ChevronDown className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      )}
-
-                      {/* Thumbnail with Shape Mask Preview */}
-                      <div className="relative w-12 h-12 rounded-lg bg-slate-100 border border-slate-200 shrink-0 overflow-hidden flex items-center justify-center">
-                        <div
-                          className={`w-full h-full bg-cover bg-center ${
-                            photo.shape === 'circle'
-                              ? 'shape-circle'
-                              : photo.shape === 'heart'
-                              ? 'shape-heart'
-                              : 'rounded-md'
-                          }`}
-                          style={{ backgroundImage: `url(${photo.previewSrc || photo.originalSrc})` }}
-                        />
-                        <span className="absolute bottom-0.5 right-0.5 bg-black/60 text-white font-mono text-[9px] px-1 rounded font-bold">
+                            {/* Lớp nền mờ Blur mở rộng */}
+                            {photo.badgeBleedMode === 'blur_expand' && (
+                              <div
+                                className="absolute inset-0 bg-cover bg-center scale-150 filter blur-[2.5px] brightness-95"
+                                style={{
+                                  backgroundImage: `url(${photo.previewSrc || photo.originalSrc})`,
+                                }}
+                              />
+                            )}
+                            {/* Mặt chính diện sắc nét */}
+                            <div
+                              className="rounded-full overflow-hidden relative shadow-xs"
+                              style={{
+                                width: `${Math.min(100, (photo.badgeFaceDiameter / (photo.targetWidth || 55)) * 100)}%`,
+                                height: `${Math.min(100, (photo.badgeFaceDiameter / (photo.targetHeight || 55)) * 100)}%`,
+                              }}
+                            >
+                              <div
+                                className="w-full h-full bg-cover bg-center"
+                                style={{
+                                  backgroundImage: `url(${photo.previewSrc || photo.originalSrc})`,
+                                }}
+                              />
+                            </div>
+                          </div>
+                        ) : (
+                          <div
+                            className={`w-full h-full bg-cover bg-center ${
+                              photo.shape === 'circle'
+                                ? 'shape-circle'
+                                : photo.shape === 'heart'
+                                ? 'shape-heart'
+                                : 'rounded-lg'
+                            }`}
+                            style={{ backgroundImage: `url(${photo.previewSrc || photo.originalSrc})` }}
+                          />
+                        )}
+                        <span className="absolute bottom-0.5 right-0.5 bg-black/75 text-white font-mono text-[9px] px-1.5 py-0.2 rounded font-bold z-10">
                           #{index + 1}
                         </span>
                         {photo.isEnhanced && (
                           <span
-                            className="absolute top-0.5 left-0.5 bg-amber-500 text-white px-1 py-0.5 rounded shadow-xs flex items-center gap-0.5 text-[8px] font-bold"
+                            className="absolute top-0.5 left-0.5 bg-amber-500 text-white px-1 py-0.5 rounded shadow-xs flex items-center gap-0.5 text-[8px] font-bold z-10"
                             title={`Đã tối ưu ${photo.upscaleFactor && photo.upscaleFactor > 1 ? `AI ${photo.upscaleFactor}x (DPI x${photo.upscaleFactor})` : 'HD'}`}
                           >
                             <Sparkles className="w-2.5 h-2.5" />
@@ -624,64 +860,97 @@ export const ImageListSidebar: React.FC<ImageListSidebarProps> = ({
                           )}
                         </div>
 
-                        {/* 🏅 Phôi Huy hiệu: Gộp gọn trên 1 dòng duy nhất, không cuộn, không chật chội */}
+                        {/* 🏅 Phôi Huy hiệu: Gộp gọn trên 1 dòng duy nhất, từ trái qua phải: Blur -> Auto -> 5 màu gợi ý -> vạch ngăn cách -> Màu lựa chọn */}
                         {photo.badgeMode && (
-                          <div className="flex items-center justify-between bg-pink-50/80 border border-pink-200/90 rounded-lg px-2 py-1 text-[11px] gap-1">
-                            {/* Nút Auto màu nền (gọn gàng, không icon) */}
+                          <div
+                            onDragStart={(e) => e.stopPropagation()}
+                            className="flex items-center justify-between bg-pink-50/80 border border-pink-200/90 rounded-lg px-2 py-1 text-[11px] gap-1"
+                          >
+                            {/* 0. Nút chế độ Viền Mờ (Blur Expand) */}
                             <button
                               type="button"
-                              onClick={() => handleRescanPhotoBleedColor(photo)}
-                              className="text-[10px] font-bold text-pink-700 hover:text-pink-900 bg-white hover:bg-pink-100 border border-pink-200 px-2 py-0.5 rounded transition cursor-pointer shadow-2xs active:scale-95 shrink-0"
-                              title="Tự động phân tích ảnh và chọn màu nền chuẩn xác"
+                              onClick={() => {
+                                const nextMode = photo.badgeBleedMode === 'blur_expand' ? 'solid' : 'blur_expand';
+                                onUpdatePhoto(photo.id, { badgeBleedMode: nextMode });
+                              }}
+                              className={`px-1.5 py-0.5 rounded text-[10px] font-bold transition flex items-center gap-0.5 cursor-pointer shrink-0 shadow-2xs ${
+                                photo.badgeBleedMode === 'blur_expand'
+                                  ? 'bg-pink-600 text-white ring-2 ring-pink-300 scale-105'
+                                  : 'bg-white hover:bg-pink-100 text-pink-700 border border-pink-300'
+                              }`}
+                              title="Bật/Tắt hiệu ứng làm mờ nền ảnh gốc mở rộng tràn viền (Blurred Bleed)"
                             >
-                              Auto màu nền
+                              <Sparkles className="w-3 h-3" />
+                              <span>Blur</span>
                             </button>
 
-                            {/* Gợi ý swatches từ ảnh: 4 màu nhỏ gọn liền kề, KHÔNG thanh trượt */}
-                            {photo.badgeBleedPalette && photo.badgeBleedPalette.length > 0 && (
-                              <div className="flex items-center gap-1 shrink-0">
-                                {photo.badgeBleedPalette.slice(0, 4).map((col, cIdx) => (
-                                  <button
-                                    key={`swatch-${photo.id}-${cIdx}`}
-                                    type="button"
-                                    onClick={() => onUpdatePhoto(photo.id, { badgeBleedColor: col })}
-                                    style={{ backgroundColor: col }}
-                                    className={`w-3.5 h-3.5 rounded-full border transition cursor-pointer shrink-0 ${
-                                      (photo.badgeBleedColor || '').toLowerCase() === col.toLowerCase()
-                                        ? 'border-pink-600 ring-2 ring-pink-400 scale-110'
-                                        : 'border-white hover:scale-110'
-                                    }`}
-                                    title={`Chọn màu ${col}`}
-                                  />
-                                ))}
-                              </div>
-                            )}
+                            {/* 1. Nút "Auto" màu */}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                handleRescanPhotoBleedColor(photo);
+                                onUpdatePhoto(photo.id, { badgeBleedMode: 'solid' });
+                              }}
+                              className={`text-[10px] font-bold px-1.5 py-0.5 rounded transition cursor-pointer shadow-2xs active:scale-95 shrink-0 ${
+                                photo.badgeBleedMode !== 'blur_expand'
+                                  ? 'bg-white hover:bg-pink-100 text-pink-700 border border-pink-200'
+                                  : 'opacity-50 hover:opacity-100 bg-white text-slate-500 border border-slate-200'
+                              }`}
+                              title="Tự động bốc màu đơn sắc từ viền ảnh"
+                            >
+                              Auto
+                            </button>
 
-                            {/* Màu hiện tại + Native color picker */}
-                            <div className="flex items-center gap-1 shrink-0">
-                              <label className="relative flex items-center cursor-pointer" title="Đổi màu viền bọc mép">
-                                <input
-                                  type="color"
-                                  value={photo.badgeBleedColor || '#ffffff'}
-                                  onChange={(e) => onUpdatePhoto(photo.id, { badgeBleedColor: e.target.value })}
-                                  className="opacity-0 absolute inset-0 w-4 h-4 cursor-pointer"
+                            {/* 2. 4 màu gợi ý */}
+                            <div className={`flex items-center gap-1 shrink-0 ${photo.badgeBleedMode === 'blur_expand' ? 'opacity-40 hover:opacity-100 transition-opacity' : ''}`}>
+                              {((photo.badgeBleedPalette && photo.badgeBleedPalette.length > 0)
+                                ? photo.badgeBleedPalette
+                                : ['#ffffff', '#f8fafc', '#f1f5f9', '#000000']
+                              ).slice(0, 4).map((col, cIdx) => (
+                                <button
+                                  key={`swatch-${photo.id}-${cIdx}`}
+                                  type="button"
+                                  onClick={() => onUpdatePhoto(photo.id, { badgeBleedColor: col, badgeBleedMode: 'solid' })}
+                                  style={{ backgroundColor: col }}
+                                  className={`w-3.5 h-3.5 rounded-full border transition cursor-pointer shrink-0 ${
+                                    photo.badgeBleedMode !== 'blur_expand' && (photo.badgeBleedColor || '').toLowerCase() === col.toLowerCase()
+                                      ? 'border-pink-600 ring-2 ring-pink-400 scale-110'
+                                      : 'border-white hover:scale-110'
+                                  }`}
+                                  title={`Chọn màu đơn sắc ${col}`}
                                 />
-                                <span
-                                  className="w-3.5 h-3.5 rounded-full border border-pink-400 shadow-2xs block"
-                                  style={{ backgroundColor: photo.badgeBleedColor || '#ffffff' }}
-                                />
-                              </label>
-                              <span className="font-mono text-[9px] text-pink-700 font-bold uppercase">
-                                {photo.badgeBleedColor || '#FFFFFF'}
-                              </span>
+                              ))}
                             </div>
+
+                            {/* 3. Dấu gạch đứng tạo sự tách biệt */}
+                            <div className="w-[1px] h-3.5 bg-pink-300/80 mx-0.5 shrink-0" aria-hidden="true" />
+
+                            {/* 4. Màu lựa chọn (không hiển thị mã màu) */}
+                            <label
+                              className={`relative flex items-center justify-center cursor-pointer shrink-0 ${photo.badgeBleedMode === 'blur_expand' ? 'opacity-40 hover:opacity-100 transition-opacity' : ''}`}
+                              title={`Màu đang chọn: ${photo.badgeBleedColor || '#ffffff'} (Nhấn để tùy chỉnh màu)`}
+                            >
+                              <input
+                                type="color"
+                                value={photo.badgeBleedColor || '#ffffff'}
+                                onChange={(e) => onUpdatePhoto(photo.id, { badgeBleedColor: e.target.value, badgeBleedMode: 'solid' })}
+                                className="opacity-0 absolute inset-0 w-full h-full cursor-pointer"
+                              />
+                              <span
+                                className="w-4 h-4 rounded-full border-2 border-white ring-1.5 ring-pink-500 shadow-2xs block transition-transform hover:scale-110 active:scale-95"
+                                style={{ backgroundColor: photo.badgeBleedColor || '#ffffff' }}
+                              />
+                            </label>
                           </div>
                         )}
                       </div>
                     </div>
 
                     {/* Bottom: Quantity & Controls */}
-                    <div className="flex items-center justify-between bg-slate-50/90 p-1.5 rounded-lg border border-slate-200/80">
+                    <div
+                      onDragStart={(e) => e.stopPropagation()}
+                      className="flex items-center justify-between bg-slate-50/90 p-1.5 rounded-lg border border-slate-200/80"
+                    >
                       {/* Quantity Stepper */}
                       <div className="flex items-center gap-1">
                         <button
@@ -792,6 +1061,54 @@ export const ImageListSidebar: React.FC<ImageListSidebarProps> = ({
           )}
         </div>
       )}
+      {/* Thẻ đang được nhấc kéo: LIFTED: scale 1.03 · +8 px shadow · 3° tilt · in hand (hình 2) */}
+      {dragState &&
+        createPortal(
+          <div
+            style={{
+              position: 'fixed',
+              left: dragState.pointerPos.x - dragState.offsetX,
+              top: dragState.pointerPos.y - dragState.offsetY,
+              width: dragState.cardWidth,
+              pointerEvents: 'none',
+              zIndex: 99999,
+              transform: 'scale(1.03) rotate(3deg)',
+              boxShadow: '0 25px 35px -5px rgba(0, 0, 0, 0.25), 0 10px 15px -5px rgba(0, 0, 0, 0.15)',
+              transformOrigin: 'center center',
+            }}
+            className="bg-white border-2 border-emerald-500 rounded-xl p-3 ring-4 ring-emerald-400/25 opacity-95 flex flex-col gap-2.5 transition-transform"
+          >
+            <div className="flex items-center gap-2.5">
+              <div className="relative w-16 h-16 rounded-xl bg-slate-100 border border-slate-200 shrink-0 overflow-hidden flex items-center justify-center shadow-xs">
+                <div
+                  className={`w-full h-full bg-cover bg-center ${
+                    dragState.photo.shape === 'circle'
+                      ? 'shape-circle'
+                      : dragState.photo.shape === 'heart'
+                      ? 'shape-heart'
+                      : 'rounded-lg'
+                  }`}
+                  style={{
+                    backgroundImage: `url(${dragState.photo.previewSrc || dragState.photo.originalSrc})`,
+                  }}
+                />
+                <span className="absolute bottom-0.5 right-0.5 bg-black/75 text-white font-mono text-[9px] px-1.5 py-0.2 rounded font-bold">
+                  #{dragState.dragIndex + 1}
+                </span>
+              </div>
+
+              <div className="flex-1 min-w-0 space-y-1">
+                <div className="text-[12px] font-bold text-slate-800 truncate">
+                  {dragState.photo.name}
+                </div>
+                <div className="text-[10px] text-emerald-700 font-bold bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md inline-block shadow-2xs">
+                  Di chuyển đến vị trí #{dragState.hoverIndex + 1}
+                </div>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
     </aside>
   );
 };
