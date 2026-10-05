@@ -87,6 +87,7 @@ export interface FreeformTextTag {
   xMm: number; // Tọa độ X trên trang A4 (mm)
   yMm: number; // Tọa độ Y trên trang A4 (mm)
   color?: string; // Mã màu chữ (mặc định #334155)
+  fontWeight?: 'normal' | 'bold'; // Độ đậm chữ
 }
 
 export type CutMarkFeature = 'solid' | 'dashed' | 'corner_marks' | 'full_trim_guides';

@@ -152,22 +152,18 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
       {/* Brand Header */}
       <div className="px-3.5 py-3 border-b border-pink-100 bg-white sticky top-0 z-20 flex items-center justify-between">
         <div className="flex items-center gap-2.5 overflow-hidden">
-          <div className="bg-gradient-to-tr from-pink-600 to-rose-600 p-2 rounded-xl text-white shadow-sm shadow-pink-500/20 shrink-0">
+          <div className="bg-gradient-to-tr from-pink-500 to-[#e02475] p-2 rounded-xl text-white shadow-sm shadow-pink-500/20 shrink-0">
             <Printer className="w-5 h-5" />
           </div>
           {!isCollapsed && (
-            <div className="flex-1 min-w-0 pr-0.5">
-              <h1 className="text-[15px] font-black text-pink-700 leading-snug tracking-tight whitespace-nowrap">
+            <div className="flex items-center gap-2 min-w-0 pr-0.5">
+              <h1 className="text-[15.5px] font-black text-[#e02475] tracking-tight whitespace-nowrap select-none">
                 Dâu Dâu AutoPack
               </h1>
-              <div className="flex items-center gap-1.5 mt-0.5">
-                <p className="text-[10.5px] text-pink-600/85 font-semibold">Dàn trang in ảnh A4</p>
-                {isAutoSaved && totalPhotos > 0 && (
-                  <span className="inline-flex items-center gap-1 px-1.5 py-0.2 bg-emerald-50 text-emerald-700 border border-emerald-200/80 rounded text-[9.5px] font-medium animate-fadeIn">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" /> Đã tự lưu
-                  </span>
-                )}
-              </div>
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9.5px] font-black uppercase tracking-wider bg-gradient-to-r from-amber-500 to-[#e02475] text-white shadow-2xs shrink-0 select-none">
+                <Sparkles className="w-2.5 h-2.5" />
+                PRO v2.5
+              </span>
             </div>
           )}
         </div>

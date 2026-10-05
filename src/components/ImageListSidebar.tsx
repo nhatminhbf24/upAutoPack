@@ -877,7 +877,7 @@ export const ImageListSidebar: React.FC<ImageListSidebarProps> = ({
                         {photo.badgeMode && (
                           <div
                             onDragStart={(e) => e.stopPropagation()}
-                            className="flex items-center justify-between bg-rose-50/60 border border-rose-200/70 rounded-lg px-2 py-1 text-[11px] gap-1"
+                            className="flex items-center justify-between bg-emerald-50/60 border border-emerald-200/70 rounded-lg px-2 py-1 text-[11px] gap-1"
                           >
                             {/* 0. Nút chế độ Viền Mờ (Blur Expand): Chỉ để chữ Blur không icon */}
                             <button
@@ -888,8 +888,8 @@ export const ImageListSidebar: React.FC<ImageListSidebarProps> = ({
                               }}
                               className={`px-2 py-0.5 rounded text-[10px] font-bold transition flex items-center justify-center cursor-pointer shrink-0 shadow-2xs ${
                                 photo.badgeBleedMode === 'blur_expand'
-                                  ? 'bg-rose-100 hover:bg-rose-600 text-rose-800 hover:text-white border border-rose-300 hover:border-rose-600 scale-105'
-                                  : 'bg-white hover:bg-rose-100 text-slate-600 hover:text-rose-800 border border-slate-200'
+                                  ? 'bg-emerald-600 hover:bg-emerald-700 text-white border border-emerald-600 scale-105'
+                                  : 'bg-white hover:bg-emerald-100 text-slate-600 hover:text-emerald-800 border border-slate-200'
                               }`}
                               title="Bật/Tắt hiệu ứng làm mờ nền ảnh gốc mở rộng tràn viền (Blurred Bleed)"
                             >
@@ -905,7 +905,7 @@ export const ImageListSidebar: React.FC<ImageListSidebarProps> = ({
                               }}
                               className={`text-[10px] font-bold px-1.5 py-0.5 rounded transition cursor-pointer shadow-2xs active:scale-95 shrink-0 ${
                                 photo.badgeBleedMode !== 'blur_expand'
-                                  ? 'bg-white hover:bg-rose-100 text-slate-700 hover:text-rose-800 border border-rose-200'
+                                  ? 'bg-white hover:bg-emerald-100 text-slate-700 hover:text-emerald-800 border border-emerald-200'
                                   : 'opacity-50 hover:opacity-100 bg-white text-slate-500 border border-slate-200'
                               }`}
                               title="Tự động bốc màu đơn sắc từ viền ảnh"
@@ -926,7 +926,7 @@ export const ImageListSidebar: React.FC<ImageListSidebarProps> = ({
                                   style={{ backgroundColor: col }}
                                   className={`w-3.5 h-3.5 rounded-full border transition cursor-pointer shrink-0 ${
                                     photo.badgeBleedMode !== 'blur_expand' && (photo.badgeBleedColor || '').toLowerCase() === col.toLowerCase()
-                                      ? 'border-slate-800 ring-2 ring-rose-300 scale-110'
+                                      ? 'border-slate-800 ring-2 ring-emerald-400 scale-110'
                                       : 'border-white hover:scale-110'
                                   }`}
                                   title={`Chọn màu đơn sắc ${col}`}
@@ -935,7 +935,7 @@ export const ImageListSidebar: React.FC<ImageListSidebarProps> = ({
                             </div>
 
                             {/* 3. Dấu gạch đứng tạo sự tách biệt */}
-                            <div className="w-[1px] h-3.5 bg-rose-200 mx-0.5 shrink-0" aria-hidden="true" />
+                            <div className="w-[1px] h-3.5 bg-emerald-200 mx-0.5 shrink-0" aria-hidden="true" />
 
                             {/* 4. Màu lựa chọn (không hiển thị mã màu) */}
                             <label
@@ -949,7 +949,7 @@ export const ImageListSidebar: React.FC<ImageListSidebarProps> = ({
                                 className="opacity-0 absolute inset-0 w-full h-full cursor-pointer"
                               />
                               <span
-                                className="w-4 h-4 rounded-full border-2 border-white ring-1.5 ring-rose-400 shadow-2xs block transition-transform hover:scale-110 active:scale-95"
+                                className="w-4 h-4 rounded-full border-2 border-white ring-1.5 ring-emerald-400 shadow-2xs block transition-transform hover:scale-110 active:scale-95"
                                 style={{ backgroundColor: photo.badgeBleedColor || '#ffffff' }}
                               />
                             </label>

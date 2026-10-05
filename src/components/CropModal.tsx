@@ -1397,6 +1397,17 @@ export const CropModal: React.FC<CropModalProps> = ({
                             }}
                           />
                         </div>
+
+                        {/* Vạch nét đứt căn dập mặt trước (nếu bật) */}
+                        {badgeGuideLines && (
+                          <div
+                            className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full border border-dashed border-emerald-400/90 pointer-events-none z-10"
+                            style={{
+                              width: `${Math.min(100, (badgeFaceDiameter / (curTargetWidth || 55)) * 100)}%`,
+                              height: `${Math.min(100, (badgeFaceDiameter / (curTargetHeight || 55)) * 100)}%`,
+                            }}
+                          />
+                        )}
                       </div>
                     ) : (
                       <img
@@ -1862,7 +1873,7 @@ export const CropModal: React.FC<CropModalProps> = ({
                   {/* 🏅 Box riêng biệt: Chế độ phôi huy hiệu cài áo chuyên dụng */}
                   <div className={`rounded-2xl p-3.5 space-y-3 border transition-all duration-200 shadow-sm hover:shadow-md ${
                     badgeMode
-                      ? 'bg-rose-50/80 border-rose-200/90'
+                      ? 'bg-emerald-50/70 border-emerald-200/90'
                       : 'bg-slate-50 border-slate-200/90'
                   }`}>
                     <div className="flex items-center justify-between gap-2">
@@ -1872,6 +1883,8 @@ export const CropModal: React.FC<CropModalProps> = ({
                       </div>
                       <button
                         type="button"
+                        role="switch"
+                        aria-checked={badgeMode}
                         onClick={() => {
                           const nextMode = !badgeMode;
                           if (nextMode) {
@@ -1880,21 +1893,35 @@ export const CropModal: React.FC<CropModalProps> = ({
                           }
                           setBadgeMode(nextMode);
                         }}
-                        className={`group relative text-[11px] font-bold px-3 py-1.5 rounded-full transition-all duration-200 cursor-pointer flex items-center gap-1.5 border select-none shadow-xs hover:shadow-md hover:scale-105 active:scale-95 ${
+                        className={`group inline-flex items-center gap-2 px-2.5 py-1 rounded-full text-xs font-bold transition-all duration-200 cursor-pointer border select-none shadow-2xs hover:shadow-xs active:scale-95 ${
                           badgeMode
-                            ? 'bg-rose-600 hover:bg-rose-700 text-white border-rose-600 ring-2 ring-rose-300 hover:ring-rose-400'
-                            : 'bg-white hover:bg-rose-50 text-slate-700 hover:text-rose-700 border-slate-300 hover:border-rose-400'
+                            ? 'bg-emerald-100/90 hover:bg-emerald-100 text-emerald-800 border-emerald-300 ring-1 ring-emerald-300/50'
+                            : 'bg-white hover:bg-slate-100 text-slate-500 hover:text-slate-700 border-slate-300'
                         }`}
                         title={badgeMode ? 'Nhấp để TẮT chế độ phôi huy hiệu' : 'Nhấp để BẬT chế độ phôi huy hiệu'}
                       >
-                        <span className={`w-2.5 h-2.5 rounded-full transition-all duration-200 ${badgeMode ? 'bg-white animate-pulse' : 'bg-slate-300 group-hover:bg-rose-500'}`} />
-                        <span>{badgeMode ? 'Đang bật' : 'Chưa bật'}</span>
-                        <span className={`text-[9.5px] px-1.5 py-0.5 rounded-full font-semibold transition-colors ${
-                          badgeMode
-                            ? 'bg-white/20 text-white group-hover:bg-white/30'
-                            : 'bg-slate-100 text-slate-500 group-hover:bg-rose-100 group-hover:text-rose-700'
-                        }`}>
-                          {badgeMode ? 'Tắt' : 'Bật'}
+                        <span className="flex items-center gap-1.5">
+                          <span
+                            className={`w-2 h-2 rounded-full transition-all duration-200 ${
+                              badgeMode ? 'bg-emerald-600 animate-pulse' : 'bg-slate-400'
+                            }`}
+                          />
+                          <span className="text-[11px] font-bold">
+                            {badgeMode ? 'Đang bật' : 'Đang tắt'}
+                          </span>
+                        </span>
+
+                        {/* Switch Track & Thumb */}
+                        <span
+                          className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors duration-200 ease-in-out ${
+                            badgeMode ? 'bg-emerald-600' : 'bg-slate-300'
+                          }`}
+                        >
+                          <span
+                            className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-sm transition-transform duration-200 ease-in-out ${
+                              badgeMode ? 'translate-x-4.5' : 'translate-x-1'
+                            }`}
+                          />
                         </span>
                       </button>
                     </div>
@@ -1923,15 +1950,15 @@ export const CropModal: React.FC<CropModalProps> = ({
                               }}
                               className={`px-1.5 py-1.5 rounded-xl text-center border transition-all duration-150 cursor-pointer flex flex-col items-center justify-center hover:scale-[1.02] active:scale-95 shadow-2xs ${
                                 isSelected
-                                  ? 'bg-rose-600 text-white border-rose-600 shadow-xs ring-2 ring-rose-300'
-                                  : 'bg-white text-slate-800 border-slate-200 hover:border-rose-300 hover:bg-rose-50/70'
+                                  ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs ring-2 ring-emerald-300'
+                                  : 'bg-white text-slate-800 border-slate-200 hover:border-emerald-300 hover:bg-emerald-50/70'
                               }`}
                               title={`${spec.name} • Mặt ${(spec.faceDiameter / 10).toFixed(1)} cm • Cắt ${(spec.cutDiameter / 10).toFixed(1)} cm`}
                             >
                               <span className="text-[11px] font-bold leading-tight truncate w-full">
                                 {spec.name.replace('Huy hiệu ', '')}
                               </span>
-                              <span className={`text-[9.5px] mt-0.5 leading-tight ${isSelected ? 'text-rose-100 font-medium' : 'text-slate-500'}`}>
+                              <span className={`text-[9.5px] mt-0.5 leading-tight ${isSelected ? 'text-emerald-100 font-medium' : 'text-slate-500'}`}>
                                 {(spec.faceDiameter / 10).toFixed(1)} ➔ {(spec.cutDiameter / 10).toFixed(1)} cm
                               </span>
                             </button>
@@ -1941,10 +1968,10 @@ export const CropModal: React.FC<CropModalProps> = ({
                     </div>
 
                     {badgeMode && (
-                      <div className="space-y-2.5 pt-1 border-t border-rose-200/70">
+                      <div className="space-y-2.5 pt-1 border-t border-emerald-200/70">
                         {/* Diameters display & edit */}
                         <div className="grid grid-cols-2 gap-2 text-xs">
-                          <div className="bg-white p-2 rounded-xl border border-rose-200/80 space-y-1 shadow-2xs">
+                          <div className="bg-white p-2 rounded-xl border border-emerald-200/80 space-y-1 shadow-2xs">
                             <span className="text-[10px] font-bold text-slate-600 block">
                               Mặt trước hiển thị (Ø)
                             </span>
@@ -1961,13 +1988,13 @@ export const CropModal: React.FC<CropModalProps> = ({
                                     setBadgeFaceDiameter(Math.round(val * 10));
                                   }
                                 }}
-                                className="w-16 px-1.5 py-0.5 border border-slate-300 rounded font-bold text-xs font-mono"
+                                className="w-16 px-1.5 py-0.5 border border-slate-300 rounded font-bold text-xs font-mono focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none"
                               />
                               <span className="text-slate-500 text-[10px] font-bold">cm</span>
                             </div>
                           </div>
 
-                          <div className="bg-white p-2 rounded-xl border border-rose-200/80 space-y-1 shadow-2xs">
+                          <div className="bg-white p-2 rounded-xl border border-emerald-200/80 space-y-1 shadow-2xs">
                             <span className="text-[10px] font-bold text-slate-600 block">
                               Khuôn cắt dập in (Ø)
                             </span>
@@ -1987,7 +2014,7 @@ export const CropModal: React.FC<CropModalProps> = ({
                                     setCustomHeightInput(e.target.value);
                                   }
                                 }}
-                                className="w-16 px-1.5 py-0.5 border border-slate-300 rounded font-bold text-xs font-mono"
+                                className="w-16 px-1.5 py-0.5 border border-slate-300 rounded font-bold text-xs font-mono focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none"
                               />
                               <span className="text-slate-500 text-[10px] font-bold">cm</span>
                             </div>
@@ -1995,22 +2022,22 @@ export const CropModal: React.FC<CropModalProps> = ({
                         </div>
 
                         {/* Kiểu nền viền tràn mép (Bleed) - Gọn gàng, giảm text thừa */}
-                        <div className="bg-white p-2.5 rounded-xl border border-rose-200/80 space-y-2 shadow-2xs">
+                        <div className="bg-white p-2.5 rounded-xl border border-emerald-200/80 space-y-2 shadow-2xs">
                           <div className="flex items-center justify-between gap-1.5">
                             <span className="text-[11px] font-bold text-slate-700 shrink-0">
                               Kiểu tràn viền:
                             </span>
-                            <div className="flex items-center gap-1 bg-rose-100/60 p-0.5 rounded-lg border border-rose-200/80">
+                            <div className="flex items-center gap-1 bg-emerald-100/60 p-0.5 rounded-lg border border-emerald-200/80">
                               <button
                                 type="button"
                                 onClick={() => setBadgeBleedMode('solid')}
                                 className={`py-1 px-2.5 text-[11px] font-bold rounded-md transition cursor-pointer flex items-center gap-1 ${
                                   badgeBleedMode === 'solid'
-                                    ? 'bg-white text-rose-900 shadow-2xs'
-                                    : 'text-rose-700 hover:bg-rose-100/50'
+                                    ? 'bg-white text-emerald-900 shadow-2xs'
+                                    : 'text-emerald-700 hover:bg-emerald-100/50'
                                 }`}
                               >
-                                <Palette className="w-3 h-3 text-rose-600" />
+                                <Palette className="w-3 h-3 text-emerald-600" />
                                 <span>Màu bệt</span>
                               </button>
                               <button
@@ -2018,8 +2045,8 @@ export const CropModal: React.FC<CropModalProps> = ({
                                 onClick={() => setBadgeBleedMode('blur_expand')}
                                 className={`py-1 px-2.5 text-[11px] font-bold rounded-md transition cursor-pointer flex items-center gap-1 ${
                                   badgeBleedMode === 'blur_expand'
-                                    ? 'bg-rose-600 text-white shadow-2xs'
-                                    : 'text-rose-700 hover:bg-rose-100/50'
+                                    ? 'bg-emerald-600 text-white shadow-2xs'
+                                    : 'text-emerald-700 hover:bg-emerald-100/50'
                                 }`}
                               >
                                 <Sparkles className="w-3 h-3" />
@@ -2030,8 +2057,8 @@ export const CropModal: React.FC<CropModalProps> = ({
 
                           {badgeBleedMode === 'blur_expand' ? (
                             /* Giao diện khi chọn Nền Mờ Blur - Ngắn gọn, súc tích */
-                            <div className="p-2 rounded-lg bg-rose-50/80 border border-rose-200/80 text-[11px] text-rose-800 flex items-center gap-1.5 font-medium">
-                              <Sparkles className="w-3.5 h-3.5 text-rose-600 shrink-0" />
+                            <div className="p-2 rounded-lg bg-emerald-50/80 border border-emerald-200/80 text-[11px] text-emerald-800 flex items-center gap-1.5 font-medium">
+                              <Sparkles className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
                               <span>Nền ảnh tự động mở rộng & làm mờ viền ngoài</span>
                             </div>
                           ) : (
@@ -2045,10 +2072,10 @@ export const CropModal: React.FC<CropModalProps> = ({
                                   type="button"
                                   onClick={handleRescanBadgeColors}
                                   disabled={isScanningBadgeColors}
-                                  className="text-[10px] font-bold text-rose-700 hover:text-rose-900 bg-rose-50 hover:bg-rose-100 border border-rose-200 px-2 py-0.5 rounded transition cursor-pointer shadow-2xs active:scale-95 flex items-center gap-0.5"
+                                  className="text-[10px] font-bold text-emerald-700 hover:text-emerald-900 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 px-2 py-0.5 rounded transition cursor-pointer shadow-2xs active:scale-95 flex items-center gap-0.5"
                                   title="Tự động phân tích ảnh và chọn màu nền chuẩn xác"
                                 >
-                                  {isScanningBadgeColors ? <Loader2 className="w-2.5 h-2.5 animate-spin" /> : <Sparkles className="w-2.5 h-2.5 text-rose-500" />}
+                                  {isScanningBadgeColors ? <Loader2 className="w-2.5 h-2.5 animate-spin" /> : <Sparkles className="w-2.5 h-2.5 text-emerald-600" />}
                                   <span>Auto màu</span>
                                 </button>
                               </div>
@@ -2062,7 +2089,7 @@ export const CropModal: React.FC<CropModalProps> = ({
                                     style={{ backgroundColor: col }}
                                     className={`w-6 h-6 rounded-full border-2 transition-all cursor-pointer shadow-xs ${
                                       badgeBleedColor.toLowerCase() === col.toLowerCase()
-                                        ? 'border-rose-600 ring-2 ring-rose-400 scale-110'
+                                        ? 'border-emerald-600 ring-2 ring-emerald-400 scale-110'
                                         : 'border-white hover:scale-105'
                                     }`}
                                     title={`Chọn màu ${col}`}
@@ -2093,7 +2120,7 @@ export const CropModal: React.FC<CropModalProps> = ({
                                     className="text-[10px] font-bold text-slate-600 hover:text-slate-900 p-1 rounded hover:bg-slate-100 cursor-pointer flex items-center"
                                     title="Dùng ống hút màu trên màn hình"
                                   >
-                                    <Pipette className="w-3.5 h-3.5 text-blue-600" />
+                                    <Pipette className="w-3.5 h-3.5 text-emerald-600" />
                                   </button>
                                 )}
 
@@ -2110,7 +2137,7 @@ export const CropModal: React.FC<CropModalProps> = ({
                               type="checkbox"
                               checked={badgeGuideLines}
                               onChange={(e) => setBadgeGuideLines(e.target.checked)}
-                              className="rounded text-rose-600 focus:ring-rose-500 w-3.5 h-3.5 cursor-pointer"
+                              className="rounded text-emerald-600 focus:ring-emerald-500 accent-emerald-600 w-3.5 h-3.5 cursor-pointer"
                             />
                             <span>Vạch căn dập mặt trước (Ø {(badgeFaceDiameter/10).toFixed(1)} cm)</span>
                           </label>

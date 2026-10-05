@@ -5,14 +5,9 @@ import { packImagesToPages } from './utils/packing';
 import { exportPagesToImage, calculateCrop, formatPhotoToPreset, getShortPresetLabel, exportAllPhotosAsZip, processImageFilesToPhotos } from './utils/imageUtils';
 import { exportPagesToPdf } from './utils/pdfExport';
 import {
-  saveProjectMeta,
-  syncPhotoBlobs,
-  getSavedSessionMeta,
-  loadSavedSession,
   clearSavedSession,
   exportProjectToDaudauFile,
   importProjectFromDaudauFile,
-  ProjectMetadata,
 } from './utils/projectStorage';
 import { ImageListSidebar } from './components/ImageListSidebar';
 import { BatchToolsSidebar } from './components/BatchToolsSidebar';
@@ -26,7 +21,6 @@ import { useHistoryState } from './hooks/useHistoryState';
 // Code-splitting via React.lazy for on-demand bundle loading
 const CropModal = React.lazy(() => import('./components/CropModal').then((m) => ({ default: m.CropModal })));
 const CustomSizeModal = React.lazy(() => import('./components/CustomSizeModal').then((m) => ({ default: m.CustomSizeModal })));
-const RestoreSessionModal = React.lazy(() => import('./components/RestoreSessionModal').then((m) => ({ default: m.RestoreSessionModal })));
 const SaveProjectModal = React.lazy(() => import('./components/SaveProjectModal').then((m) => ({ default: m.SaveProjectModal })));
 const ActivationModal = React.lazy(() => import('./components/ActivationModal').then((m) => ({ default: m.ActivationModal })));
 const PngSplitterModal = React.lazy(() => import('./components/PngSplitterModal').then((m) => ({ default: m.PngSplitterModal })));
@@ -94,9 +88,6 @@ export default function App() {
     initialTab?: 'size' | 'crop' | 'enhance' | 'adjust';
   } | null>(null);
 
-  // Restore Session Modal State
-  const [pendingRestoreMeta, setPendingRestoreMeta] = useState<ProjectMetadata | null>(null);
-  const [isAutoSaved, setIsAutoSaved] = useState<boolean>(false);
 
   // Sidebar Collapse States (Mặc định ẩn tab Thao tác hàng loạt theo yêu cầu)
   const [isListSidebarCollapsed, setIsListSidebarCollapsed] = useState<boolean>(false);
@@ -293,102 +284,13 @@ export default function App() {
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [photos.length]);
 
-  // =========================================================================
-  // LỚP 2: Tự động lưu ngầm vào IndexedDB (Debounced 500ms) & Kiểm tra khôi phục
-  // =========================================================================
-  // 1. Kiểm tra session cũ khi load ứng dụng lần đầu
-  const hasCheckedSessionRef = useRef(false);
+  // Dọn dẹp dữ liệu phiên làm việc cũ trong IndexedDB khi khởi động
   useEffect(() => {
-    if (hasCheckedSessionRef.current) return;
-    hasCheckedSessionRef.current = true;
-
-    async function checkPreviousSession() {
-      try {
-        const meta = await getSavedSessionMeta();
-        if (meta && meta.photosMeta && meta.photosMeta.length > 0) {
-          setPendingRestoreMeta(meta);
-        }
-      } catch (e) {
-        console.warn('Error checking existing session:', e);
-      }
-    }
-    checkPreviousSession();
+    clearSavedSession().catch(() => {});
   }, []);
 
-  // 2. Debounce lưu project_meta sau mỗi thao tác (500ms)
-  const saveTimeoutRef = useRef<number | null>(null);
-  useEffect(() => {
-    if (photos.length === 0) {
-      setIsAutoSaved(false);
-      return;
-    }
-
-    if (saveTimeoutRef.current) {
-      window.clearTimeout(saveTimeoutRef.current);
-    }
-
-    saveTimeoutRef.current = window.setTimeout(async () => {
-      await saveProjectMeta(photos, settings, customPresets);
-      setIsAutoSaved(true);
-    }, 500);
-
-    return () => {
-      if (saveTimeoutRef.current) {
-        window.clearTimeout(saveTimeoutRef.current);
-      }
-    };
-  }, [photos, settings, customPresets]);
-
-  // 3. Đồng bộ blobs (chỉ khi số lượng ảnh hoặc id ảnh thay đổi)
-  const previousPhotoIdsRef = useRef<string>('');
-  useEffect(() => {
-    const currentPhotoIds = photos.map((p) => p.id).join(',');
-    if (currentPhotoIds !== previousPhotoIdsRef.current) {
-      previousPhotoIdsRef.current = currentPhotoIds;
-      if (photos.length > 0) {
-        syncPhotoBlobs(photos);
-      } else {
-        clearSavedSession();
-      }
-    }
-  }, [photos]);
-
-  // Khôi phục session từ IndexedDB
-  const handleRestoreSession = useCallback(async () => {
-    try {
-      addToast('info', 'Đang nạp dự án cũ...');
-      const session = await loadSavedSession();
-      if (session && session.photos.length > 0) {
-        setPhotos(session.photos);
-        setSettings(session.settings);
-        if (session.settings.orientationMode) {
-          setOrientationMode(session.settings.orientationMode);
-          setAutoMatchOrientation(session.settings.orientationMode === 'auto_match');
-        }
-        if (session.customPresets && session.customPresets.length > 0) {
-          setCustomPresets(session.customPresets);
-        }
-        addToast('success', `Đã khôi phục ${session.photos.length} ảnh`);
-      } else {
-        addToast('error', 'Không thể nạp dữ liệu phiên cũ');
-      }
-    } catch (err) {
-      console.error('Failed to restore session:', err);
-      addToast('error', 'Lỗi khôi phục dự án');
-    } finally {
-      setPendingRestoreMeta(null);
-    }
-  }, [addToast, setPhotos]);
-
-  // Bỏ qua session cũ và bắt đầu mới
-  const handleDiscardSession = useCallback(async () => {
-    await clearSavedSession();
-    setPendingRestoreMeta(null);
-    addToast('info', 'Đã tạo dự án mới');
-  }, [addToast]);
-
   // =========================================================================
-  // LỚP 3: Xuất / Nhập file dự án .daudau (Lưu thủ công & Chuyển đổi máy)
+  // LỚP 2: Xuất / Nhập file dự án .daudau (Lưu thủ công & Chuyển đổi máy)
   // =========================================================================
   const handleExportProject = useCallback(() => {
     if (photos.length === 0) {
@@ -480,11 +382,14 @@ export default function App() {
       if (settings.layoutMode === 'freeform' && target.freePositions) {
         const offsetFree: Record<number, { x: number; y: number; pageNumber?: number }> = {};
         for (const [key, val] of Object.entries(target.freePositions)) {
-          offsetFree[Number(key)] = {
-            ...val,
-            x: Math.min(val.x + 8, 200),
-            y: Math.min(val.y + 8, 280),
-          };
+          const pos = val as { x: number; y: number; pageNumber?: number } | undefined;
+          if (pos && typeof pos.x === 'number' && typeof pos.y === 'number') {
+            offsetFree[Number(key)] = {
+              ...pos,
+              x: Math.min(pos.x + 8, 200),
+              y: Math.min(pos.y + 8, 280),
+            };
+          }
         }
         clonedPhoto.freePositions = offsetFree;
       }
@@ -521,7 +426,6 @@ export default function App() {
   const handleConfirmClearAll = useCallback(async () => {
     setPhotos([]);
     await clearSavedSession();
-    setIsAutoSaved(false);
     addToast('info', 'Đã xóa toàn bộ ảnh');
   }, [setPhotos, addToast]);
 
@@ -1033,11 +937,14 @@ export default function App() {
         if (settings.layoutMode === 'freeform' && copiedPhoto.freePositions) {
           const offsetFree: Record<number, { x: number; y: number; pageNumber?: number }> = {};
           for (const [key, val] of Object.entries(copiedPhoto.freePositions)) {
-            offsetFree[Number(key)] = {
-              ...val,
-              x: Math.min(val.x + 8, 200),
-              y: Math.min(val.y + 8, 280),
-            };
+            const pos = val as { x: number; y: number; pageNumber?: number } | undefined;
+            if (pos && typeof pos.x === 'number' && typeof pos.y === 'number') {
+              offsetFree[Number(key)] = {
+                ...pos,
+                x: Math.min(pos.x + 8, 200),
+                y: Math.min(pos.y + 8, 280),
+              };
+            }
           }
           clonedPhoto.freePositions = offsetFree;
         }
@@ -1288,18 +1195,6 @@ export default function App() {
       ) : (
         /* 3. A4 Auto Pack & Layout Printing Studio */
         <div id="app-root" className="flex w-full h-screen overflow-hidden bg-slate-100 text-slate-800 font-sans">
-          {/* Restore Session Modal (Auto-save recovery) */}
-          {pendingRestoreMeta && (
-            <Suspense fallback={null}>
-              <RestoreSessionModal
-                isOpen={Boolean(pendingRestoreMeta)}
-                meta={pendingRestoreMeta}
-                onRestore={handleRestoreSession}
-                onDiscard={handleDiscardSession}
-              />
-            </Suspense>
-          )}
-
           {/* Column 1: Image List Sidebar (Left) */}
           <ImageListSidebar
             photos={photos}
@@ -1352,7 +1247,6 @@ export default function App() {
             onExportProject={handleExportProject}
             onImportProject={handleImportProject}
             onClearAllPhotos={handleClearAll}
-            isAutoSaved={isAutoSaved}
             isExporting={isExporting}
             exportProgress={exportProgress}
             onToast={addToast}
