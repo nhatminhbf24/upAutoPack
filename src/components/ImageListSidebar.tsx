@@ -636,69 +636,79 @@ export const ImageListSidebar: React.FC<ImageListSidebarProps> = ({
                     {/* Top: Thumbnail & Size Selector (Đã bỏ cột 6 dấu chấm, thumbnail to rõ nét 64px) */}
                     <div className="flex items-center gap-2.5">
                       {/* Thumbnail with Shape Mask Preview (To rõ nét w-16 h-16 = 64px) */}
-                      <div className="relative w-16 h-16 rounded-xl bg-slate-100 border border-slate-200 shrink-0 overflow-hidden flex items-center justify-center shadow-xs">
-                        {photo.badgeMode && photo.badgeFaceDiameter ? (
-                          /* Preview phôi huy hiệu có viền (Solid hoặc Blur mở rộng) */
-                          <div
-                            className="w-full h-full rounded-full relative overflow-hidden flex items-center justify-center"
-                            style={{
-                              backgroundColor:
-                                photo.badgeBleedMode !== 'blur_expand'
-                                  ? photo.badgeBleedColor || '#ffffff'
-                                  : '#f8fafc',
-                            }}
-                          >
-                            {/* Lớp nền mờ Blur mở rộng */}
-                            {photo.badgeBleedMode === 'blur_expand' && (
-                              <div
-                                className="absolute inset-0 bg-cover bg-center scale-150 filter blur-[2.5px] brightness-95"
-                                style={{
-                                  backgroundImage: `url(${photo.previewSrc || photo.originalSrc})`,
-                                }}
-                              />
-                            )}
-                            {/* Mặt chính diện sắc nét */}
+                      <div className="relative shrink-0">
+                        {/* Nhãn đánh số ảnh góc phía trên bên trái ngoài vùng viền ảnh */}
+                        <span
+                          className={`absolute -top-2 -left-1.5 min-w-[18px] h-[18px] px-1 rounded-md text-[11px] font-bold font-mono flex items-center justify-center shadow-xs border z-20 select-none leading-none transition-all duration-150 ${
+                            isSelected
+                              ? 'bg-orange-500 text-white border-orange-400 shadow-orange-500/20'
+                              : 'bg-black/75 hover:bg-orange-500 group-hover:bg-orange-500 text-white border-white/20 hover:border-orange-400 group-hover:border-orange-400'
+                          }`}
+                        >
+                          {index + 1}
+                        </span>
+
+                        <div className="w-16 h-16 rounded-xl bg-slate-100 border border-slate-200 overflow-hidden flex items-center justify-center shadow-xs">
+                          {photo.badgeMode && photo.badgeFaceDiameter ? (
+                            /* Preview phôi huy hiệu có viền (Solid hoặc Blur mở rộng) */
                             <div
-                              className="rounded-full overflow-hidden relative shadow-xs"
+                              className="w-full h-full rounded-full relative overflow-hidden flex items-center justify-center"
                               style={{
-                                width: `${Math.min(100, (photo.badgeFaceDiameter / (photo.targetWidth || 55)) * 100)}%`,
-                                height: `${Math.min(100, (photo.badgeFaceDiameter / (photo.targetHeight || 55)) * 100)}%`,
+                                backgroundColor:
+                                  photo.badgeBleedMode !== 'blur_expand'
+                                    ? photo.badgeBleedColor || '#ffffff'
+                                    : '#f8fafc',
                               }}
                             >
+                              {/* Lớp nền mờ Blur mở rộng */}
+                              {photo.badgeBleedMode === 'blur_expand' && (
+                                <div
+                                  className="absolute inset-0 bg-cover bg-center scale-150 filter blur-[2.5px] brightness-95"
+                                  style={{
+                                    backgroundImage: `url(${photo.previewSrc || photo.originalSrc})`,
+                                  }}
+                                />
+                              )}
+                              {/* Mặt chính diện sắc nét */}
                               <div
-                                className="w-full h-full bg-cover bg-center"
+                                className="rounded-full overflow-hidden relative shadow-xs"
                                 style={{
-                                  backgroundImage: `url(${photo.previewSrc || photo.originalSrc})`,
+                                  width: `${Math.min(100, (photo.badgeFaceDiameter / (photo.targetWidth || 55)) * 100)}%`,
+                                  height: `${Math.min(100, (photo.badgeFaceDiameter / (photo.targetHeight || 55)) * 100)}%`,
                                 }}
-                              />
+                              >
+                                <div
+                                  className="w-full h-full bg-cover bg-center"
+                                  style={{
+                                    backgroundImage: `url(${photo.previewSrc || photo.originalSrc})`,
+                                  }}
+                                />
+                              </div>
                             </div>
-                          </div>
-                        ) : (
-                          <div
-                            className={`w-full h-full bg-cover bg-center ${
-                              photo.shape === 'circle'
-                                ? 'shape-circle'
-                                : photo.shape === 'heart'
-                                ? 'shape-heart'
-                                : 'rounded-lg'
-                            }`}
-                            style={{ backgroundImage: `url(${photo.previewSrc || photo.originalSrc})` }}
-                          />
-                        )}
-                        <span className="absolute bottom-0.5 right-0.5 bg-black/75 text-white font-mono text-[9px] px-1.5 py-0.2 rounded font-bold z-10">
-                          #{index + 1}
-                        </span>
-                        {photo.isEnhanced && (
-                          <span
-                            className="absolute top-0.5 left-0.5 bg-amber-500 text-white px-1 py-0.5 rounded shadow-xs flex items-center gap-0.5 text-[8px] font-bold z-10"
-                            title={`Đã tối ưu ${photo.upscaleFactor && photo.upscaleFactor > 1 ? `AI ${photo.upscaleFactor}x (DPI x${photo.upscaleFactor})` : 'HD'}`}
-                          >
-                            <Sparkles className="w-2.5 h-2.5" />
-                            {photo.upscaleFactor && photo.upscaleFactor > 1 && (
-                              <span>{photo.upscaleFactor}x</span>
-                            )}
-                          </span>
-                        )}
+                          ) : (
+                            <div
+                              className={`w-full h-full bg-cover bg-center ${
+                                photo.shape === 'circle'
+                                  ? 'shape-circle'
+                                  : photo.shape === 'heart'
+                                  ? 'shape-heart'
+                                  : 'rounded-lg'
+                              }`}
+                              style={{ backgroundImage: `url(${photo.previewSrc || photo.originalSrc})` }}
+                            />
+                          )}
+                          {photo.isEnhanced && (
+                            <span
+                              className="absolute bottom-1 right-1 bg-amber-500 text-white px-1 py-0.5 rounded shadow-xs flex items-center gap-0.5 text-[8px] font-bold z-10"
+                              title={`Đã tối ưu ${photo.upscaleFactor && photo.upscaleFactor > 1 ? `AI ${photo.upscaleFactor}x (DPI x${photo.upscaleFactor})` : 'HD'}`}
+                            >
+                              <Sparkles className="w-2.5 h-2.5" />
+                              {photo.upscaleFactor && photo.upscaleFactor > 1 && (
+                                <span>{photo.upscaleFactor}x</span>
+                              )}
+                            </span>
+                          )}
+                        </div>
                       </div>
 
                       {/* Size Select & DPI Quality Badge */}
@@ -860,28 +870,27 @@ export const ImageListSidebar: React.FC<ImageListSidebarProps> = ({
                           )}
                         </div>
 
-                        {/* 🏅 Phôi Huy hiệu: Gộp gọn trên 1 dòng duy nhất, từ trái qua phải: Blur -> Auto -> 5 màu gợi ý -> vạch ngăn cách -> Màu lựa chọn */}
+                        {/* 🏅 Phôi Huy hiệu: Gộp gọn trên 1 dòng duy nhất, từ trái qua phải: Blur -> Auto -> 4 màu gợi ý -> vạch ngăn cách -> Màu lựa chọn */}
                         {photo.badgeMode && (
                           <div
                             onDragStart={(e) => e.stopPropagation()}
-                            className="flex items-center justify-between bg-pink-50/80 border border-pink-200/90 rounded-lg px-2 py-1 text-[11px] gap-1"
+                            className="flex items-center justify-between bg-rose-50/60 border border-rose-200/70 rounded-lg px-2 py-1 text-[11px] gap-1"
                           >
-                            {/* 0. Nút chế độ Viền Mờ (Blur Expand) */}
+                            {/* 0. Nút chế độ Viền Mờ (Blur Expand): Chỉ để chữ Blur không icon */}
                             <button
                               type="button"
                               onClick={() => {
                                 const nextMode = photo.badgeBleedMode === 'blur_expand' ? 'solid' : 'blur_expand';
                                 onUpdatePhoto(photo.id, { badgeBleedMode: nextMode });
                               }}
-                              className={`px-1.5 py-0.5 rounded text-[10px] font-bold transition flex items-center gap-0.5 cursor-pointer shrink-0 shadow-2xs ${
+                              className={`px-2 py-0.5 rounded text-[10px] font-bold transition flex items-center justify-center cursor-pointer shrink-0 shadow-2xs ${
                                 photo.badgeBleedMode === 'blur_expand'
-                                  ? 'bg-pink-600 text-white ring-2 ring-pink-300 scale-105'
-                                  : 'bg-white hover:bg-pink-100 text-pink-700 border border-pink-300'
+                                  ? 'bg-rose-100 hover:bg-rose-600 text-rose-800 hover:text-white border border-rose-300 hover:border-rose-600 scale-105'
+                                  : 'bg-white hover:bg-rose-100 text-slate-600 hover:text-rose-800 border border-slate-200'
                               }`}
                               title="Bật/Tắt hiệu ứng làm mờ nền ảnh gốc mở rộng tràn viền (Blurred Bleed)"
                             >
-                              <Sparkles className="w-3 h-3" />
-                              <span>Blur</span>
+                              Blur
                             </button>
 
                             {/* 1. Nút "Auto" màu */}
@@ -893,7 +902,7 @@ export const ImageListSidebar: React.FC<ImageListSidebarProps> = ({
                               }}
                               className={`text-[10px] font-bold px-1.5 py-0.5 rounded transition cursor-pointer shadow-2xs active:scale-95 shrink-0 ${
                                 photo.badgeBleedMode !== 'blur_expand'
-                                  ? 'bg-white hover:bg-pink-100 text-pink-700 border border-pink-200'
+                                  ? 'bg-white hover:bg-rose-100 text-slate-700 hover:text-rose-800 border border-rose-200'
                                   : 'opacity-50 hover:opacity-100 bg-white text-slate-500 border border-slate-200'
                               }`}
                               title="Tự động bốc màu đơn sắc từ viền ảnh"
@@ -914,7 +923,7 @@ export const ImageListSidebar: React.FC<ImageListSidebarProps> = ({
                                   style={{ backgroundColor: col }}
                                   className={`w-3.5 h-3.5 rounded-full border transition cursor-pointer shrink-0 ${
                                     photo.badgeBleedMode !== 'blur_expand' && (photo.badgeBleedColor || '').toLowerCase() === col.toLowerCase()
-                                      ? 'border-pink-600 ring-2 ring-pink-400 scale-110'
+                                      ? 'border-slate-800 ring-2 ring-rose-300 scale-110'
                                       : 'border-white hover:scale-110'
                                   }`}
                                   title={`Chọn màu đơn sắc ${col}`}
@@ -923,7 +932,7 @@ export const ImageListSidebar: React.FC<ImageListSidebarProps> = ({
                             </div>
 
                             {/* 3. Dấu gạch đứng tạo sự tách biệt */}
-                            <div className="w-[1px] h-3.5 bg-pink-300/80 mx-0.5 shrink-0" aria-hidden="true" />
+                            <div className="w-[1px] h-3.5 bg-rose-200 mx-0.5 shrink-0" aria-hidden="true" />
 
                             {/* 4. Màu lựa chọn (không hiển thị mã màu) */}
                             <label
@@ -937,7 +946,7 @@ export const ImageListSidebar: React.FC<ImageListSidebarProps> = ({
                                 className="opacity-0 absolute inset-0 w-full h-full cursor-pointer"
                               />
                               <span
-                                className="w-4 h-4 rounded-full border-2 border-white ring-1.5 ring-pink-500 shadow-2xs block transition-transform hover:scale-110 active:scale-95"
+                                className="w-4 h-4 rounded-full border-2 border-white ring-1.5 ring-rose-400 shadow-2xs block transition-transform hover:scale-110 active:scale-95"
                                 style={{ backgroundColor: photo.badgeBleedColor || '#ffffff' }}
                               />
                             </label>
@@ -1079,22 +1088,24 @@ export const ImageListSidebar: React.FC<ImageListSidebarProps> = ({
             className="bg-white border-2 border-emerald-500 rounded-xl p-3 ring-4 ring-emerald-400/25 opacity-95 flex flex-col gap-2.5 transition-transform"
           >
             <div className="flex items-center gap-2.5">
-              <div className="relative w-16 h-16 rounded-xl bg-slate-100 border border-slate-200 shrink-0 overflow-hidden flex items-center justify-center shadow-xs">
-                <div
-                  className={`w-full h-full bg-cover bg-center ${
-                    dragState.photo.shape === 'circle'
-                      ? 'shape-circle'
-                      : dragState.photo.shape === 'heart'
-                      ? 'shape-heart'
-                      : 'rounded-lg'
-                  }`}
-                  style={{
-                    backgroundImage: `url(${dragState.photo.previewSrc || dragState.photo.originalSrc})`,
-                  }}
-                />
-                <span className="absolute bottom-0.5 right-0.5 bg-black/75 text-white font-mono text-[9px] px-1.5 py-0.2 rounded font-bold">
-                  #{dragState.dragIndex + 1}
+              <div className="relative shrink-0">
+                <span className="absolute -top-2 -left-1.5 min-w-[18px] h-[18px] px-1 rounded-md text-[11px] font-bold font-mono flex items-center justify-center shadow-xs border border-orange-400 bg-orange-500 text-white z-20 select-none leading-none">
+                  {dragState.dragIndex + 1}
                 </span>
+                <div className="w-16 h-16 rounded-xl bg-slate-100 border border-slate-200 overflow-hidden flex items-center justify-center shadow-xs">
+                  <div
+                    className={`w-full h-full bg-cover bg-center ${
+                      dragState.photo.shape === 'circle'
+                        ? 'shape-circle'
+                        : dragState.photo.shape === 'heart'
+                        ? 'shape-heart'
+                        : 'rounded-lg'
+                    }`}
+                    style={{
+                      backgroundImage: `url(${dragState.photo.previewSrc || dragState.photo.originalSrc})`,
+                    }}
+                  />
+                </div>
               </div>
 
               <div className="flex-1 min-w-0 space-y-1">

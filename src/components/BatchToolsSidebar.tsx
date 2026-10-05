@@ -746,13 +746,13 @@ export const BatchToolsSidebar: React.FC<BatchToolsSidebarProps> = ({
 
           {/* CỤM VIỀN HUY HIỆU BLUR & MÀU ĐƠN SẮC HÀNG LOẠT */}
           {photos.some((p) => p.badgeMode) && (
-            <div className="bg-pink-50/75 rounded-xl p-3 border border-pink-200/90 shadow-2xs space-y-2 transition hover:border-pink-300">
+            <div className="bg-rose-50/60 rounded-xl p-3 border border-rose-200/80 shadow-2xs space-y-2 transition hover:border-rose-300">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1.5 text-pink-950 font-bold">
-                  <Sparkles className="w-3.5 h-3.5 text-pink-600" />
+                <div className="flex items-center gap-1.5 text-rose-950 font-bold">
+                  <Sparkles className="w-3.5 h-3.5 text-rose-500" />
                   <span className="text-[11px] uppercase tracking-wide">VIỀN PHÔI HUY HIỆU</span>
                 </div>
-                <span className="text-[10px] text-pink-700 font-bold bg-pink-100 border border-pink-200 px-1.5 py-0.5 rounded">
+                <span className="text-[10px] text-rose-700 font-bold bg-rose-100 border border-rose-200 px-1.5 py-0.5 rounded">
                   {photos.filter((p) => p.badgeMode).length} phôi
                 </span>
               </div>
@@ -766,9 +766,9 @@ export const BatchToolsSidebar: React.FC<BatchToolsSidebarProps> = ({
                     });
                     onToast('success', 'Đã bật viền mờ Blur cho tất cả phôi huy hiệu');
                   }}
-                  className="py-1.5 px-2 bg-pink-600 hover:bg-pink-700 text-white rounded-lg text-xs font-bold transition flex items-center justify-center gap-1 shadow-2xs cursor-pointer active:scale-95"
+                  className="py-1.5 px-2 bg-rose-100 hover:bg-rose-600 text-rose-800 hover:text-white border border-rose-300 hover:border-rose-600 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1 shadow-2xs cursor-pointer active:scale-95 group"
                 >
-                  <Sparkles className="w-3 h-3" />
+                  <Sparkles className="w-3 h-3 text-rose-600 group-hover:text-white transition-colors" />
                   <span>Nền mờ Blur</span>
                 </button>
                 <button
@@ -779,7 +779,7 @@ export const BatchToolsSidebar: React.FC<BatchToolsSidebarProps> = ({
                     });
                     onToast('info', 'Đã chuyển tất cả phôi huy hiệu sang Màu đơn sắc');
                   }}
-                  className="py-1.5 px-2 bg-white hover:bg-pink-100 text-pink-800 border border-pink-300 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1 shadow-2xs cursor-pointer active:scale-95"
+                  className="py-1.5 px-2 bg-white hover:bg-rose-100 text-slate-700 hover:text-rose-800 border border-rose-200 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1 shadow-2xs cursor-pointer active:scale-95"
                 >
                   <span>Màu đơn sắc</span>
                 </button>
@@ -845,9 +845,9 @@ export const BatchToolsSidebar: React.FC<BatchToolsSidebarProps> = ({
                 id="btn-apply-qty-all"
                 onClick={() => handleApplyQuantityToAll()}
                 disabled={photos.length === 0}
-                className="flex-1 flex items-center justify-center gap-1 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white px-2.5 py-2 rounded-lg text-xs font-bold shadow-xs transition active:scale-95 whitespace-nowrap cursor-pointer"
+                className="flex-1 flex items-center justify-center gap-1.5 bg-emerald-100 hover:bg-emerald-600 text-emerald-800 hover:text-white border border-emerald-300 hover:border-emerald-600 disabled:opacity-50 px-2.5 py-2 rounded-lg text-xs font-bold shadow-2xs transition active:scale-95 whitespace-nowrap cursor-pointer group"
               >
-                <Copy className="w-3.5 h-3.5" />
+                <Copy className="w-3.5 h-3.5 text-emerald-700 group-hover:text-white transition-colors" />
                 <span>Áp dụng tất cả</span>
               </button>
             </div>
@@ -881,16 +881,16 @@ export const BatchToolsSidebar: React.FC<BatchToolsSidebarProps> = ({
                 id="btn-auto-adjust-all"
                 onClick={handleAutoAdjustAll}
                 disabled={isAutoAdjustingAll || photos.length === 0}
-                className="flex-1 flex items-center justify-center gap-2 bg-gradient-to-r from-purple-600 via-indigo-600 to-purple-700 hover:from-purple-700 hover:to-indigo-800 disabled:opacity-50 text-white px-3 py-2.5 rounded-xl text-xs font-bold shadow-sm shadow-purple-500/20 transition active:scale-95 cursor-pointer"
+                className="flex-1 flex items-center justify-center gap-2 bg-purple-100 hover:bg-purple-600 text-purple-900 hover:text-white border border-purple-300 hover:border-purple-600 disabled:opacity-50 px-3 py-2.5 rounded-xl text-xs font-bold shadow-2xs transition active:scale-95 cursor-pointer group"
               >
                 {isAutoAdjustingAll ? (
                   <>
-                    <Loader2 className="w-4 h-4 animate-spin text-white" />
+                    <Loader2 className="w-4 h-4 animate-spin text-purple-600 group-hover:text-white" />
                     <span>Đang cân chỉnh {photos.length} ảnh...</span>
                   </>
                 ) : (
                   <>
-                    <Wand2 className="w-4 h-4 text-purple-200" />
+                    <Wand2 className="w-4 h-4 text-purple-600 group-hover:text-white transition-colors" />
                     <span>Cân chỉnh màu Tất Cả</span>
                   </>
                 )}
@@ -954,16 +954,16 @@ export const BatchToolsSidebar: React.FC<BatchToolsSidebarProps> = ({
                 id="btn-enhance-all-hd"
                 onClick={handleEnhanceAll}
                 disabled={isEnhancingAll || photos.length === 0}
-                className="flex-1 flex items-center justify-center gap-1.5 bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 hover:from-amber-600 hover:to-orange-600 disabled:opacity-50 text-white px-3 py-2.5 rounded-xl text-xs font-bold shadow-sm shadow-amber-500/20 transition active:scale-95 cursor-pointer"
+                className="flex-1 flex items-center justify-center gap-1.5 bg-amber-100 hover:bg-amber-500 text-amber-900 hover:text-white border border-amber-300 hover:border-amber-500 disabled:opacity-50 px-3 py-2.5 rounded-xl text-xs font-bold shadow-2xs transition active:scale-95 cursor-pointer group"
               >
                 {isEnhancingAll ? (
                   <>
-                    <Loader2 className="w-4 h-4 animate-spin text-white" />
+                    <Loader2 className="w-4 h-4 animate-spin text-amber-600 group-hover:text-white" />
                     <span>Đang tăng chất lượng {photos.length} ảnh...</span>
                   </>
                 ) : (
                   <>
-                    <Sparkles className="w-4 h-4 text-amber-200" />
+                    <Sparkles className="w-4 h-4 text-amber-600 group-hover:text-white transition-colors" />
                     <span>Tăng chất lượng Tất Cả</span>
                   </>
                 )}

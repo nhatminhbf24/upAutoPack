@@ -1330,7 +1330,7 @@ export const CropModal: React.FC<CropModalProps> = ({
 
               {/* Framed Print Preview Canvas */}
               {activeTab !== 'crop' ? (
-                <div className="flex flex-col items-center justify-center w-full h-full relative">
+                <div className="flex flex-col items-center justify-center w-full h-full relative group/canvas">
                 {/* Dynamic Sized Framed Box */}
                 <div
                   ref={previewBoxRef}
@@ -1347,7 +1347,7 @@ export const CropModal: React.FC<CropModalProps> = ({
                         ? badgeBleedColor
                         : '#ffffff',
                   }}
-                  className={`relative shadow-2xl overflow-hidden cursor-grab active:cursor-grabbing transition-all select-none rounded-none ${
+                  className={`relative shadow-2xl overflow-hidden cursor-grab active:cursor-grabbing transition-all select-none rounded-none group ${
                     shape === 'circle' ? 'shape-circle' : shape === 'heart' ? 'shape-heart' : 'rounded-none'
                   }`}
                 >
@@ -1402,9 +1402,9 @@ export const CropModal: React.FC<CropModalProps> = ({
                       />
                     )}
 
-                    {/* Badge Pin Guide Indicators */}
+                    {/* Badge Pin Guide Indicators: Chỉ hiển thị khi rê chuột vào khung ảnh */}
                     {badgeMode && shape === 'circle' && (
-                      <div className="absolute top-2.5 left-2.5 bg-slate-900/85 backdrop-blur-xs text-white text-[10px] font-bold px-2 py-1 rounded-lg pointer-events-none border border-white/20 shadow-md flex items-center gap-1.5 z-20">
+                      <div className="absolute top-2.5 left-2.5 bg-slate-900/85 backdrop-blur-xs text-white text-[10px] font-bold px-2 py-1 rounded-lg pointer-events-none border border-white/20 shadow-md flex items-center gap-1.5 z-20 opacity-0 group-hover/canvas:opacity-100 group-hover:opacity-100 transition-opacity duration-200">
                         <span
                           className="w-2.5 h-2.5 rounded-full border border-white/60 shrink-0"
                           style={{ backgroundColor: badgeBleedColor }}
@@ -1442,8 +1442,8 @@ export const CropModal: React.FC<CropModalProps> = ({
                       </div>
                     )}
 
-                    {/* Shape dimensions indicator badge */}
-                    <div className="absolute bottom-2.5 right-2.5 bg-slate-900/80 backdrop-blur-xs text-white text-[10px] font-mono font-bold px-2 py-0.5 rounded-md pointer-events-none shadow-xs border border-white/10">
+                    {/* Shape dimensions indicator badge: Chỉ hiển thị khi rê chuột vào khung ảnh */}
+                    <div className="absolute bottom-2.5 right-2.5 bg-slate-900/80 backdrop-blur-xs text-white text-[10px] font-mono font-bold px-2 py-0.5 rounded-md pointer-events-none shadow-xs border border-white/10 z-20 opacity-0 group-hover/canvas:opacity-100 group-hover:opacity-100 transition-opacity duration-200">
                       {shape === 'circle'
                         ? `Ø ${(curTargetWidth / 10).toFixed(1)} cm`
                         : `${(curTargetWidth / 10).toFixed(1)} × ${(curTargetHeight / 10).toFixed(1)} cm`}
@@ -1510,7 +1510,7 @@ export const CropModal: React.FC<CropModalProps> = ({
                         width: `${cropWidthPct}%`,
                         height: `${cropHeightPct}%`,
                       }}
-                      className="absolute border-2 border-white shadow-[0_0_0_1px_rgba(0,0,0,0.6)] cursor-move select-none"
+                      className="absolute border-2 border-white shadow-[0_0_0_1px_rgba(0,0,0,0.6)] cursor-move select-none group/crop"
                     >
                       {/* Rule of Thirds Grid */}
                       <div className="absolute top-0 bottom-0 left-1/3 w-px bg-white/40 pointer-events-none" />
@@ -1545,8 +1545,8 @@ export const CropModal: React.FC<CropModalProps> = ({
                         </div>
                       )}
 
-                      {/* Dimensions Pill inside Crop Box */}
-                      <div className="absolute bottom-1.5 left-1.5 bg-black/80 backdrop-blur-xs text-white text-[10px] font-mono font-bold px-2 py-0.5 rounded pointer-events-none border border-white/20">
+                      {/* Dimensions Pill inside Crop Box: Chỉ hiển thị khi rê chuột */}
+                      <div className="absolute bottom-1.5 left-1.5 bg-black/80 backdrop-blur-xs text-white text-[10px] font-mono font-bold px-2 py-0.5 rounded pointer-events-none border border-white/20 opacity-0 group-hover/crop:opacity-100 transition-opacity duration-200">
                         {Math.round(cropBox.w)} × {Math.round(cropBox.h)} px
                       </div>
 
