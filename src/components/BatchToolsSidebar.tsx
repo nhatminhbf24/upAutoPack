@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   Sparkles,
   RotateCw,
@@ -10,17 +10,16 @@ import {
   Maximize2,
   Layers,
   Wand2,
-  Ruler,
   Plus,
-  Scissors,
   Download,
   ChevronsLeft,
   ChevronsRight,
 } from 'lucide-react';
-import { PhotoItem, DEFAULT_SIZE_PRESETS, DEFAULT_ADJUSTMENTS, SizePreset, OrientationMode } from '../types';
-import { rotateImageBase64, calculateCrop, createOptimizedPreview, getOrientedDimensions, formatPhotoToPreset, getShortPresetLabel, getImageDimensions } from '../utils/imageUtils';
+import { PhotoItem, DEFAULT_ADJUSTMENTS, LayoutSettings } from '../types';
+import { rotateImageBase64, calculateCrop, createOptimizedPreview, formatPhotoToPreset, getImageDimensions } from '../utils/imageUtils';
 import { enhanceImageQuality, getRecommendedUpscaleFactor } from '../utils/imageEnhancer';
 import { calculateAutoAdjustments, applyAdjustmentsToImage } from '../utils/imageAdjustmentEngine';
+import { PageLayoutSettings } from './PageLayoutSettings';
 
 interface BatchToolsSidebarProps {
   photos: PhotoItem[];
@@ -28,18 +27,15 @@ interface BatchToolsSidebarProps {
   onBatchUpdatePhotos?: (photos: PhotoItem[]) => void;
   onToast: (type: 'success' | 'error' | 'info', text: string) => void;
   smartCrop: boolean;
-  activePresetId: string;
-  onChangeActivePresetId: (id: string) => void;
-  orientationMode?: OrientationMode;
-  onChangeOrientationMode?: (mode: OrientationMode) => void;
-  autoMatchOrientation?: boolean;
-  onToggleAutoMatchOrientation?: (enabled: boolean) => void;
-  customPresets?: SizePreset[];
-  onOpenCustomSizeModal?: () => void;
-  onOpenPngSplitter?: () => void;
+  settings: LayoutSettings;
+  onUpdateSettings: (updates: Partial<LayoutSettings>) => void;
+  pageCount: number;
+  onClonePage1AsBackside?: () => void;
+  onResetFreeformPositions?: () => void;
   onExportAllPhotosZip?: () => void;
   isCollapsed?: boolean;
   onToggleCollapse?: () => void;
+  onClose?: () => void;
 }
 
 export const BatchToolsSidebar: React.FC<BatchToolsSidebarProps> = ({
@@ -48,31 +44,73 @@ export const BatchToolsSidebar: React.FC<BatchToolsSidebarProps> = ({
   onBatchUpdatePhotos,
   onToast,
   smartCrop,
-  activePresetId,
-  onChangeActivePresetId,
-  orientationMode,
-  onChangeOrientationMode,
-  autoMatchOrientation,
-  onToggleAutoMatchOrientation,
-  customPresets = [],
-  onOpenCustomSizeModal,
-  onOpenPngSplitter,
+  settings,
+  onUpdateSettings,
+  pageCount,
+  onClonePage1AsBackside,
+  onResetFreeformPositions,
   onExportAllPhotosZip,
   isCollapsed = false,
   onToggleCollapse,
+  onClose,
 }) => {
+  const sidebarRef = useRef<HTMLElement>(null);
   const [batchQuantity, setBatchQuantity] = useState<number>(1);
   const [enhanceStrength, setEnhanceStrength] = useState<number>(50);
-  const [isApplyingSizeAll, setIsApplyingSizeAll] = useState<boolean>(false);
+
+  // Tự động ẩn tab Thao tác hàng loạt khi click chuột ra ngoài hoặc ấn Esc
+  useEffect(() => {
+    if (isCollapsed) return;
+
+    let timer: NodeJS.Timeout | null = null;
+
+    const handleClickOutside = (event: MouseEvent | TouchEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (!target) return;
+
+      // Không đóng nếu nhấp vào bên trong sidebar này
+      if (sidebarRef.current && sidebarRef.current.contains(target)) {
+        return;
+      }
+
+      // Không đóng nếu nhấp vào các modal / dialog nổi
+      if (target.closest('[role="dialog"]') || target.closest('.fixed') || target.closest('#modal-root')) {
+        return;
+      }
+
+      if (onClose) {
+        onClose();
+      } else if (onToggleCollapse) {
+        onToggleCollapse();
+      }
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (onClose) onClose();
+        else onToggleCollapse?.();
+      }
+    };
+
+    // Delay 50ms để ngăn sự kiện click mở tab vô tình kích hoạt đóng ngay lập tức
+    timer = setTimeout(() => {
+      document.addEventListener('mousedown', handleClickOutside);
+      document.addEventListener('touchstart', handleClickOutside);
+      document.addEventListener('keydown', handleKeyDown);
+    }, 50);
+
+    return () => {
+      if (timer) clearTimeout(timer);
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isCollapsed, onClose, onToggleCollapse]);
   const [isEnhancingAll, setIsEnhancingAll] = useState<boolean>(false);
   const [isRevertingAll, setIsRevertingAll] = useState<boolean>(false);
   const [isAutoAdjustingAll, setIsAutoAdjustingAll] = useState<boolean>(false);
   const [isRevertingColorsAll, setIsRevertingColorsAll] = useState<boolean>(false);
   const [autoUpscaleDpi, setAutoUpscaleDpi] = useState<boolean>(true);
-
-  const allPresets = [...customPresets, ...DEFAULT_SIZE_PRESETS];
-  // Group presets by category
-  const defaultCategories = Array.from(new Set(DEFAULT_SIZE_PRESETS.map((p) => p.category)));
 
   // Lấy ảnh nguồn sạch chuẩn cho việc cân chỉnh màu (chống bóp méo, đảm bảo khớp đúng tỷ lệ/chiều của ảnh hiện tại)
   const getSafeBaseForAdjust = async (photo: PhotoItem): Promise<string> => {
@@ -226,103 +264,7 @@ export const BatchToolsSidebar: React.FC<BatchToolsSidebarProps> = ({
     onToast('success', `Đã áp dụng màu "${label}" (${count} ảnh)`);
   };
 
-  // 1. Batch Size Preset Change & Auto-Rotate
-  const handleApplyPresetToAll = async (
-    presetOverride?: SizePreset,
-    forceOrientation?: 'auto' | 'portrait' | 'landscape',
-    modeOverride?: OrientationMode
-  ) => {
-    if (photos.length === 0 || isApplyingSizeAll) {
-      if (photos.length === 0) onToast('error', 'Chưa có ảnh để áp dụng cỡ');
-      return;
-    }
-    const preset = presetOverride || allPresets.find((p) => p.id === activePresetId) || DEFAULT_SIZE_PRESETS[0];
-    if (!preset) return;
-
-    setIsApplyingSizeAll(true);
-
-    const currentMode: OrientationMode =
-      modeOverride ||
-      orientationMode ||
-      (autoMatchOrientation ? 'auto_match' : 'rotate_to_fit');
-
-    // Adjust target preset orientation if explicitly forced
-    let effectivePreset: SizePreset = { ...preset };
-    if (forceOrientation === 'portrait') {
-      effectivePreset = {
-        ...preset,
-        width: Math.min(preset.width, preset.height),
-        height: Math.max(preset.width, preset.height),
-      };
-    } else if (forceOrientation === 'landscape') {
-      effectivePreset = {
-        ...preset,
-        width: Math.max(preset.width, preset.height),
-        height: Math.min(preset.width, preset.height),
-      };
-    }
-
-    if (photos.length > 30) {
-      onToast('info', `Đang xử lý ${photos.length} ảnh...`);
-    }
-
-    let rotatedCount = 0;
-    let portraitCount = 0;
-    let landscapeCount = 0;
-    const updatedPhotos: PhotoItem[] = [];
-
-    for (let i = 0; i < photos.length; i++) {
-      const photo = photos[i];
-      try {
-        const res = await formatPhotoToPreset(
-          photo,
-          effectivePreset,
-          currentMode,
-          smartCrop
-        );
-        if (res.didRotate) {
-          rotatedCount++;
-        }
-        if (res.photo.targetHeight >= res.photo.targetWidth) {
-          portraitCount++;
-        } else {
-          landscapeCount++;
-        }
-        updatedPhotos.push(res.photo);
-      } catch (err) {
-        console.error('Error formatting photo to preset:', err);
-        updatedPhotos.push(photo);
-      }
-
-      if (i % 2 === 0) {
-        await new Promise((r) => setTimeout(r, 0));
-      }
-    }
-
-    if (onBatchUpdatePhotos) {
-      onBatchUpdatePhotos(updatedPhotos);
-    } else {
-      updatedPhotos.forEach((p) => {
-        onUpdatePhoto(p.id, p);
-      });
-    }
-
-    setIsApplyingSizeAll(false);
-
-    const shortLabel = getShortPresetLabel(effectivePreset.label);
-    onToast('success', `Đã đổi ${photos.length} ảnh sang khổ ${shortLabel}`);
-  };
-
-  const handleSelectOrientationMode = async (newMode: OrientationMode) => {
-    if (onChangeOrientationMode) {
-      onChangeOrientationMode(newMode);
-    }
-    if (photos.length > 0) {
-      await handleApplyPresetToAll(undefined, undefined, newMode);
-    }
-  };
-
-  // 2. Batch Quantity
+  // 1. Batch Quantity
   const handleApplyQuantityToAll = (qtyToApply?: number) => {
     if (photos.length === 0) {
       onToast('error', 'Chưa có ảnh để đổi số lượng');
@@ -527,6 +469,7 @@ export const BatchToolsSidebar: React.FC<BatchToolsSidebarProps> = ({
 
   return (
     <aside
+      ref={sidebarRef}
       id="batch-tools-sidebar"
       className={`no-print transition-all duration-300 flex flex-col bg-slate-50/80 border-r border-slate-200/90 h-full overflow-hidden z-20 ${
         isCollapsed ? 'w-11 shrink-0' : 'w-76 shrink-0'
@@ -602,147 +545,22 @@ export const BatchToolsSidebar: React.FC<BatchToolsSidebarProps> = ({
           </div>
 
           <span className="text-[9px] font-mono font-bold text-slate-400 group-hover:text-blue-600">
-            Kích thước • Xoay
+            Bố cục • Công cụ
           </span>
         </div>
       ) : (
         /* Scrollable Container */
         <div className="flex-1 overflow-y-auto p-3 space-y-3.5">
-          {/* CỤM 1: ĐỒNG BỘ KÍCH THƯỚC (Pastel Sky) */}
-          <div className="bg-sky-50/80 rounded-xl p-3 border border-sky-200/90 shadow-sm hover:shadow-md space-y-2 transition-all duration-200 hover:border-sky-300">
-            {/* Dòng 1 : Text: "KÍCH THƯỚC" - nút: "Tùy chỉnh" */}
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-1.5 text-sky-950 font-extrabold">
-                <Maximize2 className="w-3.5 h-3.5 text-sky-600" />
-                <span className="text-[11px] uppercase tracking-wider font-extrabold text-slate-800">KÍCH THƯỚC</span>
-              </div>
-              {onOpenCustomSizeModal && (
-                <button
-                  type="button"
-                  onClick={onOpenCustomSizeModal}
-                  className="flex items-center gap-1 text-[11px] font-bold text-sky-700 hover:text-sky-900 bg-white hover:bg-sky-100 border border-sky-300/80 px-2 py-0.5 rounded-lg transition active:scale-95 cursor-pointer shadow-2xs"
-                  title="Nhập kích thước in tùy chỉnh"
-                >
-                  <Ruler className="w-3 h-3 text-sky-600" />
-                  <span>Tùy chỉnh</span>
-                </button>
-              )}
-            </div>
-
-            {/* Dòng 2: như cũ chọn danh sách kích thước */}
-            <select
-              value={activePresetId}
-              onChange={(e) => {
-                if (e.target.value === '__custom_new__') {
-                  if (onOpenCustomSizeModal) onOpenCustomSizeModal();
-                  return;
-                }
-                onChangeActivePresetId(e.target.value);
-              }}
-              className="w-full bg-white border border-sky-300 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-800 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-400 transition cursor-pointer shadow-2xs"
-            >
-              {customPresets.length > 0 && (
-                <optgroup label="⭐ Kích thước tùy chỉnh của bạn">
-                  {customPresets.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.label}
-                    </option>
-                  ))}
-                </optgroup>
-              )}
-
-              {defaultCategories.map((cat) => (
-                <optgroup key={cat} label={cat}>
-                  {DEFAULT_SIZE_PRESETS.filter((p) => p.category === cat).map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.label}
-                    </option>
-                  ))}
-                </optgroup>
-              ))}
-            </select>
-
-            {/* Dòng 3: nút "Áp dụng cho tất cả" : bình thường nền nhẹ thôi > di chuột vào nền đậm hơn (tạo sự rõ rệt) */}
-            <button
-              type="button"
-              id="btn-apply-size-all"
-              onClick={() => handleApplyPresetToAll()}
-              disabled={photos.length === 0 || isApplyingSizeAll}
-              className="group w-full flex items-center justify-center gap-1.5 bg-blue-100 hover:bg-blue-600 disabled:opacity-50 text-blue-800 hover:text-white border border-blue-300 hover:border-blue-600 px-3 py-2 rounded-xl text-xs font-bold shadow-2xs hover:shadow-md transition-all duration-200 active:scale-95 cursor-pointer"
-            >
-              {isApplyingSizeAll ? (
-                <>
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  <span>Đang đồng bộ kích thước & xoay...</span>
-                </>
-              ) : (
-                <>
-                  <Check className="w-3.5 h-3.5 text-blue-600 group-hover:text-white transition-colors" />
-                  <span>Áp dụng cho tất cả</span>
-                </>
-              )}
-            </button>
-
-            {/* 3 nút dưới cùng: như cũ */}
-            <div className="space-y-1 pt-0.5">
-                {/* 1. Ép đúng khuôn - Tự xoay ảnh */}
-                  <label
-                    onClick={() => handleSelectOrientationMode('rotate_to_fit')}
-                    className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg border transition cursor-pointer select-none text-[11px] font-semibold ${
-                      (orientationMode === 'rotate_to_fit' || (!orientationMode && !autoMatchOrientation))
-                        ? 'bg-blue-50/95 border-blue-500 text-blue-900 shadow-2xs ring-1 ring-blue-400/40'
-                        : 'bg-white/80 border-slate-200 text-slate-700 hover:border-slate-300 hover:bg-white'
-                    }`}
-                  >
-                    <input
-                      type="radio"
-                      name="orientationMode"
-                      checked={orientationMode === 'rotate_to_fit' || (!orientationMode && !autoMatchOrientation)}
-                      onChange={() => handleSelectOrientationMode('rotate_to_fit')}
-                      className="text-blue-600 focus:ring-blue-500 cursor-pointer"
-                    />
-                    <span className="truncate">Ép đúng khuôn - Tự xoay ảnh</span>
-                  </label>
-
-                  {/* 2. Ép đúng khuôn - Không xoay ảnh */}
-                  <label
-                    onClick={() => handleSelectOrientationMode('fixed_crop')}
-                    className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg border transition cursor-pointer select-none text-[11px] font-semibold ${
-                      orientationMode === 'fixed_crop'
-                        ? 'bg-blue-50/95 border-blue-500 text-blue-900 shadow-2xs ring-1 ring-blue-400/40'
-                        : 'bg-white/80 border-slate-200 text-slate-700 hover:border-slate-300 hover:bg-white'
-                    }`}
-                  >
-                    <input
-                      type="radio"
-                      name="orientationMode"
-                      checked={orientationMode === 'fixed_crop'}
-                      onChange={() => handleSelectOrientationMode('fixed_crop')}
-                      className="text-blue-600 focus:ring-blue-500 cursor-pointer"
-                    />
-                    <span className="truncate">Ép đúng khuôn - Không xoay ảnh</span>
-                  </label>
-
-                  {/* 3. Xoay khuôn theo chiều ảnh */}
-                  <label
-                    onClick={() => handleSelectOrientationMode('auto_match')}
-                    className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg border transition cursor-pointer select-none text-[11px] font-semibold ${
-                      (orientationMode === 'auto_match' || (!orientationMode && autoMatchOrientation))
-                        ? 'bg-blue-50/95 border-blue-500 text-blue-900 shadow-2xs ring-1 ring-blue-400/40'
-                        : 'bg-white/80 border-slate-200 text-slate-700 hover:border-slate-300 hover:bg-white'
-                    }`}
-                  >
-                    <input
-                      type="radio"
-                      name="orientationMode"
-                      checked={orientationMode === 'auto_match' || (!orientationMode && autoMatchOrientation)}
-                      onChange={() => handleSelectOrientationMode('auto_match')}
-                      className="text-blue-600 focus:ring-blue-500 cursor-pointer"
-                    />
-                    <span className="truncate">Xoay khuôn theo chiều ảnh</span>
-                  </label>
-                </div>
-              </div>
+          {/* CỤM 1: CÀI ĐẶT BỐ CỤC & LỀ IN TRANG (Được hoán đổi từ SettingsSidebar sang) */}
+          <PageLayoutSettings
+            settings={settings}
+            onUpdateSettings={onUpdateSettings}
+            pageCount={pageCount}
+            totalPhotos={photos.length}
+            onClonePage1AsBackside={onClonePage1AsBackside}
+            onResetFreeformPositions={onResetFreeformPositions}
+            onToast={onToast}
+          />
 
           {/* CỤM VIỀN HUY HIỆU BLUR & MÀU ĐƠN SẮC HÀNG LOẠT */}
           {photos.some((p) => p.badgeMode) && (

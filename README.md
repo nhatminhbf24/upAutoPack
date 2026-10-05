@@ -11,7 +11,7 @@
 
 ```text
 autopack-print/
-├── server.js                        # File khởi động máy chủ Node.js (cPanel / Tenten Hosting)
+├── server.js                        # File khởi động máy chủ Node.js & tự động build fallback
 ├── package.json                     # Quản lý gói phụ thuộc & scripts start/build
 ├── vite.config.ts                   # Cấu hình Vite & Tailwind CSS
 ├── tsconfig.json                    # Cấu hình TypeScript
@@ -19,15 +19,22 @@ autopack-print/
 ├── metadata.json                    # Cấu hình định danh & quyền ứng dụng
 ├── .env.example                     # Mẫu biến môi trường
 ├── .gitignore                       # Danh sách loại trừ Git
+├── public/
+│   └── favicon.svg                  # Biểu tượng Favicon của website
+├── scripts/
+│   └── visual-audit.mjs             # Script tự động kiểm tra giao diện & độ nét
 ├── src/
 │   ├── components/
-│   │   ├── ToolSelectorHub.tsx      # Hub trung tâm lựa chọn không gian làm việc
+│   │   ├── ToolSelectorHub.tsx      # Hub trung tâm lựa chọn không gian làm việc (Dàn A4 / Tách PNG)
 │   │   ├── A4PreviewArea.tsx        # Vùng xem trước A4, thước đo mm, lưới, kéo thả tự do, chỉnh tâm
+│   │   ├── PageThumbnailsSidebar.tsx# Cột xem trước các trang in thu nhỏ bên phải, nhấp chuyển trang nhanh
 │   │   ├── DraggableTextTag.tsx     # Nhãn mã đơn hàng & ngày giờ kéo thả trực tiếp trên trang in
 │   │   ├── PngSplitterWorkspace.tsx # Bàn làm việc tách nhãn dán PNG tự động từ bảng sticker
 │   │   ├── PngSplitterModal.tsx     # Hộp thoại mở nhanh công cụ tách PNG từ thanh công cụ
-│   │   ├── BatchToolsSidebar.tsx    # Thao tác hàng loạt: Kích thước, Xoay 90°, Làm nét, Cân màu
-│   │   ├── SettingsSidebar.tsx      # Lề in, khoảng cách, in 2 mặt đối xứng, bleed, nhãn in, xuất file
+│   │   ├── SettingsSidebar.tsx      # Cột điều khiển: Tải ảnh, Kích thước in ấn, Xuất file & In ấn
+│   │   ├── SizePresetSelector.tsx   # Hộp chọn kích thước in, ép đúng khuôn & xoay ảnh hàng loạt
+│   │   ├── BatchToolsSidebar.tsx    # Cột Thao tác: Bố cục trang, Xoay 90°, Nhân bản, Cân màu, Nét AI
+│   │   ├── PageLayoutSettings.tsx   # Lề trang, khoảng cách, tự động sắp xếp, đường xén, bleed, duplex
 │   │   ├── ImageListSidebar.tsx     # Quản lý danh sách ảnh, số lượng in, kiểm tra DPI
 │   │   ├── CropModal.tsx            # Cắt cúp, xoay, lật, lọc màu, chỉnh sáng chi tiết
 │   │   ├── PhotoAdjustmentsPanel.tsx# Bảng thanh trượt nhiệt độ màu, độ sáng, tương phản, highlight
@@ -36,7 +43,7 @@ autopack-print/
 │   │   ├── SaveProjectModal.tsx     # Quản lý lưu và tải tệp dự án định dạng .daudau
 │   │   ├── ClearConfirmModal.tsx    # Hộp thoại xác nhận làm mới không gian làm việc
 │   │   ├── ActivationModal.tsx      # Giao diện xác thực quyền truy cập
-│   │   ├── Uploader.tsx             # Vùng tải lên ảnh hỗ trợ kéo thả và clipboard
+│   │   ├── Uploader.tsx             # Vùng tải lên ảnh thu gọn hỗ trợ kéo thả và clipboard
 │   │   └── Toast.tsx                # Hệ thống thông báo trạng thái
 │   ├── hooks/
 │   │   └── useHistoryState.ts       # Quản lý ngăn xếp lịch sử Undo / Redo đa bước (phím tắt Ctrl+Z/Y)
@@ -48,10 +55,12 @@ autopack-print/
 │   │   ├── packing.ts               # Thuật toán sắp xếp ảnh tối ưu trang in (Bin Packing)
 │   │   ├── alignmentGuides.ts       # Tính toán đường căn gióng nam châm thông minh khi kéo thả
 │   │   ├── textTagUtils.ts          # Tiện ích định dạng và tính toán vị trí nhãn in đơn hàng
+│   │   ├── badgeBleedEngine.ts      # Bộ xử lý viền mờ Blur Expand hoặc màu đơn sắc cho phôi huy hiệu
+│   │   ├── badgeUtils.ts            # Nhận diện và tính toán tỷ lệ viền phôi huy hiệu tròn
 │   │   ├── pdfExport.ts             # Xuất file PDF nhiều trang độ nét cao chuẩn in ấn (300 DPI)
 │   │   ├── projectStorage.ts        # Lưu trữ dự án và tự động lưu phiên làm việc (IndexedDB)
 │   │   ├── imageUtils.ts            # Xử lý kết xuất Canvas và tối ưu bộ nhớ
-│   │   ├── imageEnhancer.ts         # Công cụ tăng cường độ nét ảnh (Unsharp Masking)
+│   │   ├── imageEnhancer.ts         # Công cụ tăng cường độ nét ảnh (Unsharp Masking) & Upscale AI
 │   │   ├── imageAdjustmentEngine.ts # Bộ xử lý màu sắc, cân bằng trắng và độ sáng
 │   │   └── presetMatcher.ts         # Nhận diện tự động kích thước phù hợp nhất
 │   ├── types.ts                     # Định nghĩa kiểu dữ liệu TypeScript toàn cục
@@ -82,60 +91,46 @@ autopack-print/
 - Tùy chỉnh linh hoạt ngưỡng trong suốt (Alpha Threshold), kích thước tối thiểu và phần đệm lề (Padding).
 - Xem trước khung viền từng sticker và đưa trực tiếp vào bàn in A4 hoặc xuất file zip từng sticker riêng lẻ.
 
-### 3. ⚡ Xử lý hàng loạt (Batch Tools) & Lịch sử thao tác
+### 3. ⚡ Xử lý hàng loạt (Batch Tools) & Tối ưu không gian
+- **Thanh công cụ thu gọn thông minh:** Mặc định ẩn gọn thành thanh dọc mảnh và tự động thu gọn khi click chuột ra ngoài (hoặc phím `Esc`), tối đa hóa không gian bàn in A4.
 - **Hoàn tác / Làm lại (Undo/Redo):** Ngăn xếp lưu lịch sử 13 bước, hỗ trợ phím tắt `Ctrl+Z` / `Ctrl+Y` hoặc nút bấm trên thanh công cụ.
-- Đổi kích thước toàn bộ ảnh chỉ với 1 cú nhấp chuột.
-- Xoay đồng loạt 90° cho toàn bộ danh sách hoặc tự động xoay ngang/dọc theo hướng ảnh.
-- Đồng bộ số lượng bản in cho tất cả ảnh.
-- Tự động làm nét hàng loạt (Auto Sharpen) và cân bằng sáng đa luồng qua Web Worker không làm đơ giao diện.
+- **Đổi kích thước trực quan:** Khối chọn kích thước và ép khuôn/hướng xoay ảnh đặt ngay dưới box tải ảnh, chọn và áp dụng tức thì.
+- **Xoay đồng loạt 90°:** Xoay nhanh toàn bộ ảnh chỉ với 1 cú nhấp chuột.
+- **Đồng bộ số lượng bản in:** Tăng/giảm hoặc áp dụng số lượng bản in hàng loạt cho tất cả ảnh.
+- **Tăng nét & Nâng DPI AI:** Tự động làm nét hàng loạt (Auto Sharpen) và cân bằng sáng đa luồng qua Web Worker không làm đơ giao diện.
 
-### 4. 🎨 Bộ chỉnh sửa ảnh chuyên sâu (Crop & Color Engine)
+### 4. 🔘 Xử lý viền phôi huy hiệu tròn (Badge Button Pin Bleed Engine)
+- Tự động nhận diện các ảnh chế độ phôi huy hiệu cài áo tròn.
+- **Viền mờ Blur Expand:** Tự động mở rộng viền ảnh dạng hiệu ứng mờ nhòe ra ngoài đường kính phôi, đảm bảo khi dập mép kim loại không bị lẹm viền trắng.
+- **Viền màu đơn sắc:** Tự động lấy mẫu màu viền hoặc gán viền màu đơn sắc đồng nhất.
+
+### 5. 🎨 Bộ chỉnh sửa ảnh chuyên sâu (Crop & Color Engine)
 - Cắt cúp khung hình tự do hoặc cố định theo các tỷ lệ in chuẩn (Polaroid, 6x9, 9x12, 10x15, A4, v.v.).
 - Đầy đủ thao tác: Xoay 90°, lật ngang, lật dọc, phóng to/thu nhỏ.
 - Thanh trượt chi tiết: Nhiệt độ màu, Độ sáng, Độ tương phản, Vùng sáng (Highlights), Vùng tối (Shadows).
 
-### 5. 📄 Xuất file & In ấn chuẩn in 300 DPI
+### 6. 📄 Xuất file & In ấn chuẩn in 300 DPI
 - **In trực tiếp A4 (`Ctrl + P`):** Tối ưu stylesheet cho máy in văn phòng và máy in ảnh chuyên dụng.
 - **Xuất PDF đa trang chất lượng cao:** File PDF đạt chuẩn 300 DPI sắc nét theo đúng bố cục đã dàn.
 - **Xuất ảnh định dạng PNG/JPEG:** Lưu trữ các trang in A4 thành ảnh độ nét cao.
+- **Tải PNG tách nền (Trong suốt):** Xuất toàn bộ trang in với nền trong suốt hoặc đóng gói ZIP toàn bộ ảnh con đã cắt.
 
-### 6. 💾 Tự động lưu & Khôi phục phiên làm việc
+### 7. 💾 Tự động lưu & Khôi phục phiên làm việc
 - Tự động lưu ngầm toàn bộ trạng thái vào **IndexedDB** của trình duyệt.
 - Hỗ trợ xuất và mở lại tệp dự án định dạng `.daudau` mang sang máy tính khác dễ dàng.
 
 ---
 
-## 🌐 HƯỚNG DẪN TRIỂN KHAI 1-CLICK TRÊN TENTEN HOSTING (TRIỂN KHAI NHANH)
+## 🌐 Triển khai lên Hosting (Deployment)
 
-Dự án đã được cấu hình tối ưu 100% cho tính năng **"Triển khai nhanh"** của Hosting Tenten. Hệ thống Tenten sẽ tự động hóa toàn bộ quá trình: kéo code, cài đặt thư viện, tự động build và kích hoạt máy chủ mà **không cần bạn phải gõ bất kỳ câu lệnh nào**.
+Dự án được cấu hình để tự động build và chạy trên mọi môi trường **Node.js Hosting** (v18+) hỗ trợ deploy từ Git:
 
-### Các bước thực hiện:
+- Sau khi clone và chạy `npm install`, script `postinstall` sẽ tự động build ra thư mục `dist/`.
+- `server.js` tích hợp sẵn cơ chế **Auto-Build Fallback** — nếu `dist/` chưa có khi khởi động, server tự gọi build trước khi serve, đảm bảo website không bao giờ lỗi 404.
+- Cổng mạng tự động nhận qua biến môi trường `process.env.PORT` (mặc định `3000`).
 
-1. **Bước 1: Đẩy mã nguồn lên GitHub**
-   - Đẩy toàn bộ mã nguồn dự án lên một kho lưu trữ GitHub của bạn.
-
-2. **Bước 2: Mở bảng "Triển khai nhanh" trên Tenten**
-   - Đăng nhập vào trang quản trị Hosting Tenten.
-   - Chọn mục **Triển khai nhanh** (Quick Deploy):
-     - **Nguồn mã nguồn:** Chọn **Git Repo**.
-     - **Đường dẫn Git:** Dán đường dẫn repository của bạn (ví dụ: `https://github.com/username/autopack-print.git`).
-     - **Tên miền (Domain):** Chọn tên miền của bạn (ví dụ: `daudau.pro.vn`).
-     - **Phiên bản Node.js:** Chọn **Node.js v24 (LTS)** (hoặc v20, v18).
-     - Nhấn nút: **Triển khai dự án ngay**.
-
-3. **Bước 3: Hoàn tất!**
-   - Hosting Tenten sẽ tự động clone mã nguồn từ GitHub.
-   - Quá trình `npm install` sẽ tự động kích hoạt lệnh build (`postinstall: "vite build"`).
-   - Tệp `server.js` tích hợp sẵn cơ chế **Auto-Build Fallback** — nếu chưa có thư mục `dist/`, server sẽ tự động chạy build ngầm ngay khi khởi động.
-   - Cổng mạng `PORT` tự động nhận diện theo môi trường động của Tenten (`process.env.PORT || 3000`).
-   - Bạn chỉ cần chờ vài chục giây và truy cập thẳng tên miền `daudau.pro.vn` để sử dụng!
-
----
-
-### 🔄 Cập nhật dự án khi có thay đổi (Auto Update)
-Mỗi khi bạn cập nhật code và đẩy lên GitHub:
-- Trên bảng quản trị Tenten, bạn chỉ cần nhấn **Cập nhật / Pull & Deploy**.
-- Hệ thống Tenten sẽ tự động kéo bản mới nhất, tự động biên dịch lại và khởi động lại web tức thì.
+### Cập nhật khi có thay đổi
+Đẩy code mới lên Git → kéo bản mới về hosting → restart server. Hệ thống tự động biên dịch lại.
 
 ---
 

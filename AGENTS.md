@@ -1,19 +1,19 @@
 # AGENTS.md - Quy tắc & Hướng dẫn Dự án Dâu Dâu AutoPack Print
 
-Tệp tin này ghi lại toàn bộ bối cảnh dự án, kiến trúc hệ thống, nguyên tắc phát triển và quy trình triển khai hosting Tenten được thống nhất cùng tác giả.
+Tệp tin này ghi lại toàn bộ bối cảnh dự án, kiến trúc hệ thống, nguyên tắc phát triển và các quy tắc kỹ thuật bắt buộc dành cho AI agent khi làm việc với codebase này.
 
 ---
 
 ## 📌 1. Bối cảnh Dự án (Project Context)
 - **Tên dự án:** Dâu Dâu AutoPack Print
-- **Tên miền sản xuất:** `daudau.pro.vn` (Tenten Hosting)
-- **Mục đích:** Ứng dụng web chuyên nghiệp phục vụ in ấn ảnh A4 tự động và bóc tách sticker PNG cho shop Dâu Dâu.
+- **Mục đích:** Ứng dụng web chuyên nghiệp phục vụ in ấn ảnh A4 tự động và bóc tách sticker PNG.
 - **Tính năng cốt lõi:**
   1. **Dàn trang in A4 thông minh & Bố cục kép:** Sắp xếp ảnh tối ưu giấy in (Bin Packing Best-Fit) hoặc Kéo thả vị trí tự do (Freeform), thước đo milimet, kiểm tra DPI, chỉnh tâm trực tiếp, làm nét/cân sáng, xuất file PDF đa trang chuẩn in 300 DPI.
   2. **Căn gióng nam châm & In 2 mặt đối xứng:** Smart Snapping căn mép/tâm thông minh khi kéo thả, in 2 mặt đối xứng tự động lật ảnh qua trục dọc, viền xén tràn lề (Bleed) và dấu căn xén (Crop Marks).
-  3. **Nhãn đơn hàng di động (Draggable Text Tag):** Nhãn tên khách, mã đơn và ngày giờ có thể kéo thả linh hoạt đến vùng trống trên trang in.
-  4. **Tách nhãn dán PNG tự động (PNG Sheet Splitter):** Quét kênh Alpha độ trong suốt, tách rời từng sticker từ bảng sticker tổng hợp, cho phép kéo thả sang bàn in hoặc tải về file ZIP.
-  5. **Lưu trữ & Lịch sử thao tác:** Ngăn xếp Undo / Redo đa bước (Ctrl+Z / Ctrl+Y), tự động lưu ngầm vào IndexedDB và xuất/nhập tệp dự án định dạng `.daudau`.
+  3. **Cột xem trước các trang in (Page Thumbnails Navigator):** Thanh thu nhỏ bố cục các trang A4 ngoài cùng bên phải, nhấp chuột để cuộn mượt (smooth scroll) đến trang bất kỳ, tự động đánh dấu trang đang active và hỗ trợ thu gọn/mở rộng linh hoạt.
+  4. **Nhãn đơn hàng di động (Draggable Text Tag):** Nhãn tên khách, mã đơn và ngày giờ có thể kéo thả linh hoạt đến vùng trống trên trang in.
+  5. **Tách nhãn dán PNG tự động (PNG Sheet Splitter):** Quét kênh Alpha độ trong suốt, tách rời từng sticker từ bảng sticker tổng hợp, cho phép kéo thả sang bàn in hoặc tải về file ZIP.
+  6. **Lưu trữ & Lịch sử thao tác:** Ngăn xếp Undo / Redo đa bước (Ctrl+Z / Ctrl+Y), tự động lưu ngầm vào IndexedDB và xuất/nhập tệp dự án định dạng `.daudau`.
 
 ---
 
@@ -26,7 +26,7 @@ Tệp tin này ghi lại toàn bộ bối cảnh dự án, kiến trúc hệ th�
 
 2. **Server Node.js / Express tối giản:**
    - File khởi động: `server.js` (dùng ES Modules `"type": "module"`).
-   - Port: Luôn dùng `const PORT = process.env.PORT || 3000;` để nhận port động từ hosting Tenten/cPanel.
+   - Port: Luôn dùng `const PORT = process.env.PORT || 3000;` để nhận port động từ môi trường hosting.
    - Host: Luôn lắng nghe `0.0.0.0`.
    - Phục vụ tĩnh: Thư mục `dist/` và fallback SPA route `app.get('*') -> index.html`.
 
@@ -41,22 +41,19 @@ Tệp tin này ghi lại toàn bộ bối cảnh dự án, kiến trúc hệ th�
 
 ---
 
-## 🚀 3. Cơ chế Triển khai Siêu Tốc trên Hosting Tenten (1-Click Deploy)
+## 🚀 3. Quy tắc Triển khai (Deployment Rules)
 
-Hosting Tenten trang bị giao diện **"Triển khai nhanh" (Quick Deploy)**:
-- Nguồn mã nguồn: **Git Repo**
-- Đường dẫn Git: URL repository GitHub (ví dụ: `https://github.com/username/autopack-print.git`)
-- Tên miền: `daudau.pro.vn`
-- Phiên bản Node.js: **Node.js v24 (LTS)** (hoặc v20, v18)
-- Nút bấm: **Triển khai dự án ngay**
+Dự án sử dụng cơ chế **tự động build** để đảm bảo tương thích với mọi môi trường hosting Node.js:
 
-### Đảm bảo tính tương thích 1-Click:
 1. **Tự động Build khi Install (`postinstall`):**
-   Trong `package.json` đã có script `"postinstall": "vite build"`. Khi Tenten clone repo và chạy `npm install`, mã nguồn sẽ tự động được biên dịch ra thư mục `dist/` ngay lập tức.
-2. **Fallback tự Build trong `server.js`:**
-   Nếu vì bất kỳ lý do gì thư mục `dist/` chưa có khi máy chủ khởi chạy, `server.js` tự động phát hiện và gọi `npm run build` ngầm qua `child_process.execSync`, đảm bảo website không bao giờ bị lỗi 404/500 hay thiếu file.
-3. **Không cần thao tác SSH/Terminal:**
-   Người dùng chỉ cần dán link Git trên giao diện web của Tenten và bấm nút, hệ thống sẽ tự động hoàn tất 100% từ cài đặt đến chạy web.
+   - `package.json` có script `"postinstall": "vite build"`. Sau khi `npm install`, mã nguồn tự động được biên dịch ra thư mục `dist/`.
+
+2. **Auto-Build Fallback trong `server.js`:**
+   - Nếu thư mục `dist/` chưa tồn tại khi server khởi động, `server.js` tự động phát hiện và gọi `npm run build` ngầm qua `child_process.execSync` trước khi serve. Không được xóa hoặc thay đổi cơ chế này.
+
+3. **Yêu cầu môi trường:**
+   - Node.js v18 trở lên (khuyến nghị v20 LTS hoặc v24).
+   - Server lắng nghe `0.0.0.0` và nhận port qua `process.env.PORT`.
 
 ---
 

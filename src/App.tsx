@@ -18,6 +18,7 @@ import { ImageListSidebar } from './components/ImageListSidebar';
 import { BatchToolsSidebar } from './components/BatchToolsSidebar';
 import { SettingsSidebar } from './components/SettingsSidebar';
 import { A4PreviewArea } from './components/A4PreviewArea';
+import { PageThumbnailsSidebar } from './components/PageThumbnailsSidebar';
 import { ToolSelectorHub } from './components/ToolSelectorHub';
 import { ToastContainer, ToastMessage } from './components/Toast';
 import { useHistoryState } from './hooks/useHistoryState';
@@ -97,9 +98,26 @@ export default function App() {
   const [pendingRestoreMeta, setPendingRestoreMeta] = useState<ProjectMetadata | null>(null);
   const [isAutoSaved, setIsAutoSaved] = useState<boolean>(false);
 
-  // Sidebar Collapse States (Mặc định cả 2 cột đều mở rộng như hiện tại)
+  // Sidebar Collapse States (Mặc định ẩn tab Thao tác hàng loạt theo yêu cầu)
   const [isListSidebarCollapsed, setIsListSidebarCollapsed] = useState<boolean>(false);
-  const [isBatchSidebarCollapsed, setIsBatchSidebarCollapsed] = useState<boolean>(false);
+  const [isBatchSidebarCollapsed, setIsBatchSidebarCollapsed] = useState<boolean>(true);
+  const [isThumbnailsSidebarCollapsed, setIsThumbnailsSidebarCollapsed] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('daudau_thumbnails_sidebar_collapsed') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  const handleToggleThumbnailsSidebar = useCallback(() => {
+    setIsThumbnailsSidebarCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem('daudau_thumbnails_sidebar_collapsed', String(next));
+      } catch {}
+      return next;
+    });
+  }, []);
 
   // Custom Size Presets & Modal State
   const [customPresets, setCustomPresets] = useState<SizePreset[]>(() => {
@@ -1308,17 +1326,15 @@ export default function App() {
             onBatchUpdatePhotos={handleBatchUpdatePhotos}
             onToast={addToast}
             smartCrop={settings.smartCrop}
-            activePresetId={activePresetId}
-            onChangeActivePresetId={handleActivePresetChange}
-            orientationMode={orientationMode}
-            onChangeOrientationMode={handleOrientationModeChange}
-            autoMatchOrientation={autoMatchOrientation}
-            onToggleAutoMatchOrientation={handleToggleAutoMatchOrientation}
-            customPresets={customPresets}
-            onOpenCustomSizeModal={() => setCustomSizeModalConfig({ isOpen: true, targetPhoto: null })}
+            settings={settings}
+            onUpdateSettings={handleUpdateSettings}
+            pageCount={packedPages.length}
+            onClonePage1AsBackside={handleClonePage1AsBackside}
+            onResetFreeformPositions={handleResetFreeformPositions}
             onExportAllPhotosZip={handleExportAllPhotosZip}
             isCollapsed={isBatchSidebarCollapsed}
             onToggleCollapse={() => setIsBatchSidebarCollapsed((c) => !c)}
+            onClose={() => setIsBatchSidebarCollapsed(true)}
           />
 
           {/* Column 3: Settings Sidebar */}
@@ -1341,16 +1357,23 @@ export default function App() {
             exportProgress={exportProgress}
             onToast={addToast}
             activePreset={activePreset}
+            activePresetId={activePresetId}
+            onChangeActivePresetId={handleActivePresetChange}
             orientationMode={orientationMode}
+            onChangeOrientationMode={handleOrientationModeChange}
             autoMatchOrientation={autoMatchOrientation}
             customPresets={customPresets}
+            onOpenCustomSizeModal={() => setCustomSizeModalConfig({ isOpen: true, targetPhoto: null })}
+            onUpdatePhoto={handleUpdatePhoto}
+            onBatchUpdatePhotos={handleBatchUpdatePhotos}
+            smartCrop={settings.smartCrop}
             onOpenPngSplitter={() => setActiveView('png-splitter')}
             onClonePage1AsBackside={handleClonePage1AsBackside}
             onResetFreeformPositions={handleResetFreeformPositions}
             photos={photos}
           />
 
-          {/* Column 4: Live Interactive A4 Preview (Right) */}
+          {/* Column 4: Live Interactive A4 Preview */}
           <A4PreviewArea
             pages={packedPages}
             settings={settings}
@@ -1370,6 +1393,14 @@ export default function App() {
             onUpdateFreeformPosition={handleUpdateFreeformPosition}
             onResetFreeformPositions={handleResetFreeformPositions}
             onDuplicatePhoto={handleDuplicatePhoto}
+          />
+
+          {/* Column 5: Rightmost Page Thumbnails Navigation Sidebar */}
+          <PageThumbnailsSidebar
+            pages={packedPages}
+            settings={settings}
+            isCollapsed={isThumbnailsSidebarCollapsed}
+            onToggleCollapse={handleToggleThumbnailsSidebar}
           />
 
           <Suspense fallback={null}>

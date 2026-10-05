@@ -994,7 +994,8 @@ export const A4PreviewArea: React.FC<A4PreviewAreaProps> = ({
               return (
                 <div
                   key={`page-wrapper-${page.pageNumber}`}
-                  className="page-wrapper flex flex-col items-center"
+                  id={`page-wrapper-${page.pageNumber}`}
+                  className="page-wrapper flex flex-col items-center scroll-mt-16"
                 >
                   {/* Page Status Badges Header (Được dịch lên trên đỉnh, nằm ngoài tờ giấy A4 để không bao giờ che khuất chi tiết ảnh) */}
                   <div

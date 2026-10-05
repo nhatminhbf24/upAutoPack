@@ -245,14 +245,44 @@ export const Uploader: React.FC<UploaderProps> = ({
   };
 
   return (
-    <div id="uploader-section" className="space-y-2">
-      {/* Header cùng dòng: TẢI ẢNH LÊN + Dropdown Dự án (Image 1) + Nút ảnh mẫu */}
-      <div className="flex items-center justify-between gap-1.5">
-        <div className="flex items-center gap-1.5 text-rose-950 font-bold shrink-0">
-          <FileImage className="w-4 h-4 text-rose-600" />
-          <h2 className="text-xs uppercase tracking-wide">Tải ảnh lên</h2>
-        </div>
+    <div
+      id="uploader-section"
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+      className="relative"
+    >
+      {/* Hidden File Input */}
+      <input
+        ref={fileInputRef}
+        id="file-upload-input"
+        type="file"
+        multiple
+        accept="image/*"
+        onChange={handleFileInputChange}
+        className="hidden"
+      />
 
+      {/* 1 HÀNG DUY NHẤT: icon mũi tên đám mây > Nút Tải ảnh lên (màu xanh lá nhạt) > Dự án > Ảnh mẫu */}
+      <div className="flex items-center justify-between gap-1.5">
+        {/* Nút Tải ảnh lên: icon mũi tên đám mây > Tải ảnh lên (màu xanh lá nhạt, trỏ chuột vào màu đậm hơn) */}
+        <button
+          type="button"
+          id="btn-upload-photos"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={isProcessing}
+          className="h-8 flex-1 flex items-center justify-center gap-1.5 px-3 rounded-lg bg-emerald-100 hover:bg-emerald-200 active:bg-emerald-300 text-emerald-800 hover:text-emerald-950 border border-emerald-300/80 text-xs font-bold transition-all cursor-pointer shadow-2xs group active:scale-95 disabled:opacity-50"
+          title="Chọn ảnh từ máy tính hoặc kéo thả ảnh vào bất cứ đâu"
+        >
+          {isProcessing ? (
+            <Loader2 className="w-4 h-4 animate-spin text-emerald-700 shrink-0" />
+          ) : (
+            <UploadCloud className="w-4 h-4 text-emerald-700 group-hover:scale-110 transition-transform shrink-0" />
+          )}
+          <span>{isProcessing ? 'Đang nạp...' : 'Tải ảnh lên'}</span>
+        </button>
+
+        {/* 2 nút còn lại giữ nguyên */}
         <div className="flex items-center gap-1.5 shrink-0">
           {/* Streamlined Project Dropdown (Lưu / Mở dự án .daudau) */}
           {(onExportProject || onImportProject) && (
@@ -261,10 +291,10 @@ export const Uploader: React.FC<UploaderProps> = ({
                 type="button"
                 id="btn-project-dropdown"
                 onClick={() => setIsProjectDropdownOpen((prev) => !prev)}
-                className={`h-7 flex items-center gap-1 px-2.5 rounded-lg border transition cursor-pointer shadow-2xs text-xs font-semibold ${
+                className={`h-8 flex items-center gap-1 px-2.5 rounded-lg border transition cursor-pointer shadow-2xs text-xs font-semibold ${
                   isProjectDropdownOpen
                     ? 'bg-slate-200/90 text-slate-900 border-slate-300'
-                    : 'bg-white/95 hover:bg-slate-50 text-slate-700 border-slate-200/90 hover:border-slate-300'
+                    : 'bg-white/95 hover:bg-emerald-50 text-slate-700 border-slate-200/90 hover:border-emerald-300'
                 }`}
                 title="Quản lý dự án: Lưu hoặc Mở tệp .daudau"
               >
@@ -273,7 +303,7 @@ export const Uploader: React.FC<UploaderProps> = ({
                 <ChevronDown className={`w-3 h-3 text-slate-400 transition-transform duration-150 ${isProjectDropdownOpen ? 'rotate-180' : ''}`} />
               </button>
 
-              {/* Dropdown Menu (Image 1 style) */}
+              {/* Dropdown Menu */}
               {isProjectDropdownOpen && (
                 <div
                   id="project-menu-popover"
@@ -345,97 +375,27 @@ export const Uploader: React.FC<UploaderProps> = ({
             id="btn-load-sample"
             onClick={loadSamplePhotos}
             disabled={isProcessing}
-            className="w-7 h-7 flex items-center justify-center rounded-lg bg-white/95 hover:bg-rose-50 hover:border-rose-300 border border-rose-200 text-rose-500 hover:text-rose-600 transition shadow-2xs cursor-pointer active:scale-90 disabled:opacity-50"
+            className="w-8 h-8 flex items-center justify-center rounded-lg bg-white/95 hover:bg-emerald-50 hover:border-emerald-300 border border-slate-200/90 text-slate-600 hover:text-emerald-700 transition shadow-2xs cursor-pointer active:scale-90 disabled:opacity-50"
             title="Thử ngay với ảnh mẫu có sẵn (Chân dung, phong cảnh, thú cưng)"
           >
             {isProcessing ? (
-              <Loader2 className="w-3.5 h-3.5 animate-spin text-rose-500" />
+              <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-600" />
             ) : (
-              <Images className="w-3.5 h-3.5" />
+              <Images className="w-3.5 h-3.5 text-emerald-600" />
             )}
           </button>
         </div>
       </div>
 
-      {/* Hidden File Input */}
-      <input
-        ref={fileInputRef}
-        id="file-upload-input"
-        type="file"
-        multiple
-        accept="image/*"
-        onChange={handleFileInputChange}
-        className="hidden"
-      />
-
-      {/* Main Upload Dropzone (Ô cấu hình trùng lặp đã được gỡ bỏ theo yêu cầu) */}
-      <div
-        id="drop-zone-container"
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onDrop={handleDrop}
-        onClick={() => fileInputRef.current?.click()}
-        className={`relative border-2 border-dashed rounded-xl p-4 text-center cursor-pointer transition-all duration-200 group select-none ${
-          isDragging
-            ? 'border-blue-500 bg-blue-50 ring-4 ring-blue-100 scale-[0.99]'
-            : 'border-blue-200 bg-blue-50/40 hover:bg-blue-50/80 hover:border-blue-400'
-        }`}
-      >
-        <div className="w-10 h-10 mx-auto bg-white rounded-xl shadow-sm border border-blue-100 flex items-center justify-center mb-2 group-hover:scale-105 transition-transform">
-          {isProcessing ? (
-            <div className="w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
-          ) : (
-            <UploadCloud className="w-5 h-5 text-blue-600 group-hover:text-blue-700" />
-          )}
+      {/* Mini Progress Bar khi nạp nhiều ảnh */}
+      {uploadProgress && (
+        <div className="w-full bg-emerald-100/80 h-1.5 rounded-full overflow-hidden mt-2">
+          <div
+            className="bg-emerald-600 h-full transition-all duration-150 rounded-full"
+            style={{ width: `${uploadProgress.percent}%` }}
+          />
         </div>
-
-        <div className="text-[13px] font-bold text-gray-800 mb-0.5">
-          {isProcessing
-            ? `Đang tối ưu & nạp ảnh ${uploadProgress ? `(${uploadProgress.current}/${uploadProgress.total})` : ''}...`
-            : 'Kéo thả hoặc Nhấp để chọn ảnh'}
-        </div>
-
-        {uploadProgress ? (
-          <div className="mt-2 space-y-1">
-            <div className="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden">
-              <div
-                className="bg-blue-600 h-full transition-all duration-150 rounded-full"
-                style={{ width: `${uploadProgress.percent}%` }}
-              />
-            </div>
-            <p className="text-[10px] font-mono text-blue-600 font-bold">
-              {uploadProgress.percent}% hoàn tất (Giảm tải bộ nhớ siêu tốc)
-            </p>
-          </div>
-        ) : (
-          <p className="text-[11px] text-gray-500">
-            Định dạng <strong className="text-blue-700 font-semibold">{activePreset.label}</strong>
-            {effectiveMode === 'rotate_to_fit' && (
-              <span className="text-emerald-700 font-semibold ml-1">· Ép đúng khuôn - Tự xoay ảnh</span>
-            )}
-            {effectiveMode === 'fixed_crop' && (
-              <span className="text-slate-600 font-semibold ml-1">· Ép đúng khuôn - Không xoay ảnh</span>
-            )}
-            {effectiveMode === 'auto_match' && (
-              <span className="text-blue-700 font-semibold ml-1">· Xoay khuôn theo chiều ảnh</span>
-            )}
-          </p>
-        )}
-
-        <button
-          type="button"
-          id="btn-select-photos-device"
-          disabled={isProcessing}
-          onClick={(e) => {
-            e.stopPropagation();
-            fileInputRef.current?.click();
-          }}
-          className="mt-2.5 inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-lg text-xs font-semibold shadow-xs transition active:scale-95 cursor-pointer"
-        >
-          <Plus className="w-3.5 h-3.5" />
-          <span>Chọn ảnh từ máy</span>
-        </button>
-      </div>
+      )}
     </div>
   );
 };
