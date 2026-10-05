@@ -20,6 +20,7 @@ import {
   Tag,
   Plus,
   X,
+  AlertTriangle,
 } from 'lucide-react';
 import { PackedPage, LayoutSettings, PhotoItem, ShapeType, PlacedPhotoItem, FreeformTextTag } from '../types';
 import { A4_WIDTH_MM, A4_HEIGHT_MM } from '../utils/packing';
@@ -46,6 +47,7 @@ interface A4PreviewAreaProps {
   onUpdateSettings?: (updates: Partial<LayoutSettings>) => void;
   onUpdateFreeformPosition?: (photoId: string, instanceIndex: number, pos: { x: number; y: number; pageNumber?: number }) => void;
   onResetFreeformPositions?: () => void;
+  onDuplicatePhoto?: (id: string) => void;
 }
 
 // Trình hiển thị vạch gióng nam châm trực tiếp qua DOM để đạt 60 FPS, không re-render React
@@ -123,6 +125,7 @@ export const A4PreviewArea: React.FC<A4PreviewAreaProps> = ({
   onUpdateSettings,
   onUpdateFreeformPosition,
   onResetFreeformPositions,
+  onDuplicatePhoto,
 }) => {
   const [zoom, setZoom] = useState<number>(70); // Percentage: 30% to 150%
   const [showRuler, setShowRuler] = useState<boolean>(false);
@@ -416,8 +419,30 @@ export const A4PreviewArea: React.FC<A4PreviewAreaProps> = ({
       const moveCssPxX = moveMmX * unscaledPxPerMmX;
       const moveCssPxY = moveMmY * unscaledPxPerMmY;
 
+      // Kiểm tra tràn lề thời gian thực và cảnh báo trực tiếp lên khung ảnh
+      const isDraggingOutOfBounds =
+        latestSnappedRenderX < -0.1 ||
+        latestSnappedRenderY < -0.1 ||
+        latestSnappedRenderX + itemW > pageW_mm + 0.1 ||
+        latestSnappedRenderY + itemH > pageH_mm + 0.1;
+      const isDraggingNearEdge =
+        !isDraggingOutOfBounds &&
+        (latestSnappedRenderX < 3 ||
+          latestSnappedRenderY < 3 ||
+          latestSnappedRenderX + itemW > pageW_mm - 3 ||
+          latestSnappedRenderY + itemH > pageH_mm - 3);
+
       if (boxElement) {
         boxElement.style.transform = `translate3d(${moveCssPxX}px, ${moveCssPxY}px, 0)`;
+        if (isDraggingOutOfBounds) {
+          boxElement.classList.add('ring-2', 'ring-rose-500', 'ring-offset-1');
+          boxElement.classList.remove('ring-amber-500');
+        } else if (isDraggingNearEdge) {
+          boxElement.classList.add('ring-2', 'ring-amber-500');
+          boxElement.classList.remove('ring-rose-500', 'ring-offset-1');
+        } else {
+          boxElement.classList.remove('ring-2', 'ring-rose-500', 'ring-offset-1', 'ring-amber-500');
+        }
       }
       if (cropMarksElement) {
         cropMarksElement.style.transform = `translate3d(${moveCssPxX}px, ${moveCssPxY}px, 0)`;
@@ -459,7 +484,7 @@ export const A4PreviewArea: React.FC<A4PreviewAreaProps> = ({
         boxElement.style.top = `${latestSnappedRenderY}mm`;
         boxElement.style.transform = '';
         boxElement.style.zIndex = '';
-        boxElement.classList.remove('shadow-2xl', 'opacity-95');
+        boxElement.classList.remove('shadow-2xl', 'opacity-95', 'ring-rose-500', 'ring-offset-1', 'ring-amber-500');
       }
       if (cropMarksElement) {
         cropMarksElement.style.willChange = '';
@@ -1032,6 +1057,67 @@ export const A4PreviewArea: React.FC<A4PreviewAreaProps> = ({
                     })()}
 
                     <div className="flex items-center gap-2 pointer-events-none">
+                      {/* Cảnh báo ảnh tràn mép giấy hoặc sát mép nguy hiểm (Freeform) */}
+                      {(() => {
+                        if (!isFreeformMode) return null;
+                        const outOfBoundsCount = page.items.filter((it) => {
+                          const isSquare = it.shape === 'circle' || it.shape === 'heart';
+                          const diam = isSquare ? Math.min(it.w, it.h) : 0;
+                          const itemW = isSquare ? diam : it.w;
+                          const itemH = isSquare ? diam : it.h;
+                          const itemX = isSquare ? it.x + (it.w - diam) / 2 : it.x;
+                          const itemY = isSquare ? it.y + (it.h - diam) / 2 : it.y;
+                          return (
+                            itemX < -0.1 ||
+                            itemY < -0.1 ||
+                            itemX + itemW > pageW_mm + 0.1 ||
+                            itemY + itemH > pageH_mm + 0.1
+                          );
+                        }).length;
+
+                        const nearEdgeCount = page.items.filter((it) => {
+                          const isSquare = it.shape === 'circle' || it.shape === 'heart';
+                          const diam = isSquare ? Math.min(it.w, it.h) : 0;
+                          const itemW = isSquare ? diam : it.w;
+                          const itemH = isSquare ? diam : it.h;
+                          const itemX = isSquare ? it.x + (it.w - diam) / 2 : it.x;
+                          const itemY = isSquare ? it.y + (it.h - diam) / 2 : it.y;
+                          const isOut =
+                            itemX < -0.1 ||
+                            itemY < -0.1 ||
+                            itemX + itemW > pageW_mm + 0.1 ||
+                            itemY + itemH > pageH_mm + 0.1;
+                          return (
+                            !isOut &&
+                            (itemX < 3 || itemY < 3 || itemX + itemW > pageW_mm - 3 || itemY + itemH > pageH_mm - 3)
+                          );
+                        }).length;
+
+                        if (outOfBoundsCount > 0) {
+                          return (
+                            <div
+                              className="no-print bg-rose-600/95 text-white text-[12px] font-bold px-2.5 py-1 rounded-full shadow-xs flex items-center gap-1.5 animate-pulse"
+                              title="Có ảnh đang tràn ra ngoài lề trang in A4. Máy in sẽ cắt cụt một phần ảnh!"
+                            >
+                              <AlertTriangle className="w-3.5 h-3.5 text-white" />
+                              <span>{outOfBoundsCount} ảnh tràn lề giấy</span>
+                            </div>
+                          );
+                        }
+                        if (nearEdgeCount > 0) {
+                          return (
+                            <div
+                              className="no-print bg-amber-600/95 text-white text-[12px] font-bold px-2.5 py-1 rounded-full shadow-xs flex items-center gap-1.5"
+                              title="Có ảnh nằm sát mép giấy (< 3mm). Đầu in máy in thông thường có thể cắt phạm viền."
+                            >
+                              <AlertTriangle className="w-3.5 h-3.5 text-white" />
+                              <span>{nearEdgeCount} ảnh sát mép (&lt;3mm)</span>
+                            </div>
+                          );
+                        }
+                        return null;
+                      })()}
+
                       {/* Duplex Indicator Badge if enabled */}
                       {settings.duplexMode && (
                         <div className="bg-purple-700/95 text-white text-[13px] font-bold px-3 py-1 rounded-full shadow-xs flex items-center gap-1.5">
@@ -1245,14 +1331,24 @@ export const A4PreviewArea: React.FC<A4PreviewAreaProps> = ({
 
                   {/* Printable Margin Guideline (Subtle dashed, hidden in print) */}
                   <div
-                    className="no-print absolute border border-blue-200/40 pointer-events-none z-10"
+                    className={`no-print absolute pointer-events-none z-10 transition-colors ${
+                      isFreeformMode
+                        ? 'border-2 border-dashed border-rose-300/60 bg-rose-50/5'
+                        : 'border border-blue-200/40'
+                    }`}
                     style={{
                       left: `${settings.margin}mm`,
                       top: `${settings.margin}mm`,
                       width: `${pageW_mm - settings.margin * 2}mm`,
                       height: `${pageH_mm - settings.margin * 2}mm`,
                     }}
-                  />
+                  >
+                    {isFreeformMode && (
+                      <span className="absolute -top-3.5 right-1 text-[8.5px] font-bold font-mono text-rose-500/80 bg-white/90 px-1 rounded shadow-2xs border border-rose-200/60 select-none">
+                        Vùng in an toàn (Lề {settings.margin}mm)
+                      </span>
+                    )}
+                  </div>
 
                   {/* Full Trim Guides (Đường gióng thước tràn ra tận 4 mép giấy A4) */}
                   {(() => {
@@ -1411,6 +1507,21 @@ export const A4PreviewArea: React.FC<A4PreviewAreaProps> = ({
                     const isDashedCut = settings.cutLines && activeCutStyles.includes('dashed');
                     const isSelected = selectedPhotoId === item.id;
 
+                    const isOutOfBounds =
+                      isFreeformMode &&
+                      (currentItemX < -0.1 ||
+                        currentItemY < -0.1 ||
+                        currentItemX + renderW > pageW_mm + 0.1 ||
+                        currentItemY + renderH > pageH_mm + 0.1);
+
+                    const isNearEdge =
+                      isFreeformMode &&
+                      !isOutOfBounds &&
+                      (currentItemX < 3 ||
+                        currentItemY < 3 ||
+                        currentItemX + renderW > pageW_mm - 3 ||
+                        currentItemY + renderH > pageH_mm - 3);
+
                     return (
                       <React.Fragment key={`frag-${item.id}-${item.instanceIndex}`}>
                         {/* Corner Crop Marks for Precision Cutting (SVG Overlay) */}
@@ -1462,7 +1573,11 @@ export const A4PreviewArea: React.FC<A4PreviewAreaProps> = ({
                           onDoubleClick={() => onOpenCropModal(item)}
                           title={
                             isFreeformMode
-                              ? 'Nhấp giữ và kéo ảnh tự do trên trang A4 • Tự động gióng & hút nam châm 3mm • Nhấp đúp để chỉnh chi tiết'
+                              ? isOutOfBounds
+                                ? 'CẢNH BÁO: Ảnh đang tràn ra ngoài khổ giấy A4! Có nguy cơ bị máy in cắt mất góc.'
+                                : isNearEdge
+                                ? 'CẢNH BÁO: Ảnh nằm sát mép giấy (< 3mm). Đầu in thông thường có thể cắt phạm viền.'
+                                : 'Nhấp giữ và kéo ảnh tự do trên trang A4 • Tự động gióng & hút nam châm 3mm • Nhấp đúp để chỉnh chi tiết'
                               : 'Kéo thả để đổi vị trí ảnh • Kéo chuột trên ảnh để dịch tâm • Nhấp đúp để chỉnh chi tiết'
                           }
                           style={{
@@ -1486,8 +1601,35 @@ export const A4PreviewArea: React.FC<A4PreviewAreaProps> = ({
                             !isFreeformMode && isDragOverThis
                               ? 'ring-4 ring-emerald-500 ring-offset-2 scale-105 z-30 shadow-lg'
                               : ''
-                          } ${isSelected ? 'z-30' : ''}`}
+                          } ${isSelected ? 'z-30' : ''} ${
+                            isOutOfBounds
+                              ? 'ring-2 ring-rose-500 ring-offset-1 shadow-lg shadow-rose-500/25'
+                              : isNearEdge
+                              ? 'ring-2 ring-amber-500 shadow-md shadow-amber-500/20'
+                              : ''
+                          }`}
                         >
+                        {/* Out-of-bounds warning badge (Freeform mode) */}
+                        {isOutOfBounds && (
+                          <div
+                            className="no-print pointer-events-none absolute top-1.5 left-1.5 bg-rose-600 text-white text-[9px] font-bold px-1.5 py-0.5 rounded shadow-sm flex items-center gap-1 z-30 border border-rose-300/40 animate-pulse select-none"
+                            title="Ảnh tràn ra ngoài khổ giấy A4! Có nguy cơ bị cắt mất góc khi in."
+                          >
+                            <AlertTriangle className="w-2.5 h-2.5 text-white shrink-0" />
+                            <span>Tràn giấy</span>
+                          </div>
+                        )}
+
+                        {/* Near edge warning badge (Freeform mode) */}
+                        {isNearEdge && (
+                          <div
+                            className="no-print pointer-events-none absolute top-1.5 left-1.5 bg-amber-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded shadow-sm flex items-center gap-1 z-30 border border-amber-300/40 select-none"
+                            title="Ảnh cách mép giấy dưới 3mm. Máy in thông thường có thể cắt phạm viền ảnh!"
+                          >
+                            <AlertTriangle className="w-2.5 h-2.5 text-white shrink-0" />
+                            <span>Sát mép (&lt;3mm)</span>
+                          </div>
+                        )}
                         {/* Image Content */}
                         {item.badgeMode && item.badgeFaceDiameter ? (
                           /* 🏅 Chế độ phôi huy hiệu cài áo: Mặt chính diện nằm lọt lòng giữa viền bọc */

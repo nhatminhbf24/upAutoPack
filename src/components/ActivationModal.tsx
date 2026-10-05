@@ -5,14 +5,24 @@ interface ActivationModalProps {
   onUnlock: () => void;
 }
 
-const SECRET_CODE = '0798408406';
+// SHA-256 hash của mã kích hoạt hợp lệ (bảo vệ bản quyền, chống đọc trộm mã từ source code bundle)
+const VALID_CODE_HASH = 'c94af02011125cb23374163642351496ea71a9300ea1d4582791b356d53dea3c';
+
+async function sha256Hex(str: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(str);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
+}
 
 export const ActivationModal: React.FC<ActivationModalProps> = ({ onUnlock }) => {
   const [code, setCode] = useState('');
   const [error, setError] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const [isVerifying, setIsVerifying] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const cleanCode = code.trim();
 
@@ -22,16 +32,26 @@ export const ActivationModal: React.FC<ActivationModalProps> = ({ onUnlock }) =>
       return;
     }
 
-    if (cleanCode === SECRET_CODE) {
-      try {
-        localStorage.setItem('daudau_unlocked', 'true');
-      } catch (err) {
-        console.warn('Cannot write to localStorage', err);
+    setIsVerifying(true);
+    try {
+      const hash = await sha256Hex(cleanCode);
+      if (hash === VALID_CODE_HASH) {
+        try {
+          localStorage.setItem('daudau_unlocked', 'true');
+        } catch (err) {
+          console.warn('Cannot write to localStorage', err);
+        }
+        onUnlock();
+      } else {
+        setError(true);
+        setErrorMessage('Mã kích hoạt không chính xác. Vui lòng kiểm tra lại!');
       }
-      onUnlock();
-    } else {
+    } catch (err) {
+      console.error('Lỗi kiểm tra mã kích hoạt:', err);
       setError(true);
-      setErrorMessage('Mã kích hoạt không chính xác. Vui lòng kiểm tra lại!');
+      setErrorMessage('Không thể xác thực mã lúc này. Vui lòng thử lại!');
+    } finally {
+      setIsVerifying(false);
     }
   };
 

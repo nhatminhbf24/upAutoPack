@@ -334,6 +334,17 @@ export async function splitPngSheet(
       finalCanvas.toBlob((b) => resolve(b || new Blob()), 'image/png');
     });
 
+    const width = finalCanvas.width;
+    const height = finalCanvas.height;
+
+    // Free canvas GPU textures immediately
+    if (finalCanvas !== itemCanvas) {
+      finalCanvas.width = 0;
+      finalCanvas.height = 0;
+    }
+    itemCanvas.width = 0;
+    itemCanvas.height = 0;
+
     const safeBaseName = baseName.replace(/\.[^/.]+$/, '').trim() || 'sticker';
     const itemNumber = String(i + 1).padStart(2, '0');
     const name = `${safeBaseName}_${itemNumber}.png`;
@@ -344,8 +355,8 @@ export async function splitPngSheet(
       name,
       dataUrl,
       blob,
-      width: finalCanvas.width,
-      height: finalCanvas.height,
+      width,
+      height,
       pixelCount: comp.pixelCount,
       bbox: {
         minX: comp.minX,
@@ -366,6 +377,10 @@ export async function splitPngSheet(
       await new Promise((r) => setTimeout(r, 0));
     }
   }
+
+  // Free main sheet canvas memory
+  canvas.width = 0;
+  canvas.height = 0;
 
   onProgress?.(100, `Hoàn tất tách ${extractedItems.length} ảnh PNG!`);
 

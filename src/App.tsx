@@ -1,7 +1,8 @@
-import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, useRef, Suspense } from 'react';
+import { Loader2, UploadCloud } from 'lucide-react';
 import { PhotoItem, LayoutSettings, ShapeType, SizePreset, DEFAULT_SIZE_PRESETS, OrientationMode } from './types';
 import { packImagesToPages } from './utils/packing';
-import { exportPagesToImage, calculateCrop, formatPhotoToPreset, getShortPresetLabel, exportAllPhotosAsZip } from './utils/imageUtils';
+import { exportPagesToImage, calculateCrop, formatPhotoToPreset, getShortPresetLabel, exportAllPhotosAsZip, processImageFilesToPhotos } from './utils/imageUtils';
 import { exportPagesToPdf } from './utils/pdfExport';
 import {
   saveProjectMeta,
@@ -17,17 +18,19 @@ import { ImageListSidebar } from './components/ImageListSidebar';
 import { BatchToolsSidebar } from './components/BatchToolsSidebar';
 import { SettingsSidebar } from './components/SettingsSidebar';
 import { A4PreviewArea } from './components/A4PreviewArea';
-import { CropModal } from './components/CropModal';
-import { CustomSizeModal } from './components/CustomSizeModal';
-import { RestoreSessionModal } from './components/RestoreSessionModal';
-import { SaveProjectModal } from './components/SaveProjectModal';
-import { ActivationModal } from './components/ActivationModal';
-import { PngSplitterModal } from './components/PngSplitterModal';
-import { ClearConfirmModal } from './components/ClearConfirmModal';
 import { ToolSelectorHub } from './components/ToolSelectorHub';
-import { PngSplitterWorkspace } from './components/PngSplitterWorkspace';
 import { ToastContainer, ToastMessage } from './components/Toast';
 import { useHistoryState } from './hooks/useHistoryState';
+
+// Code-splitting via React.lazy for on-demand bundle loading
+const CropModal = React.lazy(() => import('./components/CropModal').then((m) => ({ default: m.CropModal })));
+const CustomSizeModal = React.lazy(() => import('./components/CustomSizeModal').then((m) => ({ default: m.CustomSizeModal })));
+const RestoreSessionModal = React.lazy(() => import('./components/RestoreSessionModal').then((m) => ({ default: m.RestoreSessionModal })));
+const SaveProjectModal = React.lazy(() => import('./components/SaveProjectModal').then((m) => ({ default: m.SaveProjectModal })));
+const ActivationModal = React.lazy(() => import('./components/ActivationModal').then((m) => ({ default: m.ActivationModal })));
+const PngSplitterModal = React.lazy(() => import('./components/PngSplitterModal').then((m) => ({ default: m.PngSplitterModal })));
+const ClearConfirmModal = React.lazy(() => import('./components/ClearConfirmModal').then((m) => ({ default: m.ClearConfirmModal })));
+const PngSplitterWorkspace = React.lazy(() => import('./components/PngSplitterWorkspace').then((m) => ({ default: m.PngSplitterWorkspace })));
 
 const CUSTOM_PRESETS_STORAGE_KEY = 'dau_dau_custom_size_presets';
 
@@ -125,6 +128,13 @@ export default function App() {
   const [isExporting, setIsExporting] = useState(false);
   const [exportProgress, setExportProgress] = useState<{ current: number; total: number } | null>(null);
   const [selectedPhotoId, setSelectedPhotoId] = useState<string | null>(null);
+  const [copiedPhoto, setCopiedPhoto] = useState<PhotoItem | null>(null);
+
+  // Global Drag & Drop anywhere on screen
+  const [isGlobalDragging, setIsGlobalDragging] = useState<boolean>(false);
+  const [isProcessingUpload, setIsProcessingUpload] = useState<boolean>(false);
+  const [uploadProgress, setUploadProgress] = useState<{ current: number; total: number; percent: number } | null>(null);
+  const dragCounterRef = useRef<number>(0);
 
   // Khổ in mặc định được cài trên ứng dụng (active preset) và tùy chọn tự khớp chiều
   const [activePresetId, setActivePresetId] = useState<string>(() => {
@@ -422,70 +432,6 @@ export default function App() {
     [addToast, setPhotos]
   );
 
-  // Keyboard shortcut support for Undo (Ctrl+Z) and Redo (Ctrl+Y, Ctrl+Shift+Z)
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Don't trigger if typing in an input or textarea
-      const target = e.target as HTMLElement;
-      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) {
-        return;
-      }
-
-      const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
-      const isCtrlOrCmd = isMac ? e.metaKey : e.ctrlKey;
-
-      if (isCtrlOrCmd && !e.altKey) {
-        if (e.key === 'p' || e.key === 'P') {
-          e.preventDefault();
-          handlePrint();
-        } else if (e.key === 'z' || e.key === 'Z') {
-          e.preventDefault();
-          if (e.shiftKey) {
-            // Redo: Ctrl+Shift+Z
-            if (canRedo) {
-              handleRedo();
-              addToast('info', 'Đã làm lại (Ctrl+Y)');
-            }
-          } else {
-            // Undo: Ctrl+Z
-            if (canUndo) {
-              handleUndo();
-              addToast('info', 'Đã hoàn tác (Ctrl+Z)');
-            }
-          }
-        } else if (e.key === 'y' || e.key === 'Y') {
-          // Redo: Ctrl+Y
-          e.preventDefault();
-          if (canRedo) {
-            handleRedo();
-            addToast('info', 'Đã làm lại (Ctrl+Y)');
-          }
-        } else if (e.key === 's' || e.key === 'S') {
-          // Quick save project: Ctrl+S
-          e.preventDefault();
-          handleExportProject();
-        }
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [canUndo, canRedo, handleUndo, handleRedo, handleExportProject, addToast]);
-
-  const onUndoWithToast = useCallback(() => {
-    if (canUndo) {
-      handleUndo();
-      addToast('info', 'Đã hoàn tác (Ctrl+Z)');
-    }
-  }, [canUndo, handleUndo, addToast]);
-
-  const onRedoWithToast = useCallback(() => {
-    if (canRedo) {
-      handleRedo();
-      addToast('info', 'Đã làm lại (Ctrl+Y)');
-    }
-  }, [canRedo, handleRedo, addToast]);
-
   const handleAddPhotos = useCallback((newPhotos: PhotoItem[]) => {
     setPhotos((prev) => [...prev, ...newPhotos]);
   }, [setPhotos]);
@@ -500,6 +446,51 @@ export default function App() {
     setPhotos((prev) => prev.filter((photo) => photo.id !== id));
     addToast('info', 'Đã xóa ảnh');
   }, [setPhotos, addToast]);
+
+  const handleDuplicatePhoto = useCallback(
+    (photoId: string) => {
+      const target = photos.find((p) => p.id === photoId);
+      if (!target) return;
+
+      const clonedPhoto: PhotoItem = {
+        ...target,
+        id: 'photo_copy_' + Math.random().toString(36).substring(2, 9) + '_' + Date.now(),
+        name: `${target.name} (Bản sao)`,
+        qty: 1,
+      };
+
+      if (settings.layoutMode === 'freeform' && target.freePositions) {
+        const offsetFree: Record<number, { x: number; y: number; pageNumber?: number }> = {};
+        for (const [key, val] of Object.entries(target.freePositions)) {
+          offsetFree[Number(key)] = {
+            ...val,
+            x: Math.min(val.x + 8, 200),
+            y: Math.min(val.y + 8, 280),
+          };
+        }
+        clonedPhoto.freePositions = offsetFree;
+      }
+
+      setPhotos((prev) => [...prev, clonedPhoto]);
+      setSelectedPhotoId(clonedPhoto.id);
+      addToast('success', `Đã nhân bản "${target.name}"`);
+    },
+    [photos, settings.layoutMode, setPhotos, setSelectedPhotoId, addToast]
+  );
+
+  const onUndoWithToast = useCallback(() => {
+    if (canUndo) {
+      handleUndo();
+      addToast('info', 'Đã hoàn tác (Ctrl+Z)');
+    }
+  }, [canUndo, handleUndo, addToast]);
+
+  const onRedoWithToast = useCallback(() => {
+    if (canRedo) {
+      handleRedo();
+      addToast('info', 'Đã làm lại (Ctrl+Y)');
+    }
+  }, [canRedo, handleRedo, addToast]);
 
   const handleClearAll = useCallback(() => {
     if (photos.length === 0) {
@@ -880,17 +871,320 @@ export default function App() {
     [photos, settings.smartCrop, handleUpdatePhoto, addToast]
   );
 
-  // Global shortcut Ctrl+S / Cmd+S for saving project
+  // Keyboard shortcut support (Ctrl+Z, Ctrl+Y, Ctrl+S, Ctrl+P, Ctrl+C, Ctrl+D, Delete)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
-        e.preventDefault();
-        handleExportProject();
+      const target = e.target as HTMLElement;
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) {
+        return;
+      }
+
+      const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+      const isCtrlOrCmd = isMac ? e.metaKey : e.ctrlKey;
+
+      if (isCtrlOrCmd && !e.altKey) {
+        if (e.key === 'p' || e.key === 'P') {
+          e.preventDefault();
+          handlePrint();
+        } else if (e.key === 'z' || e.key === 'Z') {
+          e.preventDefault();
+          if (e.shiftKey) {
+            // Redo: Ctrl+Shift+Z
+            if (canRedo) {
+              handleRedo();
+              addToast('info', 'Đã làm lại (Ctrl+Y)');
+            }
+          } else {
+            // Undo: Ctrl+Z
+            if (canUndo) {
+              handleUndo();
+              addToast('info', 'Đã hoàn tác (Ctrl+Z)');
+            }
+          }
+        } else if (e.key === 'y' || e.key === 'Y') {
+          // Redo: Ctrl+Y
+          e.preventDefault();
+          if (canRedo) {
+            handleRedo();
+            addToast('info', 'Đã làm lại (Ctrl+Y)');
+          }
+        } else if (e.key === 's' || e.key === 'S') {
+          // Quick save project: Ctrl+S
+          e.preventDefault();
+          handleExportProject();
+        } else if ((e.key === 'c' || e.key === 'C') && selectedPhotoId) {
+          // Copy selected photo: Ctrl+C
+          const found = photos.find((p) => p.id === selectedPhotoId);
+          if (found) {
+            setCopiedPhoto(found);
+            addToast('info', `Đã sao chép ảnh "${found.name}" (Nhấn Ctrl+V để dán)`);
+          }
+        } else if ((e.key === 'd' || e.key === 'D') && selectedPhotoId) {
+          // Instant Duplicate: Ctrl+D
+          e.preventDefault();
+          handleDuplicatePhoto(selectedPhotoId);
+        }
+      } else if ((e.key === 'Delete' || e.key === 'Backspace') && selectedPhotoId) {
+        // Delete selected photo
+        const found = photos.find((p) => p.id === selectedPhotoId);
+        if (found) {
+          e.preventDefault();
+          handleRemovePhoto(selectedPhotoId);
+          setSelectedPhotoId(null);
+        }
       }
     };
+
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleExportProject]);
+  }, [
+    canUndo,
+    canRedo,
+    handleUndo,
+    handleRedo,
+    handlePrint,
+    handleExportProject,
+    selectedPhotoId,
+    photos,
+    handleDuplicatePhoto,
+    handleRemovePhoto,
+    setSelectedPhotoId,
+    addToast,
+  ]);
+
+  // Global Clipboard Paste Handler (Ctrl+V anywhere in app)
+  useEffect(() => {
+    const handleGlobalPaste = async (e: ClipboardEvent) => {
+      const activeEl = document.activeElement;
+      const isInput =
+        activeEl instanceof HTMLInputElement ||
+        activeEl instanceof HTMLTextAreaElement ||
+        activeEl?.getAttribute('contenteditable') === 'true';
+
+      const items = e.clipboardData?.items;
+      const imageFiles: File[] = [];
+
+      if (items) {
+        for (let i = 0; i < items.length; i++) {
+          if (items[i].type.startsWith('image/')) {
+            const blob = items[i].getAsFile();
+            if (blob) {
+              imageFiles.push(
+                new File([blob], `clipboard_${Date.now()}_${i + 1}.png`, { type: blob.type })
+              );
+            }
+          }
+        }
+      }
+
+      // 1. Paste real image files from OS clipboard (Screenshot, Web image, Zalo, etc.)
+      if (imageFiles.length > 0) {
+        e.preventDefault();
+        try {
+          const effectiveOrientation: OrientationMode =
+            orientationMode || (autoMatchOrientation ? 'auto_match' : 'rotate_to_fit');
+          const newPhotos = await processImageFilesToPhotos(
+            imageFiles,
+            activePreset,
+            effectiveOrientation,
+            settings.smartCrop
+          );
+          if (newPhotos.length > 0) {
+            setPhotos((prev) => [...prev, ...newPhotos]);
+            if (newPhotos.length === 1) {
+              setSelectedPhotoId(newPhotos[0].id);
+            }
+            addToast('success', `Đã dán ${newPhotos.length} ảnh từ Clipboard (Ctrl+V)`);
+          }
+        } catch (err) {
+          console.error('Error pasting clipboard image:', err);
+          addToast('error', 'Không thể dán ảnh từ Clipboard');
+        }
+        return;
+      }
+
+      // 2. If no image in OS clipboard, duplicate internal copied photo
+      if (!isInput && copiedPhoto) {
+        e.preventDefault();
+        const clonedPhoto: PhotoItem = {
+          ...copiedPhoto,
+          id: 'photo_copy_' + Math.random().toString(36).substring(2, 9) + '_' + Date.now(),
+          name: `${copiedPhoto.name} (Bản sao)`,
+          qty: 1,
+        };
+        if (settings.layoutMode === 'freeform' && copiedPhoto.freePositions) {
+          const offsetFree: Record<number, { x: number; y: number; pageNumber?: number }> = {};
+          for (const [key, val] of Object.entries(copiedPhoto.freePositions)) {
+            offsetFree[Number(key)] = {
+              ...val,
+              x: Math.min(val.x + 8, 200),
+              y: Math.min(val.y + 8, 280),
+            };
+          }
+          clonedPhoto.freePositions = offsetFree;
+        }
+        setPhotos((prev) => [...prev, clonedPhoto]);
+        setSelectedPhotoId(clonedPhoto.id);
+        addToast('success', `Đã dán bản sao "${copiedPhoto.name}" (Ctrl+V)`);
+      }
+    };
+
+    window.addEventListener('paste', handleGlobalPaste);
+    return () => window.removeEventListener('paste', handleGlobalPaste);
+  }, [
+    copiedPhoto,
+    activePreset,
+    orientationMode,
+    autoMatchOrientation,
+    settings.smartCrop,
+    settings.layoutMode,
+    setPhotos,
+    setSelectedPhotoId,
+    addToast,
+  ]);
+
+  // =========================================================================
+  // GLOBAL DRAG & DROP ANYWHERE ON SCREEN (Hỗ trợ kéo thả ảnh trực tiếp vào bất kỳ đâu)
+  // =========================================================================
+  useEffect(() => {
+    // Only enable when unlocked and not in png-splitter workspace
+    if (!isUnlocked || activeView === 'png-splitter') {
+      setIsGlobalDragging(false);
+      dragCounterRef.current = 0;
+      return;
+    }
+
+    const isFileDrag = (e: DragEvent): boolean => {
+      if (!e.dataTransfer) return false;
+      const types = Array.from(e.dataTransfer.types || []);
+      return types.includes('Files');
+    };
+
+    const handleDragEnter = (e: DragEvent) => {
+      if (!isFileDrag(e)) return;
+      e.preventDefault();
+      dragCounterRef.current += 1;
+      if (dragCounterRef.current === 1) {
+        setIsGlobalDragging(true);
+      }
+    };
+
+    const handleDragOver = (e: DragEvent) => {
+      if (!isFileDrag(e)) return;
+      e.preventDefault();
+      if (e.dataTransfer) {
+        e.dataTransfer.dropEffect = 'copy';
+      }
+    };
+
+    const handleDragLeave = (e: DragEvent) => {
+      if (!isFileDrag(e)) return;
+      e.preventDefault();
+      dragCounterRef.current -= 1;
+      // When leaving the window or counter hits 0
+      if (dragCounterRef.current <= 0 || (e.clientX <= 0 && e.clientY <= 0)) {
+        dragCounterRef.current = 0;
+        setIsGlobalDragging(false);
+      }
+    };
+
+    const handleDrop = async (e: DragEvent) => {
+      if (!isFileDrag(e)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      dragCounterRef.current = 0;
+      setIsGlobalDragging(false);
+
+      const files = Array.from(e.dataTransfer?.files || []);
+      if (files.length === 0) return;
+
+      // 1. Check if user dropped a .daudau project file
+      const projectFile = files.find((f) => f.name.endsWith('.daudau'));
+      if (projectFile) {
+        handleImportProject(projectFile);
+        return;
+      }
+
+      // 2. Filter image files
+      const imageFiles = files.filter((f) =>
+        f.type.startsWith('image/') || /\.(jpg|jpeg|png|webp|avif|jfif|bmp|gif|svg)$/i.test(f.name)
+      );
+
+      if (imageFiles.length === 0) {
+        addToast('error', 'Vui lòng thả tệp hình ảnh hợp lệ (JPG, PNG, WEBP, AVIF...)');
+        return;
+      }
+
+      // If dropped from Hub screen, switch to a4-layout automatically
+      if (activeView === 'hub') {
+        setActiveView('a4-layout');
+      }
+
+      setIsProcessingUpload(true);
+      setUploadProgress({ current: 0, total: imageFiles.length, percent: 0 });
+
+      try {
+        const effectiveOrientation: OrientationMode =
+          orientationMode || (autoMatchOrientation ? 'auto_match' : 'rotate_to_fit');
+        const addedPhotos = await processImageFilesToPhotos(
+          imageFiles,
+          activePreset,
+          effectiveOrientation,
+          settings.smartCrop,
+          (current, total, percent) => setUploadProgress({ current, total, percent })
+        );
+
+        if (addedPhotos.length > 0) {
+          setPhotos((prev) => [...prev, ...addedPhotos]);
+          if (addedPhotos.length === 1) {
+            setSelectedPhotoId(addedPhotos[0].id);
+          }
+          const shortLabel = getShortPresetLabel(activePreset.label);
+          addToast('success', `Đã thêm ${addedPhotos.length} ảnh (${shortLabel})`);
+        } else {
+          addToast('error', 'Không thể đọc file ảnh');
+        }
+      } catch (err) {
+        console.error('Error in global drag-drop upload:', err);
+        addToast('error', 'Lỗi khi tải ảnh lên');
+      } finally {
+        setIsProcessingUpload(false);
+        setUploadProgress(null);
+      }
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        dragCounterRef.current = 0;
+        setIsGlobalDragging(false);
+      }
+    };
+
+    window.addEventListener('dragenter', handleDragEnter, true);
+    window.addEventListener('dragover', handleDragOver, true);
+    window.addEventListener('dragleave', handleDragLeave, true);
+    window.addEventListener('drop', handleDrop, true);
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      window.removeEventListener('dragenter', handleDragEnter, true);
+      window.removeEventListener('dragover', handleDragOver, true);
+      window.removeEventListener('dragleave', handleDragLeave, true);
+      window.removeEventListener('drop', handleDrop, true);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [
+    isUnlocked,
+    activeView,
+    orientationMode,
+    autoMatchOrientation,
+    activePreset,
+    settings.smartCrop,
+    handleImportProject,
+    setPhotos,
+    setSelectedPhotoId,
+    addToast,
+  ]);
 
   // =========================================================================
   // VIEW ROUTING & WORKSPACE RENDERING
@@ -901,14 +1195,60 @@ export default function App() {
       {/* Toast Notifications */}
       <ToastContainer toasts={toasts} onDismiss={dismissToast} />
 
-      {/* Lock / Security Activation Modal (0798408406) */}
+      {/* Global Full-Screen Drag & Drop Overlay */}
+      {isGlobalDragging && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/75 backdrop-blur-sm p-6 pointer-events-none transition-all duration-200">
+          <div className="relative max-w-lg w-full border-4 border-dashed border-rose-400 bg-white/95 rounded-3xl p-8 text-center shadow-2xl shadow-rose-950/50 flex flex-col items-center justify-center">
+            <div className="w-20 h-20 rounded-full bg-rose-100 flex items-center justify-center mb-4 ring-8 ring-rose-200/60 animate-bounce">
+              <UploadCloud className="w-10 h-10 text-rose-600" />
+            </div>
+
+            <h3 className="text-2xl font-black text-slate-800 tracking-tight mb-2">
+              Thả ảnh vào đây để tải lên ngay!
+            </h3>
+            <p className="text-slate-600 text-sm max-w-sm font-medium leading-relaxed mb-4">
+              Thả vào bất kỳ vị trí nào trên màn hình. Hệ thống sẽ tự động đưa vào bàn in theo khổ{' '}
+              <span className="font-bold text-rose-600 bg-rose-50 px-2 py-0.5 rounded border border-rose-200">
+                {activePreset.label}
+              </span>
+            </p>
+
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-100 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+              <span>Hỗ trợ JPG, PNG, WEBP, AVIF, JFIF...</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Global Upload Processing Modal */}
+      {isProcessingUpload && uploadProgress && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/70 backdrop-blur-xs p-4">
+          <div className="bg-white rounded-2xl p-6 shadow-2xl max-w-sm w-full border border-slate-200 text-center">
+            <Loader2 className="w-10 h-10 animate-spin text-rose-600 mx-auto mb-3" />
+            <h4 className="text-base font-bold text-slate-800 mb-1">Đang xử lý tải ảnh...</h4>
+            <p className="text-xs text-slate-500 mb-3 font-medium">
+              Đang chuẩn bị {uploadProgress.current}/{uploadProgress.total} ảnh ({uploadProgress.percent}%)
+            </p>
+            <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+              <div
+                className="bg-rose-500 h-full transition-all duration-200"
+                style={{ width: `${uploadProgress.percent}%` }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Lock / Security Activation Modal (SHA-256 protected) */}
       {!isUnlocked ? (
-        <ActivationModal
-          onUnlock={() => {
-            setIsUnlocked(true);
-            setActiveView('hub');
-          }}
-        />
+        <Suspense fallback={<div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80"><Loader2 className="w-8 h-8 animate-spin text-pink-500" /></div>}>
+          <ActivationModal
+            onUnlock={() => {
+              setIsUnlocked(true);
+              setActiveView('hub');
+            }}
+          />
+        </Suspense>
       ) : activeView === 'hub' ? (
         /* 1. Tool Selection Hub Screen (2 Options) */
         <ToolSelectorHub
@@ -917,25 +1257,29 @@ export default function App() {
         />
       ) : activeView === 'png-splitter' ? (
         /* 2. Standalone PNG Sheet & Sticker Splitter Tool Workspace */
-        <PngSplitterWorkspace
-          onBackToHub={() => setActiveView('hub')}
-          onNavigateToA4={() => setActiveView('a4-layout')}
-          onAddPhotosToA4Project={handleAddPhotos}
-          onToast={addToast}
-          customPresets={customPresets}
-          smartCrop={settings.smartCrop}
-        />
+        <Suspense fallback={<div className="flex w-full h-screen items-center justify-center bg-slate-50"><Loader2 className="w-8 h-8 animate-spin text-pink-500" /></div>}>
+          <PngSplitterWorkspace
+            onBackToHub={() => setActiveView('hub')}
+            onNavigateToA4={() => setActiveView('a4-layout')}
+            onAddPhotosToA4Project={handleAddPhotos}
+            onToast={addToast}
+            customPresets={customPresets}
+            smartCrop={settings.smartCrop}
+          />
+        </Suspense>
       ) : (
         /* 3. A4 Auto Pack & Layout Printing Studio */
         <div id="app-root" className="flex w-full h-screen overflow-hidden bg-slate-100 text-slate-800 font-sans">
           {/* Restore Session Modal (Auto-save recovery) */}
           {pendingRestoreMeta && (
-            <RestoreSessionModal
-              isOpen={Boolean(pendingRestoreMeta)}
-              meta={pendingRestoreMeta}
-              onRestore={handleRestoreSession}
-              onDiscard={handleDiscardSession}
-            />
+            <Suspense fallback={null}>
+              <RestoreSessionModal
+                isOpen={Boolean(pendingRestoreMeta)}
+                meta={pendingRestoreMeta}
+                onRestore={handleRestoreSession}
+                onDiscard={handleDiscardSession}
+              />
+            </Suspense>
           )}
 
           {/* Column 1: Image List Sidebar (Left) */}
@@ -945,6 +1289,7 @@ export default function App() {
             onSelectPhoto={setSelectedPhotoId}
             onUpdatePhoto={handleUpdatePhoto}
             onRemovePhoto={handleRemovePhoto}
+            onDuplicatePhoto={handleDuplicatePhoto}
             onClearAll={handleClearAll}
             onOpenCropModal={(photo, initialTab) => setCropModalConfig({ photo, initialTab: initialTab || 'size' })}
             onOpenCustomSizeModal={(photo) => setCustomSizeModalConfig({ isOpen: true, targetPhoto: photo || null })}
@@ -1024,10 +1369,12 @@ export default function App() {
             onUpdateSettings={handleUpdateSettings}
             onUpdateFreeformPosition={handleUpdateFreeformPosition}
             onResetFreeformPositions={handleResetFreeformPositions}
+            onDuplicatePhoto={handleDuplicatePhoto}
           />
 
-          {/* Modal for Fine-Tuned Crop / Pan / Framing / Color Adjustments */}
-          {cropModalConfig && (
+          <Suspense fallback={null}>
+            {/* Modal for Fine-Tuned Crop / Pan / Framing / Color Adjustments */}
+            {cropModalConfig && (
             <CropModal
               photo={cropModalConfig.photo}
               initialTab={cropModalConfig.initialTab || 'size'}
@@ -1074,13 +1421,13 @@ export default function App() {
             />
           )}
 
-          {/* Modal for Confirming Clear All Photos */}
-          <ClearConfirmModal
-            isOpen={isClearConfirmOpen}
-            photoCount={photos.length}
-            onConfirm={handleConfirmClearAll}
-            onClose={() => setIsClearConfirmOpen(false)}
-          />
+            <ClearConfirmModal
+              isOpen={isClearConfirmOpen}
+              photoCount={photos.length}
+              onConfirm={handleConfirmClearAll}
+              onClose={() => setIsClearConfirmOpen(false)}
+            />
+          </Suspense>
         </div>
       )}
     </>

@@ -18,6 +18,7 @@ import {
   SlidersHorizontal,
   ChevronsLeft,
   ChevronsRight,
+  Copy,
 } from 'lucide-react';
 import { PhotoItem, DEFAULT_SIZE_PRESETS, SizePreset } from '../types';
 import { rotateImageBase64, calculateCrop, createOptimizedPreview } from '../utils/imageUtils';
@@ -30,6 +31,7 @@ interface ImageListSidebarProps {
   onSelectPhoto?: (id: string | null) => void;
   onUpdatePhoto: (id: string, updates: Partial<PhotoItem>) => void;
   onRemovePhoto: (id: string) => void;
+  onDuplicatePhoto?: (id: string) => void;
   onClearAll: () => void;
   onOpenCropModal: (photo: PhotoItem, initialTab?: 'size' | 'crop' | 'enhance' | 'adjust') => void;
   onOpenCustomSizeModal?: (photo?: PhotoItem) => void;
@@ -47,6 +49,7 @@ export const ImageListSidebar: React.FC<ImageListSidebarProps> = ({
   onSelectPhoto,
   onUpdatePhoto,
   onRemovePhoto,
+  onDuplicatePhoto,
   onClearAll,
   onOpenCropModal,
   onOpenCustomSizeModal,
@@ -990,15 +993,15 @@ export const ImageListSidebar: React.FC<ImageListSidebarProps> = ({
 
                       {/* Action Buttons */}
                       <div className="flex items-center gap-1.5">
-                        {/* 1 Nút Chỉnh sửa duy nhất mở popup chỉnh ảnh (cắt cúp, chỉnh màu, làm nét, kích thước...) */}
+                        {/* 1 Nút Sửa mở popup chỉnh ảnh (cắt cúp, chỉnh màu, làm nét, kích thước...) */}
                         <button
                           type="button"
                           onClick={() => onOpenCropModal(photo)}
-                          className="flex items-center gap-1 px-2 py-1 rounded-md bg-white hover:bg-blue-50 border border-slate-200 hover:border-blue-300 text-slate-700 hover:text-blue-700 transition shadow-2xs cursor-pointer text-xs font-bold active:scale-95"
+                          className="flex items-center gap-1 px-2 py-1 rounded-md bg-white hover:bg-blue-50 border border-slate-200 hover:border-blue-300 text-slate-700 hover:text-blue-700 transition shadow-2xs cursor-pointer text-xs font-bold active:scale-95 whitespace-nowrap shrink-0"
                           title="Mở popup chỉnh sửa ảnh (cắt cúp, chỉnh màu, làm nét, kích thước...)"
                         >
-                          <SlidersHorizontal className="w-3.5 h-3.5 text-blue-600" />
-                          <span>Chỉnh sửa</span>
+                          <SlidersHorizontal className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                          <span>Sửa</span>
                         </button>
 
                         {/* Rotate 90° */}
@@ -1015,6 +1018,18 @@ export const ImageListSidebar: React.FC<ImageListSidebarProps> = ({
                             <RotateCw className="w-3.5 h-3.5" />
                           )}
                         </button>
+
+                        {/* Duplicate photo */}
+                        {onDuplicatePhoto && (
+                          <button
+                            type="button"
+                            onClick={() => onDuplicatePhoto(photo.id)}
+                            className="p-1.5 rounded-md bg-white border border-slate-200 text-slate-700 hover:text-emerald-600 hover:border-emerald-300 transition shadow-2xs cursor-pointer active:scale-95"
+                            title="Nhân bản ảnh này (Ctrl+D hoặc Ctrl+C / Ctrl+V)"
+                          >
+                            <Copy className="w-3.5 h-3.5" />
+                          </button>
+                        )}
 
                         {/* Delete button (Toggle Confirmation) */}
                         <button

@@ -1,7 +1,7 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { UploadCloud, Image as ImageIcon, Images, Plus, Loader2, FileImage, Save, FolderOpen, ChevronDown } from 'lucide-react';
 import { PhotoItem, ShapeType, SizePreset, OrientationMode } from '../types';
-import { readFileAsDataURL, getImageDimensions, calculateCrop, createOptimizedPreview, getOrientedDimensions, rotateImageBase64, getShortPresetLabel } from '../utils/imageUtils';
+import { readFileAsDataURL, getImageDimensions, calculateCrop, createOptimizedPreview, getOrientedDimensions, rotateImageBase64, getShortPresetLabel, processImageFilesToPhotos } from '../utils/imageUtils';
 import { detectBadgeBleedColors } from '../utils/badgeUtils';
 
 interface UploaderProps {
@@ -86,125 +86,15 @@ export const Uploader: React.FC<UploaderProps> = ({
 
     setIsProcessing(true);
     setUploadProgress({ current: 0, total: files.length, percent: 0 });
-    const addedPhotos: PhotoItem[] = [];
 
     try {
-      // Process files in small asynchronous chunks to keep main thread 100% fluid
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i];
-        setUploadProgress({
-          current: i + 1,
-          total: files.length,
-          percent: Math.round(((i + 1) / files.length) * 100),
-        });
-
-        try {
-          const dataUrl = await readFileAsDataURL(file);
-          const dims = await getImageDimensions(dataUrl);
-
-          // Generate lightweight display proxy (420px) for buttery smooth UI rendering (60fps)
-          let previewSrc = await createOptimizedPreview(dataUrl, 420, 0.82);
-
-          // Determine target dimensions based on active preset configured on the app
-          let targetW = activePreset.width;
-          let targetH = activePreset.height;
-          const targetShape: ShapeType = activePreset.shape;
-          let finalOriginalSrc = dataUrl;
-          let finalPreviewSrc = previewSrc;
-          let finalImgWidth = dims.width;
-          let finalImgHeight = dims.height;
-          let finalRotation = 0;
-
-          if (targetShape === 'rect' && activePreset.width !== activePreset.height) {
-            const isPresetPortrait = activePreset.height > activePreset.width;
-            const isPresetLandscape = activePreset.width > activePreset.height;
-            const isImgLandscape = dims.width > dims.height;
-            const isImgPortrait = dims.height > dims.width;
-
-            if (effectiveMode === 'rotate_to_fit') {
-              if ((isPresetPortrait && isImgLandscape) || (isPresetLandscape && isImgPortrait)) {
-                // Auto rotate 90 degrees to fit frame perfectly
-                finalOriginalSrc = await rotateImageBase64(dataUrl, 90);
-                finalPreviewSrc = await createOptimizedPreview(finalOriginalSrc, 420, 0.82);
-                finalImgWidth = dims.height;
-                finalImgHeight = dims.width;
-                finalRotation = 90;
-              }
-              targetW = activePreset.width;
-              targetH = activePreset.height;
-            } else if (effectiveMode === 'auto_match') {
-              const oriented = getOrientedDimensions(dims.width, dims.height, targetW, targetH, true, targetShape);
-              targetW = oriented.targetWidth;
-              targetH = oriented.targetHeight;
-            } else {
-              // 'fixed_crop'
-              targetW = activePreset.width;
-              targetH = activePreset.height;
-            }
-          }
-
-          const crop = calculateCrop(finalImgWidth, finalImgHeight, targetW, targetH, smartCrop);
-
-          const baseWorkingSrc = finalRotation === 90 ? finalOriginalSrc : dataUrl;
-
-          const isBadge = Boolean(activePreset.isBadgePreset);
-          let badgeBleedColor: string | undefined;
-          let badgeBleedPalette: string[] | undefined;
-          if (isBadge) {
-            try {
-              const analysis = await detectBadgeBleedColors(finalOriginalSrc);
-              badgeBleedColor = analysis.dominantColor;
-              badgeBleedPalette = analysis.palette;
-            } catch (e) {
-              badgeBleedColor = '#ffffff';
-            }
-          }
-
-          addedPhotos.push({
-            id: 'photo_' + Math.random().toString(36).substring(2, 9) + '_' + Date.now() + '_' + i,
-            name: file.name || 'Ảnh tải lên',
-            originalSrc: finalOriginalSrc,
-            previewSrc: finalPreviewSrc,
-            rawOriginalSrc: baseWorkingSrc,
-            rawOriginalWidth: finalImgWidth,
-            rawOriginalHeight: finalImgHeight,
-            rawOriginalCrop: { cropX: crop.cropX, cropY: crop.cropY, cropW: crop.cropW, cropH: crop.cropH },
-            unadjustedSrc: baseWorkingSrc,
-            unrotatedOriginalSrc: dataUrl,
-            unrotatedPreviewSrc: previewSrc,
-            unrotatedWidth: dims.width,
-            unrotatedHeight: dims.height,
-            rotatedOriginalSrc: finalRotation === 90 ? finalOriginalSrc : undefined,
-            rotatedPreviewSrc: finalRotation === 90 ? finalPreviewSrc : undefined,
-            autoRotateAngle: finalRotation,
-            imgWidth: finalImgWidth,
-            imgHeight: finalImgHeight,
-            targetWidth: targetW,
-            targetHeight: targetH,
-            shape: targetShape,
-            qty: 1,
-            scale: 1,
-            cropX: crop.cropX,
-            cropY: crop.cropY,
-            cropW: crop.cropW,
-            cropH: crop.cropH,
-            rotation: finalRotation,
-            badgeMode: isBadge,
-            badgeFaceDiameter: isBadge ? (activePreset.badgeFaceDiameter || 43) : undefined,
-            badgeBleedColor: isBadge ? (badgeBleedColor || '#ffffff') : undefined,
-            badgeBleedPalette: isBadge ? badgeBleedPalette : undefined,
-            badgeGuideLines: false,
-            badgeBleedMode: isBadge ? 'solid' : undefined,
-          });
-        } catch (err) {
-          console.error('Error processing single image:', err);
-        }
-
-        // Yield to browser main thread every 2 images to avoid UI frame drop
-        if (i % 2 === 0) {
-          await new Promise((resolve) => setTimeout(resolve, 0));
-        }
-      }
+      const addedPhotos = await processImageFilesToPhotos(
+        files,
+        activePreset,
+        effectiveMode,
+        smartCrop,
+        (current, total, percent) => setUploadProgress({ current, total, percent })
+      );
 
       if (addedPhotos.length > 0) {
         onAddPhotos(addedPhotos);
@@ -224,31 +114,6 @@ export const Uploader: React.FC<UploaderProps> = ({
       }
     }
   };
-
-  // Clipboard Paste Support (Ctrl+V / Cmd+V)
-  useEffect(() => {
-    const handlePaste = (e: ClipboardEvent) => {
-      if (!e.clipboardData) return;
-      const items = e.clipboardData.items;
-      const imageFiles: File[] = [];
-
-      for (let i = 0; i < items.length; i++) {
-        if (items[i].type.indexOf('image') !== -1) {
-          const blob = items[i].getAsFile();
-          if (blob) {
-            imageFiles.push(new File([blob], `paste_${Date.now()}.png`, { type: blob.type }));
-          }
-        }
-      }
-
-      if (imageFiles.length > 0) {
-        processFiles(imageFiles);
-      }
-    };
-
-    window.addEventListener('paste', handlePaste);
-    return () => window.removeEventListener('paste', handlePaste);
-  }, [activePreset, orientationMode, autoMatchOrientation, smartCrop, customPresets]);
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();

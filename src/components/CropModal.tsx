@@ -84,6 +84,17 @@ export const CropModal: React.FC<CropModalProps> = ({
     setActiveTab(getInitialTab());
   }, [initialTab, photo.id]);
 
+  // Support closing modal via Escape key
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
   const [isMaximized, setIsMaximized] = useState<boolean>(false);
   const [canvasTheme, setCanvasTheme] = useState<'dark' | 'light'>(() => {
     try {
@@ -1113,7 +1124,7 @@ export const CropModal: React.FC<CropModalProps> = ({
   const maxCropImgH = Math.max(280, containerDimensions.height - 70);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-2 sm:p-4">
+    <div id="crop-modal" className="no-print fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-2 sm:p-4">
       <div
         className={`bg-white shadow-2xl flex flex-col overflow-hidden border border-slate-200 transition-all duration-150 ${
           isMaximized

@@ -82,7 +82,10 @@ export async function createOptimizedPreview(
     ctx.imageSmoothingQuality = 'medium';
     ctx.drawImage(img, 0, 0, targetW, targetH);
 
-    return isPng ? canvas.toDataURL('image/png') : canvas.toDataURL('image/jpeg', quality);
+    const result = isPng ? canvas.toDataURL('image/png') : canvas.toDataURL('image/jpeg', quality);
+    canvas.width = 0;
+    canvas.height = 0;
+    return result;
   } catch (e) {
     console.warn('Failed to create optimized preview, falling back to original', e);
     return src;
@@ -109,7 +112,10 @@ export async function rotateImageBase64(src: string, angle = 90): Promise<string
     ctx.drawImage(img, -img.naturalWidth / 2, -img.naturalHeight / 2);
 
     const isPng = src.startsWith('data:image/png') || src.includes('.png');
-    return isPng ? canvas.toDataURL('image/png') : canvas.toDataURL('image/jpeg', 0.95);
+    const result = isPng ? canvas.toDataURL('image/png') : canvas.toDataURL('image/jpeg', 0.95);
+    canvas.width = 0;
+    canvas.height = 0;
+    return result;
   } catch (err) {
     console.error('Error rotating image:', err);
     return src;
@@ -148,6 +154,8 @@ export async function cropImageToCanvas(
     ctx.drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
 
     const croppedSrc = isPng ? canvas.toDataURL('image/png') : canvas.toDataURL('image/jpeg', 0.95);
+    canvas.width = 0;
+    canvas.height = 0;
     return {
       croppedSrc,
       width: sw,
@@ -1019,3 +1027,137 @@ export async function exportPagesToZip(
 
   setTimeout(() => URL.revokeObjectURL(blobUrl), 15000);
 }
+
+/**
+ * Xử lý danh sách File ảnh từ máy tính hoặc Clipboard thành mảng PhotoItem chuẩn
+ * Tự động tạo preview siêu nhẹ (420px proxy), tính kích thước và tỷ lệ cắt cúp theo SizePreset
+ */
+export async function processImageFilesToPhotos(
+  fileList: FileList | File[],
+  activePreset: SizePreset,
+  orientationMode: OrientationMode = 'auto_match',
+  smartCrop: boolean = false,
+  onProgress?: (current: number, total: number, percent: number) => void
+): Promise<PhotoItem[]> {
+  const files = Array.from(fileList).filter((f) =>
+    f.type.startsWith('image/') || /\.(jpg|jpeg|png|webp|avif|jfif|bmp|gif|svg)$/i.test(f.name)
+  );
+
+  if (files.length === 0) {
+    return [];
+  }
+
+  const addedPhotos: PhotoItem[] = [];
+
+  for (let i = 0; i < files.length; i++) {
+    const file = files[i];
+    if (onProgress) {
+      onProgress(i + 1, files.length, Math.round(((i + 1) / files.length) * 100));
+    }
+
+    try {
+      const dataUrl = await readFileAsDataURL(file);
+      const dims = await getImageDimensions(dataUrl);
+
+      // Generate lightweight display proxy (420px) for buttery smooth UI rendering (60fps)
+      let previewSrc = await createOptimizedPreview(dataUrl, 420, 0.82);
+
+      let targetW = activePreset.width;
+      let targetH = activePreset.height;
+      const targetShape: ShapeType = activePreset.shape;
+      let finalOriginalSrc = dataUrl;
+      let finalPreviewSrc = previewSrc;
+      let finalImgWidth = dims.width;
+      let finalImgHeight = dims.height;
+      let finalRotation = 0;
+
+      if (targetShape === 'rect' && activePreset.width !== activePreset.height) {
+        const isPresetPortrait = activePreset.height > activePreset.width;
+        const isPresetLandscape = activePreset.width > activePreset.height;
+        const isImgLandscape = dims.width > dims.height;
+        const isImgPortrait = dims.height > dims.width;
+
+        if (orientationMode === 'rotate_to_fit') {
+          if ((isPresetPortrait && isImgLandscape) || (isPresetLandscape && isImgPortrait)) {
+            finalOriginalSrc = await rotateImageBase64(dataUrl, 90);
+            finalPreviewSrc = await createOptimizedPreview(finalOriginalSrc, 420, 0.82);
+            finalImgWidth = dims.height;
+            finalImgHeight = dims.width;
+            finalRotation = 90;
+          }
+          targetW = activePreset.width;
+          targetH = activePreset.height;
+        } else if (orientationMode === 'auto_match') {
+          const oriented = getOrientedDimensions(dims.width, dims.height, targetW, targetH, true, targetShape);
+          targetW = oriented.targetWidth;
+          targetH = oriented.targetHeight;
+        } else {
+          targetW = activePreset.width;
+          targetH = activePreset.height;
+        }
+      }
+
+      const crop = calculateCrop(finalImgWidth, finalImgHeight, targetW, targetH, smartCrop);
+      const baseWorkingSrc = finalRotation === 90 ? finalOriginalSrc : dataUrl;
+
+      const isBadge = Boolean(activePreset.isBadgePreset);
+      let badgeBleedColor: string | undefined;
+      let badgeBleedPalette: string[] | undefined;
+      if (isBadge) {
+        try {
+          const analysis = await detectBadgeBleedColors(finalOriginalSrc);
+          badgeBleedColor = analysis.dominantColor;
+          badgeBleedPalette = analysis.palette;
+        } catch (e) {
+          badgeBleedColor = '#ffffff';
+        }
+      }
+
+      addedPhotos.push({
+        id: 'photo_' + Math.random().toString(36).substring(2, 9) + '_' + Date.now() + '_' + i,
+        name: file.name || `Ảnh dán Clipboard ${Date.now()}`,
+        originalSrc: finalOriginalSrc,
+        previewSrc: finalPreviewSrc,
+        rawOriginalSrc: baseWorkingSrc,
+        rawOriginalWidth: finalImgWidth,
+        rawOriginalHeight: finalImgHeight,
+        rawOriginalCrop: { cropX: crop.cropX, cropY: crop.cropY, cropW: crop.cropW, cropH: crop.cropH },
+        unadjustedSrc: baseWorkingSrc,
+        unrotatedOriginalSrc: dataUrl,
+        unrotatedPreviewSrc: previewSrc,
+        unrotatedWidth: dims.width,
+        unrotatedHeight: dims.height,
+        rotatedOriginalSrc: finalRotation === 90 ? finalOriginalSrc : undefined,
+        rotatedPreviewSrc: finalRotation === 90 ? finalPreviewSrc : undefined,
+        autoRotateAngle: finalRotation,
+        imgWidth: finalImgWidth,
+        imgHeight: finalImgHeight,
+        targetWidth: targetW,
+        targetHeight: targetH,
+        shape: targetShape,
+        qty: 1,
+        scale: 1,
+        cropX: crop.cropX,
+        cropY: crop.cropY,
+        cropW: crop.cropW,
+        cropH: crop.cropH,
+        rotation: finalRotation,
+        badgeMode: isBadge,
+        badgeFaceDiameter: isBadge ? (activePreset.badgeFaceDiameter || 43) : undefined,
+        badgeBleedColor: isBadge ? (badgeBleedColor || '#ffffff') : undefined,
+        badgeBleedPalette: isBadge ? badgeBleedPalette : undefined,
+        badgeGuideLines: false,
+        badgeBleedMode: isBadge ? 'solid' : undefined,
+      });
+    } catch (err) {
+      console.error('Error processing single image:', err);
+    }
+
+    if (i % 2 === 0) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+  }
+
+  return addedPhotos;
+}
+

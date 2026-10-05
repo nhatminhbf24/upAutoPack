@@ -18,5 +18,18 @@ export default defineConfig(() => {
       hmr: process.env.DISABLE_HMR !== 'true',
       watch: process.env.DISABLE_HMR === 'true' ? null : {},
     },
+    build: {
+      chunkSizeWarningLimit: 600,
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            'vendor-react': ['react', 'react-dom'],
+            'vendor-pdf': ['jspdf'],
+            'vendor-zip': ['jszip'],
+            'vendor-ui': ['lucide-react', 'motion'],
+          },
+        },
+      },
+    },
   };
 });
