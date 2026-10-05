@@ -715,7 +715,7 @@ export const PngSplitterModal: React.FC<PngSplitterModalProps> = ({
                                 downloadSingleExtractedPng(item);
                               }}
                               className="p-1 hover:text-blue-600 hover:bg-blue-100/50 rounded transition cursor-pointer"
-                              title="Tải riêng file PNG này"
+                              title="Tải ảnh PNG tách nền này về máy"
                             >
                               <Download className="w-3 h-3" />
                             </button>
@@ -786,7 +786,7 @@ export const PngSplitterModal: React.FC<PngSplitterModalProps> = ({
                   ) : (
                     <>
                       <FolderArchive className="w-4 h-4 text-emerald-200" />
-                      <span>Tải thư mục ZIP ({selectedCount} ảnh)</span>
+                      <span>Tải ZIP PNG tách nền ({selectedCount} ảnh)</span>
                     </>
                   )}
                 </button>

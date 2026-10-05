@@ -1471,6 +1471,7 @@ export const A4PreviewArea: React.FC<A4PreviewAreaProps> = ({
                             top: `${currentItemY}mm`,
                             width: `${renderW}mm`,
                             height: `${renderH}mm`,
+                            backgroundColor: item.badgeMode ? (item.badgeBleedColor || '#ffffff') : undefined,
                           }}
                           className={`bg-white z-20 overflow-hidden select-none group/box ${
                             isFreeformMode
@@ -1485,7 +1486,31 @@ export const A4PreviewArea: React.FC<A4PreviewAreaProps> = ({
                           } ${isSelected ? 'z-30' : ''}`}
                         >
                         {/* Image Content */}
-                        {item.isRotated ? (
+                        {item.badgeMode && item.badgeFaceDiameter ? (
+                          /* 🏅 Chế độ phôi huy hiệu cài áo: Mặt chính diện nằm lọt lòng giữa viền bọc */
+                          <div
+                            className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full overflow-hidden pointer-events-none"
+                            style={{
+                              width: `${Math.min(100, (item.badgeFaceDiameter / (item.targetWidth || 55)) * 100)}%`,
+                              height: `${Math.min(100, (item.badgeFaceDiameter / (item.targetHeight || 55)) * 100)}%`,
+                            }}
+                          >
+                            <img
+                              src={item.previewSrc || item.originalSrc}
+                              alt={item.name}
+                              draggable={false}
+                              decoding="async"
+                              loading="lazy"
+                              className="absolute max-w-none pointer-events-none transition-none"
+                              style={{
+                                width: `${percentW}%`,
+                                height: `${percentH}%`,
+                                left: `${percentX}%`,
+                                top: `${percentY}%`,
+                              }}
+                            />
+                          </div>
+                        ) : item.isRotated ? (
                           <div
                             className="absolute pointer-events-none"
                             style={{
@@ -1531,7 +1556,7 @@ export const A4PreviewArea: React.FC<A4PreviewAreaProps> = ({
                         )}
 
                         {/* 90° Auto-Rotated Badge (Visible when not hovered, disappears on hover) */}
-                        {item.isRotated && (
+                        {!item.badgeMode && item.isRotated && (
                           <div
                             className="no-print opacity-90 group-hover/box:opacity-0 transition-opacity absolute top-1.5 right-1.5 bg-emerald-700/90 backdrop-blur-xs text-white text-[9px] font-bold px-1.5 py-0.5 rounded shadow-sm border border-emerald-500/40 pointer-events-none flex items-center gap-0.5 z-10"
                             title="Ảnh được tự động xoay 90° để tối ưu ghép khít khoảng trống giấy in"

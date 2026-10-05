@@ -69,6 +69,12 @@ export interface PhotoItem {
   rotation: number; // 0, 90, 180, 270 degrees
   orderTag?: string; // Nhãn mã đơn hoặc tên khách riêng cho ảnh này (ví dụ: #DH01, Khách Tuấn)
   freePositions?: Record<number, { x: number; y: number; pageNumber?: number }>; // Vị trí tự do trên trang A4 theo từng bản in (instanceIndex)
+  badgeMode?: boolean; // Kích hoạt chế độ phôi huy hiệu chuyên dụng
+  badgeFaceDiameter?: number; // Đường kính mặt chính diện huy hiệu (mm), ví dụ 44mm (cho khuôn cắt 55mm)
+  badgeBleedColor?: string; // Mã màu HEX đổ nền viền bọc mép (tự động nhận diện từ ảnh khách)
+  badgeBleedPalette?: string[]; // 5 màu gợi ý từ biên ảnh
+  badgeGuideLines?: boolean; // Hiển thị vòng căn dập mặt chính (mặc định false)
+  badgeBleedMode?: 'solid' | 'blur_expand'; // 'solid': màu trơn | 'blur_expand': kéo giãn nhòe viền
 }
 
 export interface FreeformTextTag {
@@ -131,9 +137,16 @@ export interface SizePreset {
   height: number; // mm
   shape: ShapeType;
   isCustom?: boolean;
+  isBadgePreset?: boolean; // Preset huy hiệu chuyên dụng (tự động viền bọc & căn mặt chính diện)
+  badgeFaceDiameter?: number; // Đường kính mặt huy hiệu (mm), ví dụ 44mm
 }
 
 export const DEFAULT_SIZE_PRESETS: SizePreset[] = [
+  // 🏅 Huy hiệu cài áo chuyên dụng (Badge Pin - Tự động đổ nền viền bọc mép)
+  { id: 'badge_44_to_55', label: 'Huy hiệu 4.4 cm (Khuôn 5.5 cm)', category: '🏅 Huy hiệu cài áo (Badge Pin)', width: 55, height: 55, shape: 'circle', isBadgePreset: true, badgeFaceDiameter: 44 },
+  { id: 'badge_58_to_70', label: 'Huy hiệu 5.8 cm (Khuôn 7.0 cm)', category: '🏅 Huy hiệu cài áo (Badge Pin)', width: 70, height: 70, shape: 'circle', isBadgePreset: true, badgeFaceDiameter: 58 },
+  { id: 'badge_100_to_115', label: 'Huy hiệu 10.0 cm (Khuôn 11.5 cm)', category: '🏅 Huy hiệu cài áo (Badge Pin)', width: 115, height: 115, shape: 'circle', isBadgePreset: true, badgeFaceDiameter: 100 },
+
   // Ảnh tiêu chuẩn & Phổ biến (Standard & Popular)
   { id: '30x80_rect', label: '3 x 8 cm (Bookmark / Photostrip)', category: 'Cơ bản & Phổ biến', width: 30, height: 80, shape: 'rect' },
   { id: '50x70_rect', label: '5 x 7 cm (Ảnh thẻ / Mini)', category: 'Cơ bản & Phổ biến', width: 50, height: 70, shape: 'rect' },
@@ -155,12 +168,11 @@ export const DEFAULT_SIZE_PRESETS: SizePreset[] = [
   { id: '30x40_rect', label: 'Ảnh 3 x 4 cm (CMND / CCCD)', category: 'Ảnh thẻ & Hồ sơ', width: 30, height: 40, shape: 'rect' },
   { id: '40x60_rect', label: 'Ảnh 4 x 6 cm (Hộ chiếu)', category: 'Ảnh thẻ & Hồ sơ', width: 40, height: 60, shape: 'rect' },
 
-  // Hình tròn (Sticker / Huy hiệu)
-  { id: '40x40_circle', label: 'Hình tròn 4.0 cm (4.0 x 4.0 cm)', category: 'Hình tròn (Sticker / Huy hiệu)', width: 40, height: 40, shape: 'circle' },
-  { id: '48x48_circle', label: 'Hình tròn 4.8 cm (4.8 x 4.8 cm)', category: 'Hình tròn (Sticker / Huy hiệu)', width: 48, height: 48, shape: 'circle' },
-  { id: '52x52_circle', label: 'Hình tròn 5.2 cm (5.2 x 5.2 cm)', category: 'Hình tròn (Sticker / Huy hiệu)', width: 52, height: 52, shape: 'circle' },
-  { id: '75x75_circle', label: 'Hình tròn 7.5 cm (7.5 x 7.5 cm)', category: 'Hình tròn (Sticker / Huy hiệu)', width: 75, height: 75, shape: 'circle' },
-  { id: '125x125_circle', label: 'Hình tròn 12.5 cm (12.5 x 12.5 cm)', category: 'Hình tròn (Sticker / Huy hiệu)', width: 125, height: 125, shape: 'circle' },
+  // Hình tròn (Sticker)
+  { id: '40x40_circle', label: 'Hình tròn 4.0 cm (4.0 x 4.0 cm)', category: 'Hình tròn (Sticker)', width: 40, height: 40, shape: 'circle' },
+  { id: '48x48_circle', label: 'Hình tròn 4.8 cm (4.8 x 4.8 cm)', category: 'Hình tròn (Sticker)', width: 48, height: 48, shape: 'circle' },
+  { id: '52x52_circle', label: 'Hình tròn 5.2 cm (5.2 x 5.2 cm)', category: 'Hình tròn (Sticker)', width: 52, height: 52, shape: 'circle' },
+  { id: '125x125_circle', label: 'Hình tròn 12.5 cm (12.5 x 12.5 cm)', category: 'Hình tròn (Sticker)', width: 125, height: 125, shape: 'circle' },
 
   // Hình vuông & Trái tim
   { id: '50x50_rect', label: 'Vuông 5 x 5 cm (Polaroid mini)', category: 'Hình vuông & Trái tim', width: 50, height: 50, shape: 'rect' },

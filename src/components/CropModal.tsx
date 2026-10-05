@@ -24,6 +24,8 @@ import {
   Ruler,
   Maximize,
   HelpCircle,
+  Download,
+  Pipette,
 } from 'lucide-react';
 import { PhotoItem, ShapeType, ImageAdjustments, DEFAULT_ADJUSTMENTS } from '../types';
 import {
@@ -31,7 +33,9 @@ import {
   calculateCrop,
   createOptimizedPreview,
   cropImageToCanvas,
+  exportSinglePhotoAsPng,
 } from '../utils/imageUtils';
+import { detectBadgeBleedColors, STANDARD_BADGE_SPECS } from '../utils/badgeUtils';
 import { enhanceImageQuality, calculatePrintDPI, getRecommendedUpscaleFactor } from '../utils/imageEnhancer';
 import { PhotoAdjustmentsPanel } from './PhotoAdjustmentsPanel';
 import {
@@ -69,8 +73,8 @@ export const CropModal: React.FC<CropModalProps> = ({
   // Determine initial active tab
   const getInitialTab = (): EditTab => {
     if (initialTab === 'adjust') return 'adjust';
-    if (initialTab === 'crop') return 'crop';
     if (initialTab === 'enhance') return 'enhance';
+    if (initialTab === 'crop') return 'crop';
     return 'size';
   };
 
@@ -158,6 +162,20 @@ export const CropModal: React.FC<CropModalProps> = ({
   const [previewAdjustedSrc, setPreviewAdjustedSrc] = useState<string>(photo.originalSrc);
   const [isApplyingAdjustmentPreview, setIsApplyingAdjustmentPreview] = useState(false);
   const [isCroppingAction, setIsCroppingAction] = useState(false);
+  const [isDownloadingPng, setIsDownloadingPng] = useState(false);
+
+  // 🏅 Chế độ phôi huy hiệu cài áo (Badge Pin) state
+  const [badgeMode, setBadgeMode] = useState<boolean>(() => Boolean(photo.badgeMode));
+  const [badgeFaceDiameter, setBadgeFaceDiameter] = useState<number>(() => photo.badgeFaceDiameter || 44);
+  const [badgeBleedColor, setBadgeBleedColor] = useState<string>(() => photo.badgeBleedColor || '#ffffff');
+  const [badgeBleedPalette, setBadgeBleedPalette] = useState<string[]>(() =>
+    photo.badgeBleedPalette && photo.badgeBleedPalette.length > 0
+      ? photo.badgeBleedPalette
+      : ['#ffffff', '#f8fafc', '#000000', '#fbcfe8', '#bfdbfe', '#fef08a']
+  );
+  const [badgeGuideLines, setBadgeGuideLines] = useState<boolean>(false);
+  const [badgeBleedMode, setBadgeBleedMode] = useState<'solid' | 'blur_expand'>(() => photo.badgeBleedMode || 'solid');
+  const [isScanningBadgeColors, setIsScanningBadgeColors] = useState<boolean>(false);
 
   // Drag state for Framed View (Pan)
   const dragStartRef = useRef<{ x: number; y: number; startCropX: number; startCropY: number }>({
@@ -337,6 +355,35 @@ export const CropModal: React.FC<CropModalProps> = ({
     setCropY(centerCrop.cropY);
     setScale(1);
     setCropSuccessToast('Đã canh giữa ảnh & đặt lại thu phóng 100%');
+    setTimeout(() => setCropSuccessToast(null), 2000);
+  };
+
+  // Căn ảnh tràn viền khuôn in (Fill/Cover)
+  const handleFillFrame = () => {
+    const centerCrop = calculateCrop(currentImgWidth, currentImgHeight, effectiveTargetW, effectiveTargetH, smartCrop);
+    setCropX(centerCrop.cropX);
+    setCropY(centerCrop.cropY);
+    setScale(1);
+    setCropSuccessToast('Đã căn ảnh tràn viền khuôn in');
+    setTimeout(() => setCropSuccessToast(null), 2000);
+  };
+
+  // Căn ảnh thu trọn trong khuôn in (Contain/Fit)
+  const handleContainFrame = () => {
+    const imgRatio = currentImgWidth / currentImgHeight;
+    const targetRatio = effectiveTargetW / effectiveTargetH;
+    let fitScale = 1;
+    if (imgRatio > targetRatio) {
+      fitScale = targetRatio / imgRatio;
+    } else {
+      fitScale = imgRatio / targetRatio;
+    }
+    const safeScale = Math.max(0.5, Math.min(1, Math.round(fitScale * 100) / 100));
+    const centerCrop = calculateCrop(currentImgWidth, currentImgHeight, effectiveTargetW, effectiveTargetH, smartCrop);
+    setCropX(centerCrop.cropX);
+    setCropY(centerCrop.cropY);
+    setScale(safeScale);
+    setCropSuccessToast('Đã thu trọn toàn bộ ảnh trong khuôn in');
     setTimeout(() => setCropSuccessToast(null), 2000);
   };
 
@@ -538,6 +585,56 @@ export const CropModal: React.FC<CropModalProps> = ({
     setCustomWidthInput(dStr);
     setCustomHeightInput(dStr);
     updateTargetDimensions(diamMm, diamMm);
+  };
+
+  // 🏅 Select badge preset (Face diameter ➔ Cut diameter)
+  const handleSelectBadgePreset = (faceMm: number, cutMm: number) => {
+    setBadgeMode(true);
+    setBadgeFaceDiameter(faceMm);
+    setShape('circle');
+    const dStr = sizeUnit === 'cm' ? (cutMm / 10).toFixed(1).replace('.0', '') : String(cutMm);
+    setCustomWidthInput(dStr);
+    setCustomHeightInput(dStr);
+    updateTargetDimensions(cutMm, cutMm);
+    setCropRatioPreset('1:1');
+    updateCropBoxForRatio(1);
+
+    detectBadgeBleedColors(displayImageSrc || photo.originalSrc).then((res) => {
+      setBadgeBleedColor(res.dominantColor);
+      setBadgeBleedPalette(res.palette);
+    });
+  };
+
+  // 🏅 Rescan border colors from current image
+  const handleRescanBadgeColors = async () => {
+    setIsScanningBadgeColors(true);
+    try {
+      const res = await detectBadgeBleedColors(displayImageSrc || photo.originalSrc);
+      setBadgeBleedColor(res.dominantColor);
+      setBadgeBleedPalette(res.palette);
+    } catch (e) {
+      console.warn('Error scanning badge colors:', e);
+    } finally {
+      setIsScanningBadgeColors(false);
+    }
+  };
+
+  // 🏅 Eyedropper API support
+  const handleEyedropper = async () => {
+    if (typeof window !== 'undefined' && 'EyeDropper' in window) {
+      try {
+        const eyeDropper = new (window as any).EyeDropper();
+        const result = await eyeDropper.open();
+        if (result?.sRGBHex) {
+          setBadgeBleedColor(result.sRGBHex);
+          if (!badgeBleedPalette.includes(result.sRGBHex)) {
+            setBadgeBleedPalette([result.sRGBHex, ...badgeBleedPalette.slice(0, 5)]);
+          }
+        }
+      } catch {
+        // Canceled or unsupported
+      }
+    }
   };
 
   // Shape switching logic
@@ -956,6 +1053,12 @@ export const CropModal: React.FC<CropModalProps> = ({
         targetHeight: curTargetHeight,
         imgWidth: currentImgWidth,
         imgHeight: currentImgHeight,
+        badgeMode,
+        badgeFaceDiameter: badgeMode ? badgeFaceDiameter : undefined,
+        badgeBleedColor: badgeMode ? badgeBleedColor : undefined,
+        badgeBleedPalette: badgeMode ? badgeBleedPalette : undefined,
+        badgeGuideLines: badgeMode ? badgeGuideLines : undefined,
+        badgeBleedMode: badgeMode ? badgeBleedMode : undefined,
       });
       onClose();
     } catch (err) {
@@ -1072,9 +1175,9 @@ export const CropModal: React.FC<CropModalProps> = ({
             </div>
           </div>
 
-          {/* Center 4 Main Tabs */}
+          {/* Center 3 Main Tabs */}
           <nav className="flex items-center gap-1 bg-slate-200/90 p-1 rounded-xl shadow-inner border border-slate-300/60">
-            {/* Tab 1: Size & Framing */}
+            {/* Tab 1: Size & Crop */}
             <button
               type="button"
               onClick={() => setActiveTab('size')}
@@ -1084,25 +1187,11 @@ export const CropModal: React.FC<CropModalProps> = ({
                   : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
               }`}
             >
-              <Ruler className="w-3.5 h-3.5" />
-              <span>Khổ in & Khung</span>
-            </button>
-
-            {/* Tab 2: Interactive Crop */}
-            <button
-              type="button"
-              onClick={() => setActiveTab('crop')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
-                activeTab === 'crop'
-                  ? 'bg-white text-blue-700 shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
-              }`}
-            >
               <Scissors className="w-3.5 h-3.5" />
-              <span>Cắt xén (Crop)</span>
+              <span>Khổ in & Cắt cúp</span>
             </button>
 
-            {/* Tab 3: HD Enhance & AI */}
+            {/* Tab 2: HD Enhance & AI */}
             <button
               type="button"
               onClick={() => setActiveTab('enhance')}
@@ -1116,7 +1205,7 @@ export const CropModal: React.FC<CropModalProps> = ({
               <span>Làm nét & AI</span>
             </button>
 
-            {/* Tab 4: Color & Lighting */}
+            {/* Tab 3: Color & Lighting */}
             <button
               type="button"
               onClick={() => setActiveTab('adjust')}
@@ -1199,40 +1288,20 @@ export const CropModal: React.FC<CropModalProps> = ({
               }`}
             >
               <div className="flex items-center gap-2">
-                {activeTab === 'crop' ? (
-                  <>
-                    <Scissors className="w-4 h-4 text-blue-400" />
-                    <span>Chế độ Cắt xén ảnh (Interactive Crop) • Kéo 8 điểm neo để định khung</span>
-                  </>
-                ) : (
-                  <>
-                    <Move className="w-4 h-4 text-blue-400" />
-                    <span>Khung in thực tế • Kéo chuột để di chuyển tâm • Lăn chuột để thu phóng</span>
-                  </>
-                )}
+                <Move className="w-4 h-4 text-blue-400" />
+                <span>Khung in thực tế • Kéo chuột để di chuyển tâm • Lăn chuột để thu phóng</span>
               </div>
 
-              {/* Quick Jump Buttons */}
-              <div className="flex items-center gap-2">
-                {activeTab === 'size' && (
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab('crop')}
-                    className="text-[11px] font-bold text-blue-500 hover:text-blue-400 flex items-center gap-1 cursor-pointer"
-                  >
-                    <span>Cắt ảnh thừa (Crop) &rarr;</span>
-                  </button>
-                )}
-                {activeTab === 'crop' && (
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab('size')}
-                    className="text-[11px] font-bold text-blue-500 hover:text-blue-400 flex items-center gap-1 cursor-pointer"
-                  >
-                    <span>Xem khung in &rarr;</span>
-                  </button>
-                )}
-              </div>
+              {/* Quick Center Action */}
+              <button
+                type="button"
+                onClick={handleResetCenter}
+                className="text-[11px] font-bold text-blue-500 hover:text-blue-600 flex items-center gap-1 cursor-pointer transition active:scale-95"
+                title="Canh ảnh ngay giữa tâm khung in"
+              >
+                <Move className="w-3 h-3" />
+                <span>Về giữa tâm</span>
+              </button>
             </div>
 
             {/* Notification Toast */}
@@ -1259,37 +1328,73 @@ export const CropModal: React.FC<CropModalProps> = ({
                 }}
               />
 
-              {/* MODE 1: Framed Print Preview (Used in Size, Enhance, Adjust tabs) */}
+              {/* Framed Print Preview Canvas */}
               {activeTab !== 'crop' ? (
                 <div className="flex flex-col items-center justify-center w-full h-full relative">
-                  {/* Dynamic Sized Framed Box */}
-                  <div
-                    ref={previewBoxRef}
-                    onMouseDown={handleMouseDown}
-                    onMouseMove={handleMouseMove}
-                    onMouseUp={handleMouseUp}
-                    onMouseLeave={handleMouseUp}
-                    style={{
-                      width: `${fitBoxW}px`,
-                      height: `${fitBoxH}px`,
-                      aspectRatio: `${effectiveTargetW} / ${effectiveTargetH}`,
-                    }}
-                    className={`relative shadow-2xl overflow-hidden cursor-grab active:cursor-grabbing bg-white transition-all select-none rounded-none ${
-                      shape === 'circle' ? 'shape-circle' : shape === 'heart' ? 'shape-heart' : 'rounded-none'
-                    }`}
-                  >
-                    <img
-                      src={displayImageSrc}
-                      alt="Live preview"
-                      draggable={false}
-                      className="absolute max-w-none pointer-events-none transition-none"
-                      style={{
-                        width: `${percentW}%`,
-                        height: `${percentH}%`,
-                        left: `${percentX}%`,
-                        top: `${percentY}%`,
-                      }}
-                    />
+                {/* Dynamic Sized Framed Box */}
+                <div
+                  ref={previewBoxRef}
+                  onMouseDown={handleMouseDown}
+                  onMouseMove={handleMouseMove}
+                  onMouseUp={handleMouseUp}
+                  onMouseLeave={handleMouseUp}
+                  style={{
+                    width: `${fitBoxW}px`,
+                    height: `${fitBoxH}px`,
+                    aspectRatio: `${effectiveTargetW} / ${effectiveTargetH}`,
+                    backgroundColor: badgeMode && shape === 'circle' ? badgeBleedColor : '#ffffff',
+                  }}
+                  className={`relative shadow-2xl overflow-hidden cursor-grab active:cursor-grabbing transition-all select-none rounded-none ${
+                    shape === 'circle' ? 'shape-circle' : shape === 'heart' ? 'shape-heart' : 'rounded-none'
+                  }`}
+                >
+                    {badgeMode && shape === 'circle' ? (
+                      /* 🏅 Chế độ phôi huy hiệu: Mặt trước 4.4cm nằm lọt lòng giữa viền bọc 5.5cm */
+                      <div
+                        className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full overflow-hidden pointer-events-none"
+                        style={{
+                          width: `${Math.min(100, (badgeFaceDiameter / (curTargetWidth || 55)) * 100)}%`,
+                          height: `${Math.min(100, (badgeFaceDiameter / (curTargetHeight || 55)) * 100)}%`,
+                        }}
+                      >
+                        <img
+                          src={displayImageSrc}
+                          alt="Live preview"
+                          draggable={false}
+                          className="absolute max-w-none pointer-events-none transition-none"
+                          style={{
+                            width: `${percentW}%`,
+                            height: `${percentH}%`,
+                            left: `${percentX}%`,
+                            top: `${percentY}%`,
+                          }}
+                        />
+                      </div>
+                    ) : (
+                      <img
+                        src={displayImageSrc}
+                        alt="Live preview"
+                        draggable={false}
+                        className="absolute max-w-none pointer-events-none transition-none"
+                        style={{
+                          width: `${percentW}%`,
+                          height: `${percentH}%`,
+                          left: `${percentX}%`,
+                          top: `${percentY}%`,
+                        }}
+                      />
+                    )}
+
+                    {/* Badge Pin Guide Indicators */}
+                    {badgeMode && shape === 'circle' && (
+                      <div className="absolute top-2.5 left-2.5 bg-slate-900/85 backdrop-blur-xs text-white text-[10px] font-bold px-2 py-1 rounded-lg pointer-events-none border border-white/20 shadow-md flex items-center gap-1.5 z-20">
+                        <span
+                          className="w-2.5 h-2.5 rounded-full border border-white/60 shrink-0"
+                          style={{ backgroundColor: badgeBleedColor }}
+                        />
+                        <span>Mặt Ø {(badgeFaceDiameter / 10).toFixed(1)} cm ➔ Cắt Ø {(curTargetWidth / 10).toFixed(1)} cm</span>
+                      </div>
+                    )}
 
                     {/* Corner Radius Simulation (Chỉ hiển thị khi người dùng chủ động chọn R3 / R5 để thử kìm dập) */}
                     {shape !== 'circle' && shape !== 'heart' && cornerPreview !== 'none' && (
@@ -1855,9 +1960,208 @@ export const CropModal: React.FC<CropModalProps> = ({
                     ) : (
                       /* Circular / Heart diameter input & presets */
                       <div className="space-y-3">
+                        {shape === 'circle' && (
+                          /* 🏅 Chế độ phôi huy hiệu cài áo chuyên dụng (Badge Pin Pro) */
+                          <div className="bg-pink-50/70 border border-pink-200/90 rounded-2xl p-3 space-y-3">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-sm">🏅</span>
+                                <span className="text-xs font-bold text-pink-950">Chế độ phôi huy hiệu cài áo:</span>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const nextMode = !badgeMode;
+                                  setBadgeMode(nextMode);
+                                  if (nextMode) {
+                                    handleSelectBadgePreset(44, 55);
+                                  }
+                                }}
+                                className={`text-[11px] font-bold px-2.5 py-1 rounded-full transition cursor-pointer flex items-center gap-1 shadow-2xs ${
+                                  badgeMode
+                                    ? 'bg-pink-600 text-white'
+                                    : 'bg-white text-slate-700 border border-slate-300 hover:bg-slate-100'
+                                }`}
+                              >
+                                <span>{badgeMode ? 'Đang bật' : 'Bật chế độ'}</span>
+                              </button>
+                            </div>
+
+                            {/* Preset buttons */}
+                            <div className="space-y-1.5">
+                              <span className="text-[10px] font-bold text-pink-900/80 uppercase tracking-wider block">
+                                Cỡ huy hiệu chuẩn:
+                              </span>
+                              <div className="grid grid-cols-2 gap-1.5">
+                                {STANDARD_BADGE_SPECS.map((spec) => {
+                                  const isSelected =
+                                    badgeMode &&
+                                    curTargetWidth === spec.cutDiameter &&
+                                    badgeFaceDiameter === spec.faceDiameter;
+                                  return (
+                                    <button
+                                      key={spec.id}
+                                      type="button"
+                                      onClick={() => handleSelectBadgePreset(spec.faceDiameter, spec.cutDiameter)}
+                                      className={`px-2 py-1.5 rounded-xl text-left border transition cursor-pointer flex flex-col ${
+                                        isSelected
+                                          ? 'bg-pink-600 text-white border-pink-600 shadow-2xs'
+                                          : 'bg-white text-slate-800 border-pink-200/80 hover:bg-pink-100/50'
+                                      }`}
+                                    >
+                                      <span className="text-[11px] font-bold">
+                                        Huy hiệu {spec.faceDiameter / 10} cm
+                                      </span>
+                                      <span className={`text-[9.5px] ${isSelected ? 'text-pink-100' : 'text-slate-500'}`}>
+                                        Khuôn cắt {spec.cutDiameter / 10} cm
+                                      </span>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+
+                            {badgeMode && (
+                              <div className="space-y-3 pt-1 border-t border-pink-200/70">
+                                {/* Diameters display & edit */}
+                                <div className="grid grid-cols-2 gap-2 text-xs">
+                                  <div className="bg-white p-2 rounded-xl border border-pink-200/80 space-y-1">
+                                    <span className="text-[9.5px] font-bold text-slate-500 block">
+                                      Mặt trước hiển thị (Ø)
+                                    </span>
+                                    <div className="flex items-center gap-1">
+                                      <input
+                                        type="number"
+                                        step="0.1"
+                                        min="1"
+                                        max="20"
+                                        value={(badgeFaceDiameter / 10).toFixed(1)}
+                                        onChange={(e) => {
+                                          const val = parseFloat(e.target.value);
+                                          if (!isNaN(val) && val > 0) {
+                                            setBadgeFaceDiameter(Math.round(val * 10));
+                                          }
+                                        }}
+                                        className="w-16 px-1.5 py-0.5 border border-slate-300 rounded font-bold text-xs font-mono"
+                                      />
+                                      <span className="text-slate-500 text-[10px] font-bold">cm</span>
+                                    </div>
+                                  </div>
+
+                                  <div className="bg-white p-2 rounded-xl border border-pink-200/80 space-y-1">
+                                    <span className="text-[9.5px] font-bold text-slate-500 block">
+                                      Khuôn cắt dập in (Ø)
+                                    </span>
+                                    <div className="flex items-center gap-1">
+                                      <input
+                                        type="number"
+                                        step="0.1"
+                                        min="1"
+                                        max="25"
+                                        value={(curTargetWidth / 10).toFixed(1)}
+                                        onChange={(e) => {
+                                          const val = parseFloat(e.target.value);
+                                          if (!isNaN(val) && val > 0) {
+                                            const mm = Math.round(val * 10);
+                                            updateTargetDimensions(mm, mm);
+                                            setCustomWidthInput(e.target.value);
+                                            setCustomHeightInput(e.target.value);
+                                          }
+                                        }}
+                                        className="w-16 px-1.5 py-0.5 border border-slate-300 rounded font-bold text-xs font-mono"
+                                      />
+                                      <span className="text-slate-500 text-[10px] font-bold">cm</span>
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {/* Bleed Color Picker & Palette */}
+                                <div className="bg-white p-2.5 rounded-xl border border-pink-200/80 space-y-2">
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-[11px] font-bold text-slate-800">
+                                      Màu nền viền bọc (Bleed):
+                                    </span>
+                                    <div className="flex items-center gap-1">
+                                      <button
+                                        type="button"
+                                        onClick={handleRescanBadgeColors}
+                                        disabled={isScanningBadgeColors}
+                                        className="text-[10px] font-bold text-pink-700 hover:text-pink-900 bg-pink-50 hover:bg-pink-100 border border-pink-200 px-2 py-0.5 rounded transition cursor-pointer shadow-2xs active:scale-95"
+                                        title="Tự động phân tích ảnh và chọn màu nền chuẩn xác"
+                                      >
+                                        Auto màu nền
+                                      </button>
+                                      {typeof window !== 'undefined' && 'EyeDropper' in window && (
+                                        <button
+                                          type="button"
+                                          onClick={handleEyedropper}
+                                          className="text-[10px] font-bold text-slate-600 hover:text-slate-900 p-1 rounded hover:bg-slate-100 cursor-pointer flex items-center"
+                                          title="Dùng ống hút màu trên màn hình"
+                                        >
+                                          <Pipette className="w-3 h-3 text-blue-600" />
+                                        </button>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  {/* Swatch palette */}
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    {badgeBleedPalette.map((col, idx) => (
+                                      <button
+                                        key={`palette-${col}-${idx}`}
+                                        type="button"
+                                        onClick={() => setBadgeBleedColor(col)}
+                                        style={{ backgroundColor: col }}
+                                        className={`w-6 h-6 rounded-full border-2 transition-all cursor-pointer shadow-xs ${
+                                          badgeBleedColor.toLowerCase() === col.toLowerCase()
+                                            ? 'border-pink-600 ring-2 ring-pink-400 scale-110'
+                                            : 'border-white hover:scale-105'
+                                        }`}
+                                        title={`Chọn màu ${col}`}
+                                      />
+                                    ))}
+
+                                    {/* Native Color Picker */}
+                                    <label
+                                      className="relative w-6 h-6 rounded-full border border-slate-300 overflow-hidden cursor-pointer shadow-xs flex items-center justify-center hover:scale-105"
+                                      title="Chọn màu tự do"
+                                    >
+                                      <input
+                                        type="color"
+                                        value={badgeBleedColor}
+                                        onChange={(e) => setBadgeBleedColor(e.target.value)}
+                                        className="opacity-0 absolute inset-0 w-full h-full cursor-pointer"
+                                      />
+                                      <span
+                                        className="w-full h-full rounded-full"
+                                        style={{ backgroundColor: badgeBleedColor }}
+                                      />
+                                    </label>
+
+                                    <span className="text-[10px] font-mono text-slate-600 font-bold ml-1">
+                                      {badgeBleedColor.toUpperCase()}
+                                    </span>
+                                  </div>
+
+                                  {/* Toggle guide marks */}
+                                  <label className="flex items-center gap-2 pt-1 border-t border-slate-100 text-[11px] text-slate-700 cursor-pointer select-none">
+                                    <input
+                                      type="checkbox"
+                                      checked={badgeGuideLines}
+                                      onChange={(e) => setBadgeGuideLines(e.target.checked)}
+                                      className="rounded text-pink-600 focus:ring-pink-500 w-3.5 h-3.5"
+                                    />
+                                    <span>In vòng nét đứt căn dập mặt trước (Ø {(badgeFaceDiameter/10).toFixed(1)} cm)</span>
+                                  </label>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
                         <div className="space-y-1">
                           <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
-                            {shape === 'circle' ? `Đường kính Ø (${sizeUnit})` : `Kích thước (${sizeUnit})`}
+                            {shape === 'circle' ? `Đường kính khuôn in Ø (${sizeUnit})` : `Kích thước (${sizeUnit})`}
                           </span>
                           <div className="relative">
                             <input
@@ -1876,16 +2180,16 @@ export const CropModal: React.FC<CropModalProps> = ({
 
                         <div className="space-y-1.5 pt-1">
                           <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
-                            Kích thước phổ biến:
+                            Kích thước tròn phổ biến:
                           </span>
                           <div className="flex flex-wrap gap-1.5">
-                            {[25, 30, 40, 48, 50, 60, 75].map((d) => (
+                            {[30, 40, 44, 48, 50, 55, 58, 60, 70, 100].map((d) => (
                               <button
                                 key={d}
                                 type="button"
                                 onClick={() => handleSelectCirclePreset(d)}
                                 className={`px-2.5 py-1 rounded-lg text-xs font-bold border transition cursor-pointer ${
-                                  curTargetWidth === d
+                                  curTargetWidth === d && !badgeMode
                                     ? 'bg-blue-600 text-white border-blue-600 shadow-2xs'
                                     : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
                                 }`}
@@ -2303,6 +2607,49 @@ export const CropModal: React.FC<CropModalProps> = ({
           </div>
 
           <div className="flex items-center gap-2.5">
+            <button
+              type="button"
+              onClick={async () => {
+                if (!photo || isDownloadingPng) return;
+                setIsDownloadingPng(true);
+                try {
+                  const currentSnapshot: PhotoItem = {
+                    ...photo,
+                    originalSrc: previewAdjustedSrc || currentBaseSrc,
+                    targetWidth: effectiveTargetW,
+                    targetHeight: effectiveTargetH,
+                    shape: shape,
+                    scale: scale,
+                    cropX: cropX,
+                    cropY: cropY,
+                    cropW: cropW,
+                    cropH: cropH,
+                    adjustments: adjustments,
+                    badgeMode,
+                    badgeFaceDiameter: badgeMode ? badgeFaceDiameter : undefined,
+                    badgeBleedColor: badgeMode ? badgeBleedColor : undefined,
+                    badgeBleedPalette: badgeMode ? badgeBleedPalette : undefined,
+                    badgeGuideLines: badgeMode ? badgeGuideLines : undefined,
+                    badgeBleedMode: badgeMode ? badgeBleedMode : undefined,
+                  };
+                  await exportSinglePhotoAsPng(currentSnapshot, true);
+                } catch (err) {
+                  console.error('Error downloading PNG from CropModal:', err);
+                } finally {
+                  setIsDownloadingPng(false);
+                }
+              }}
+              disabled={isApplyingAdjustmentPreview || isCroppingAction || isDownloadingPng}
+              className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-700 hover:to-purple-700 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer disabled:opacity-60"
+              title="Tải ngay ảnh PNG tách nền với hình dáng và điều chỉnh hiện tại (300 DPI)"
+            >
+              {isDownloadingPng ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <Download className="w-3.5 h-3.5" />
+              )}
+              <span>Tải PNG tách nền</span>
+            </button>
             <button
               type="button"
               onClick={onClose}

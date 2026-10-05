@@ -2,6 +2,7 @@ import JSZip from 'jszip';
 import { PhotoItem, PackedPage, LayoutSettings, SizePreset, OrientationMode, ShapeType } from '../types';
 import { MM_TO_PX_300DPI, A4_WIDTH_MM, A4_HEIGHT_MM } from './packing';
 import { renderTextTagOnCanvas } from './textTagUtils';
+import { detectBadgeBleedColors } from './badgeUtils';
 
 export function getShortPresetLabel(label: string): string {
   if (!label) return '';
@@ -368,6 +369,21 @@ export async function formatPhotoToPreset(
 
   const crop = calculateCrop(finalW, finalH, targetW, targetH, smartCrop);
 
+  const isBadge = Boolean(preset.isBadgePreset);
+  let badgeBleedColor = photo.badgeBleedColor;
+  let badgeBleedPalette = photo.badgeBleedPalette;
+
+  if (isBadge && (!badgeBleedColor || badgeBleedColor.toLowerCase() === '#ffb6c1' || !photo.badgeMode)) {
+    try {
+      const analysis = await detectBadgeBleedColors(finalSrc);
+      badgeBleedColor = analysis.dominantColor;
+      badgeBleedPalette = analysis.palette;
+    } catch (e) {
+      console.warn('Could not auto detect bleed color for badge', e);
+      badgeBleedColor = badgeBleedColor || '#ffffff';
+    }
+  }
+
   return {
     photo: {
       ...photo,
@@ -398,6 +414,12 @@ export async function formatPhotoToPreset(
       cropH: crop.cropH,
       scale: 1,
       rotation: autoRotateAngle,
+      badgeMode: isBadge,
+      badgeFaceDiameter: isBadge ? (preset.badgeFaceDiameter || 44) : undefined,
+      badgeBleedColor: isBadge ? (badgeBleedColor || '#ffffff') : undefined,
+      badgeBleedPalette: isBadge ? badgeBleedPalette : undefined,
+      badgeGuideLines: false,
+      badgeBleedMode: isBadge ? (photo.badgeBleedMode || 'solid') : undefined,
     },
     didRotate,
   };
@@ -406,19 +428,21 @@ export async function formatPhotoToPreset(
 export async function exportPagesToImage(
   pages: PackedPage[],
   settings: LayoutSettings,
-  format: 'png' | 'jpeg',
-  onProgress?: (current: number, total: number) => void
+  format: 'png' | 'jpeg' | 'png-transparent' = 'png',
+  onProgress?: (current: number, total: number) => void,
+  options?: { transparentBackground?: boolean }
 ): Promise<void> {
   if (pages.length === 0) return;
 
+  const isTransparent = format === 'png-transparent' || Boolean(options?.transparentBackground);
   const isLandscape = settings.paperOrientation === 'landscape';
   const pageW_mm = isLandscape ? A4_HEIGHT_MM : A4_WIDTH_MM;
   const pageH_mm = isLandscape ? A4_WIDTH_MM : A4_HEIGHT_MM;
 
   const canvasWidth = Math.round(pageW_mm * MM_TO_PX_300DPI);
   const canvasHeight = Math.round(pageH_mm * MM_TO_PX_300DPI);
-  const mimeType = format === 'png' ? 'image/png' : 'image/jpeg';
-  const ext = format === 'png' ? 'png' : 'jpg';
+  const mimeType = format === 'jpeg' ? 'image/jpeg' : 'image/png';
+  const ext = format === 'jpeg' ? 'jpg' : 'png';
 
   for (let pageIdx = 0; pageIdx < pages.length; pageIdx++) {
     if (onProgress) onProgress(pageIdx + 1, pages.length);
@@ -427,7 +451,7 @@ export async function exportPagesToImage(
     let canvas: HTMLCanvasElement | null = document.createElement('canvas');
     canvas.width = canvasWidth;
     canvas.height = canvasHeight;
-    const ctx = canvas.getContext('2d', { alpha: format === 'png' });
+    const ctx = canvas.getContext('2d', { alpha: isTransparent || format === 'png' });
     if (!ctx) {
       if (canvas) {
         canvas.width = 0;
@@ -437,11 +461,16 @@ export async function exportPagesToImage(
       continue;
     }
 
-    // White background
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+    // Only fill white background if NOT transparent
+    if (!isTransparent) {
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+    }
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = 'high';
+
+    // Freeform Text Tag / Thông tin mã đơn
+    renderTextTagOnCanvas(ctx, settings, page.pageNumber, pages.length, isLandscape);
 
     for (const item of page.items) {
       const pxX = item.x * MM_TO_PX_300DPI;
@@ -457,33 +486,73 @@ export async function exportPagesToImage(
 
         ctx.save();
 
-        // Apply Shape Clip
-        if (item.shape === 'circle') {
-          ctx.beginPath();
-          ctx.arc(pxX + pxW / 2, pxY + pxH / 2, Math.min(pxW, pxH) / 2, 0, Math.PI * 2);
-          ctx.clip();
-        } else if (item.shape === 'heart') {
-          ctx.translate(pxX, pxY);
-          ctx.scale(pxW / 24, pxH / 24);
-          const heartPath = new Path2D(
-            'M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z'
-          );
-          ctx.clip(heartPath);
-          ctx.setTransform(1, 0, 0, 1, 0, 0);
-        }
+        if (item.shape === 'circle' && item.badgeMode && item.badgeFaceDiameter) {
+          // 🏅 Phôi huy hiệu cài áo chuyên dụng (Badge Pin)
+          const diam = Math.min(pxW, pxH);
+          const centerX = pxX + pxW / 2;
+          const centerY = pxY + pxH / 2;
+          const cutRadius = diam / 2;
 
-        // Draw Image
-        ctx.drawImage(
-          img,
-          item.cropX,
-          item.cropY,
-          actualCropW,
-          actualCropH,
-          pxX,
-          pxY,
-          pxW,
-          pxH
-        );
+          // 1. Cắt viền tròn khuôn cắt dập (Cut diameter, vd 5.5cm)
+          ctx.beginPath();
+          ctx.arc(centerX, centerY, cutRadius, 0, Math.PI * 2);
+          ctx.clip();
+
+          // 2. Đổ màu nền đồng bộ viền bọc mép (Bleed margin, vd màu nền tự động)
+          ctx.fillStyle = item.badgeBleedColor || '#ffffff';
+          ctx.fillRect(centerX - cutRadius, centerY - cutRadius, diam, diam);
+
+          // 3. Đường kính mặt chính diện huy hiệu (Face diameter, vd 4.4cm)
+          const faceRatio = Math.min(1, item.badgeFaceDiameter / (item.targetWidth || 55));
+          const faceDiam = diam * faceRatio;
+          const faceRadius = faceDiam / 2;
+
+          // Vẽ ảnh khách centered trong mặt trước 4.4cm
+          ctx.save();
+          ctx.beginPath();
+          ctx.arc(centerX, centerY, faceRadius, 0, Math.PI * 2);
+          ctx.clip();
+          ctx.drawImage(
+            img,
+            item.cropX,
+            item.cropY,
+            actualCropW,
+            actualCropH,
+            centerX - faceRadius,
+            centerY - faceRadius,
+            faceDiam,
+            faceDiam
+          );
+          ctx.restore();
+        } else {
+          // Khung thông thường (Chữ nhật, Tròn thường, Trái tim)
+          if (item.shape === 'circle') {
+            ctx.beginPath();
+            ctx.arc(pxX + pxW / 2, pxY + pxH / 2, Math.min(pxW, pxH) / 2, 0, Math.PI * 2);
+            ctx.clip();
+          } else if (item.shape === 'heart') {
+            ctx.translate(pxX, pxY);
+            ctx.scale(pxW / 24, pxH / 24);
+            const heartPath = new Path2D(
+              'M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z'
+            );
+            ctx.clip(heartPath);
+            ctx.setTransform(1, 0, 0, 1, 0, 0);
+          }
+
+          // Draw Image
+          ctx.drawImage(
+            img,
+            item.cropX,
+            item.cropY,
+            actualCropW,
+            actualCropH,
+            pxX,
+            pxY,
+            pxW,
+            pxH
+          );
+        }
 
         ctx.restore();
 
@@ -520,7 +589,8 @@ export async function exportPagesToImage(
     const dataUrl = canvas.toDataURL(mimeType, 0.98);
     const link = document.createElement('a');
     const pageSuffix = pages.length > 1 ? `_Trang${page.pageNumber}` : '';
-    link.download = `InAnh_A4${pageSuffix}_${Date.now()}.${ext}`;
+    const typeLabel = isTransparent ? '_TachNen' : '';
+    link.download = `InAnh_A4${typeLabel}${pageSuffix}_${Date.now()}.${ext}`;
     link.href = dataUrl;
     link.click();
 
@@ -534,6 +604,267 @@ export async function exportPagesToImage(
       await new Promise((r) => setTimeout(r, 300));
     }
   }
+}
+
+/**
+ * Xuất 1 ảnh đơn lẻ định dạng PNG chuẩn 300 DPI với nền trong suốt (tách nền theo khuôn)
+ */
+export async function exportSinglePhotoAsPng(
+  photo: PhotoItem,
+  transparent: boolean = true
+): Promise<void> {
+  const targetW_mm = photo.targetWidth || (photo.imgWidth / MM_TO_PX_300DPI);
+  const targetH_mm = photo.targetHeight || (photo.imgHeight / MM_TO_PX_300DPI);
+
+  const canvasW = Math.max(120, Math.round(targetW_mm * MM_TO_PX_300DPI));
+  const canvasH = Math.max(120, Math.round(targetH_mm * MM_TO_PX_300DPI));
+
+  const canvas = document.createElement('canvas');
+  canvas.width = canvasW;
+  canvas.height = canvasH;
+  const ctx = canvas.getContext('2d', { alpha: transparent });
+  if (!ctx) return;
+
+  if (!transparent) {
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvasW, canvasH);
+  }
+
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+
+  try {
+    const img = await loadImage(photo.originalSrc);
+
+    ctx.save();
+
+    if (photo.shape === 'circle' && photo.badgeMode && photo.badgeFaceDiameter) {
+      // 🏅 Huy hiệu chuyên dụng (Badge Pin)
+      const diam = Math.min(canvasW, canvasH);
+      const centerX = canvasW / 2;
+      const centerY = canvasH / 2;
+      const cutRadius = diam / 2;
+
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, cutRadius, 0, Math.PI * 2);
+      ctx.clip();
+
+      // Đổ nền viền bọc (Bleed)
+      ctx.fillStyle = photo.badgeBleedColor || '#ffffff';
+      ctx.fillRect(0, 0, canvasW, canvasH);
+
+      const faceRatio = Math.min(1, photo.badgeFaceDiameter / (photo.targetWidth || 55));
+      const faceDiam = diam * faceRatio;
+      const faceRadius = faceDiam / 2;
+
+      const scale = photo.scale || 1;
+      const cropX = photo.cropX ?? 0;
+      const cropY = photo.cropY ?? 0;
+      const actualCropW = (photo.cropW ?? photo.imgWidth) / scale;
+      const actualCropH = (photo.cropH ?? photo.imgHeight) / scale;
+
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, faceRadius, 0, Math.PI * 2);
+      ctx.clip();
+      ctx.drawImage(
+        img,
+        cropX,
+        cropY,
+        actualCropW,
+        actualCropH,
+        centerX - faceRadius,
+        centerY - faceRadius,
+        faceDiam,
+        faceDiam
+      );
+      ctx.restore();
+    } else {
+      // Apply Shape Clip
+      if (photo.shape === 'circle') {
+        ctx.beginPath();
+        ctx.arc(canvasW / 2, canvasH / 2, Math.min(canvasW, canvasH) / 2, 0, Math.PI * 2);
+        ctx.clip();
+      } else if (photo.shape === 'heart') {
+        ctx.scale(canvasW / 24, canvasH / 24);
+        const heartPath = new Path2D(
+          'M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z'
+        );
+        ctx.clip(heartPath);
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+      }
+
+      const scale = photo.scale || 1;
+      const cropX = photo.cropX ?? 0;
+      const cropY = photo.cropY ?? 0;
+      const actualCropW = (photo.cropW ?? photo.imgWidth) / scale;
+      const actualCropH = (photo.cropH ?? photo.imgHeight) / scale;
+
+      ctx.drawImage(
+        img,
+        cropX,
+        cropY,
+        actualCropW,
+        actualCropH,
+        0,
+        0,
+        canvasW,
+        canvasH
+      );
+    }
+
+    ctx.restore();
+
+    const dataUrl = canvas.toDataURL('image/png', 0.98);
+    const link = document.createElement('a');
+    const baseName = (photo.name || 'anh').replace(/\.[^/.]+$/, '').trim();
+    const shapeLabel = photo.shape !== 'rect' ? `_${photo.shape}` : '';
+    link.download = `${baseName}${shapeLabel}_tach_nen_${Date.now()}.png`;
+    link.href = dataUrl;
+    link.click();
+  } catch (err) {
+    console.error('Error exporting single photo as PNG:', err);
+    throw err;
+  } finally {
+    canvas.width = 0;
+    canvas.height = 0;
+  }
+}
+
+/**
+ * Đóng gói toàn bộ danh sách ảnh con thành file ZIP định dạng PNG tách nền
+ */
+export async function exportAllPhotosAsZip(
+  photos: PhotoItem[],
+  zipName: string = 'bo_anh_da_tach_nen.zip',
+  onProgress?: (current: number, total: number) => void
+): Promise<void> {
+  if (photos.length === 0) return;
+
+  const zip = new JSZip();
+  const folderName = zipName.replace(/\.zip$/i, '');
+  const folder = zip.folder(folderName) || zip;
+
+  for (let i = 0; i < photos.length; i++) {
+    onProgress?.(i + 1, photos.length);
+    const photo = photos[i];
+
+    const targetW_mm = photo.targetWidth || (photo.imgWidth / MM_TO_PX_300DPI);
+    const targetH_mm = photo.targetHeight || (photo.imgHeight / MM_TO_PX_300DPI);
+    const canvasW = Math.max(120, Math.round(targetW_mm * MM_TO_PX_300DPI));
+    const canvasH = Math.max(120, Math.round(targetH_mm * MM_TO_PX_300DPI));
+
+    const canvas = document.createElement('canvas');
+    canvas.width = canvasW;
+    canvas.height = canvasH;
+    const ctx = canvas.getContext('2d', { alpha: true });
+    if (!ctx) continue;
+
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+
+    try {
+      const img = await loadImage(photo.originalSrc);
+      ctx.save();
+
+      if (photo.shape === 'circle' && photo.badgeMode && photo.badgeFaceDiameter) {
+        // 🏅 Huy hiệu chuyên dụng (Badge Pin)
+        const diam = Math.min(canvasW, canvasH);
+        const centerX = canvasW / 2;
+        const centerY = canvasH / 2;
+        const cutRadius = diam / 2;
+
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, cutRadius, 0, Math.PI * 2);
+        ctx.clip();
+
+        // Đổ nền viền bọc (Bleed)
+        ctx.fillStyle = photo.badgeBleedColor || '#ffffff';
+        ctx.fillRect(0, 0, canvasW, canvasH);
+
+        const faceRatio = Math.min(1, photo.badgeFaceDiameter / (photo.targetWidth || 55));
+        const faceDiam = diam * faceRatio;
+        const faceRadius = faceDiam / 2;
+
+        const scale = photo.scale || 1;
+        const cropX = photo.cropX ?? 0;
+        const cropY = photo.cropY ?? 0;
+        const actualCropW = (photo.cropW ?? photo.imgWidth) / scale;
+        const actualCropH = (photo.cropH ?? photo.imgHeight) / scale;
+
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, faceRadius, 0, Math.PI * 2);
+        ctx.clip();
+        ctx.drawImage(
+          img,
+          cropX,
+          cropY,
+          actualCropW,
+          actualCropH,
+          centerX - faceRadius,
+          centerY - faceRadius,
+          faceDiam,
+          faceDiam
+        );
+        ctx.restore();
+      } else {
+        if (photo.shape === 'circle') {
+          ctx.beginPath();
+          ctx.arc(canvasW / 2, canvasH / 2, Math.min(canvasW, canvasH) / 2, 0, Math.PI * 2);
+          ctx.clip();
+        } else if (photo.shape === 'heart') {
+          ctx.scale(canvasW / 24, canvasH / 24);
+          const heartPath = new Path2D(
+            'M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z'
+          );
+          ctx.clip(heartPath);
+          ctx.setTransform(1, 0, 0, 1, 0, 0);
+        }
+
+        const scale = photo.scale || 1;
+        const cropX = photo.cropX ?? 0;
+        const cropY = photo.cropY ?? 0;
+        const actualCropW = (photo.cropW ?? photo.imgWidth) / scale;
+        const actualCropH = (photo.cropH ?? photo.imgHeight) / scale;
+
+        ctx.drawImage(img, cropX, cropY, actualCropW, actualCropH, 0, 0, canvasW, canvasH);
+      }
+
+      ctx.restore();
+
+      const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
+      if (blob) {
+        const baseName = (photo.name || `anh_${i + 1}`).replace(/\.[^/.]+$/, '').trim();
+        const shapeLabel = photo.shape !== 'rect' ? `_${photo.shape}` : '';
+        folder.file(`${String(i + 1).padStart(2, '0')}_${baseName}${shapeLabel}_tach_nen.png`, blob);
+      }
+    } catch (e) {
+      console.error('Error exporting photo to zip', e);
+    } finally {
+      canvas.width = 0;
+      canvas.height = 0;
+    }
+
+    if (i % 2 === 0) {
+      await new Promise((r) => setTimeout(r, 0));
+    }
+  }
+
+  const zipBlob = await zip.generateAsync({
+    type: 'blob',
+    compression: 'DEFLATE',
+    compressionOptions: { level: 6 },
+  });
+
+  const url = URL.createObjectURL(zipBlob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = zipName.endsWith('.zip') ? zipName : `${zipName}.zip`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
 }
 
 export async function exportPagesToZip(

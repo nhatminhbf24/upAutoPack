@@ -13,6 +13,8 @@ import {
   Ruler,
   Plus,
   Scissors,
+  Download,
+  FolderArchive,
 } from 'lucide-react';
 import { PhotoItem, DEFAULT_SIZE_PRESETS, DEFAULT_ADJUSTMENTS, SizePreset, OrientationMode } from '../types';
 import { rotateImageBase64, calculateCrop, createOptimizedPreview, getOrientedDimensions, formatPhotoToPreset, getShortPresetLabel, getImageDimensions } from '../utils/imageUtils';
@@ -34,6 +36,7 @@ interface BatchToolsSidebarProps {
   customPresets?: SizePreset[];
   onOpenCustomSizeModal?: () => void;
   onOpenPngSplitter?: () => void;
+  onExportAllPhotosZip?: () => void;
   isCollapsed?: boolean;
   onToggleCollapse?: () => void;
 }
@@ -53,6 +56,7 @@ export const BatchToolsSidebar: React.FC<BatchToolsSidebarProps> = ({
   customPresets = [],
   onOpenCustomSizeModal,
   onOpenPngSplitter,
+  onExportAllPhotosZip,
   isCollapsed = false,
   onToggleCollapse,
 }) => {
@@ -561,88 +565,82 @@ export const BatchToolsSidebar: React.FC<BatchToolsSidebarProps> = ({
         /* Scrollable Container */
         <div className="flex-1 overflow-y-auto p-3 space-y-3.5">
           {/* CỤM 1: ĐỒNG BỘ KÍCH THƯỚC (Pastel Sky) */}
-          <div className="bg-sky-50/80 rounded-xl p-3.5 border border-sky-200/90 shadow-2xs space-y-2.5 transition hover:border-sky-300">
+          <div className="bg-sky-50/80 rounded-xl p-3 border border-sky-200/90 shadow-2xs space-y-2 transition hover:border-sky-300">
+            {/* Dòng 1 : Text: "KÍCH THƯỚC" - nút: "Tùy chỉnh" */}
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-1.5 text-sky-950 font-bold">
+              <div className="flex items-center gap-1.5 text-sky-950 font-extrabold">
                 <Maximize2 className="w-3.5 h-3.5 text-sky-600" />
-                <span className="text-[11px] uppercase tracking-wide">Đồng bộ kích thước:</span>
+                <span className="text-[11px] uppercase tracking-wider font-extrabold text-slate-800">KÍCH THƯỚC</span>
               </div>
-              <span className="text-[10px] text-sky-700 font-semibold bg-sky-100/80 border border-sky-200 px-1.5 py-0.5 rounded">
-                Khổ in
-              </span>
-            </div>
-
-            <div className="space-y-1.5">
-              <select
-                value={activePresetId}
-                onChange={(e) => {
-                  if (e.target.value === '__custom_new__') {
-                    if (onOpenCustomSizeModal) onOpenCustomSizeModal();
-                    return;
-                  }
-                  onChangeActivePresetId(e.target.value);
-                }}
-                className="w-full bg-white border border-sky-300 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-800 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-400 transition"
-              >
-                <option value="__custom_new__" className="font-bold text-pink-600">
-                  ➕ Nhập kích thước tùy chỉnh...
-                </option>
-
-                {customPresets.length > 0 && (
-                  <optgroup label="⭐ Kích thước tùy chỉnh của bạn">
-                    {customPresets.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.label}
-                      </option>
-                    ))}
-                  </optgroup>
-                )}
-
-                {defaultCategories.map((cat) => (
-                  <optgroup key={cat} label={cat}>
-                    {DEFAULT_SIZE_PRESETS.filter((p) => p.category === cat).map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.label}
-                      </option>
-                    ))}
-                  </optgroup>
-                ))}
-              </select>
-
               {onOpenCustomSizeModal && (
                 <button
                   type="button"
                   onClick={onOpenCustomSizeModal}
-                  className="w-full flex items-center justify-center gap-1 text-[11px] font-bold text-pink-700 bg-pink-50 hover:bg-pink-100 border border-pink-200 py-1.5 rounded-lg transition cursor-pointer"
+                  className="flex items-center gap-1 text-[11px] font-bold text-sky-700 hover:text-sky-900 bg-white hover:bg-sky-100 border border-sky-300/80 px-2 py-0.5 rounded-lg transition active:scale-95 cursor-pointer shadow-2xs"
+                  title="Nhập kích thước in tùy chỉnh"
                 >
-                  <Ruler className="w-3.5 h-3.5 text-pink-600" />
-                  <span>+ Nhập kích thước tùy chỉnh</span>
+                  <Ruler className="w-3 h-3 text-sky-600" />
+                  <span>Tùy chỉnh</span>
                 </button>
               )}
+            </div>
 
-              {/* Vibrant Blue/Indigo Action Button - ĐƯA LÊN TRÊN ĐỊNH HƯỚNG KHUÔN */}
-              <button
-                type="button"
-                id="btn-apply-size-all"
-                onClick={() => handleApplyPresetToAll()}
-                disabled={photos.length === 0 || isApplyingSizeAll}
-                className="w-full flex items-center justify-center gap-1.5 bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 hover:from-blue-700 hover:to-indigo-800 disabled:opacity-50 text-white px-3 py-2.5 rounded-xl text-xs font-bold shadow-sm shadow-blue-500/20 transition active:scale-95 cursor-pointer mt-1"
-              >
-                {isApplyingSizeAll ? (
-                  <>
-                    <Loader2 className="w-3.5 h-3.5 animate-spin text-white" />
-                    <span>Đang đồng bộ kích thước & xoay...</span>
-                  </>
-                ) : (
-                  <>
-                    <Check className="w-3.5 h-3.5 text-emerald-300" />
-                    <span>Áp dụng kích thước cho tất cả</span>
-                  </>
-                )}
-              </button>
+            {/* Dòng 2: như cũ chọn danh sách kích thước */}
+            <select
+              value={activePresetId}
+              onChange={(e) => {
+                if (e.target.value === '__custom_new__') {
+                  if (onOpenCustomSizeModal) onOpenCustomSizeModal();
+                  return;
+                }
+                onChangeActivePresetId(e.target.value);
+              }}
+              className="w-full bg-white border border-sky-300 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-800 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-400 transition cursor-pointer shadow-2xs"
+            >
+              {customPresets.length > 0 && (
+                <optgroup label="⭐ Kích thước tùy chỉnh của bạn">
+                  {customPresets.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.label}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
 
-              {/* Tùy chọn định hướng khuôn in */}
-              <div className="space-y-1 pt-1">
+              {defaultCategories.map((cat) => (
+                <optgroup key={cat} label={cat}>
+                  {DEFAULT_SIZE_PRESETS.filter((p) => p.category === cat).map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.label}
+                    </option>
+                  ))}
+                </optgroup>
+              ))}
+            </select>
+
+            {/* Dòng 3: nút "Áp dụng cho tất cả" : bình thường nền nhẹ thôi > di chuột vào nền đậm hơn (tạo sự rõ rệt) */}
+            <button
+              type="button"
+              id="btn-apply-size-all"
+              onClick={() => handleApplyPresetToAll()}
+              disabled={photos.length === 0 || isApplyingSizeAll}
+              className="group w-full flex items-center justify-center gap-1.5 bg-blue-100 hover:bg-blue-600 disabled:opacity-50 text-blue-800 hover:text-white border border-blue-300 hover:border-blue-600 px-3 py-2 rounded-xl text-xs font-bold shadow-2xs hover:shadow-md transition-all duration-200 active:scale-95 cursor-pointer"
+            >
+              {isApplyingSizeAll ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  <span>Đang đồng bộ kích thước & xoay...</span>
+                </>
+              ) : (
+                <>
+                  <Check className="w-3.5 h-3.5 text-blue-600 group-hover:text-white transition-colors" />
+                  <span>Áp dụng cho tất cả</span>
+                </>
+              )}
+            </button>
+
+            {/* 3 nút dưới cùng: như cũ */}
+            <div className="space-y-1 pt-0.5">
                 {/* 1. Ép đúng khuôn - Tự xoay ảnh */}
                   <label
                     onClick={() => handleSelectOrientationMode('rotate_to_fit')}
@@ -701,7 +699,6 @@ export const BatchToolsSidebar: React.FC<BatchToolsSidebarProps> = ({
                   </label>
                 </div>
               </div>
-            </div>
 
           {/* CỤM 2: XOAY & ĐỊNH HƯỚNG (Pastel Indigo) - ĐƯỢC ĐƯA LÊN TRÊN SỐ LƯỢNG */}
           <div className="bg-indigo-50/70 rounded-xl p-3.5 border border-indigo-200/90 shadow-2xs space-y-2 transition hover:border-indigo-300">
@@ -943,6 +940,33 @@ export const BatchToolsSidebar: React.FC<BatchToolsSidebarProps> = ({
               </div>
             </div>
           </div>
+
+          {/* CỤM 6: TẢI PNG TÁCH NỀN HÀNG LOẠT (Pastel Violet/Purple) */}
+          {onExportAllPhotosZip && (
+            <div className="bg-purple-50/70 rounded-xl p-3 border border-purple-200/90 shadow-2xs space-y-2 transition hover:border-purple-300">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5 text-purple-950 font-bold">
+                  <Sparkles className="w-3.5 h-3.5 text-purple-600" />
+                  <span className="text-[11px] uppercase tracking-wide">TẢI PNG TÁCH NỀN</span>
+                </div>
+                <span className="text-[10px] text-purple-700 font-bold bg-purple-100 border border-purple-200 px-1.5 py-0.5 rounded">
+                  Trong suốt
+                </span>
+              </div>
+
+              <button
+                type="button"
+                id="btn-batch-download-zip-transparent"
+                onClick={onExportAllPhotosZip}
+                disabled={photos.length === 0}
+                className="w-full flex items-center justify-center gap-1.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 disabled:opacity-50 text-white px-3 py-2.5 rounded-xl text-xs font-bold shadow-sm transition active:scale-95 cursor-pointer"
+                title="Đóng gói tất cả ảnh đã cắt/tách nền với độ phân giải cao 300 DPI vào file ZIP"
+              >
+                <FolderArchive className="w-3.5 h-3.5" />
+                <span>Tải trọn bộ PNG tách nền (.ZIP)</span>
+              </button>
+            </div>
+          )}
         </div>
       )}
     </aside>

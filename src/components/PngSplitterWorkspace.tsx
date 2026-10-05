@@ -718,7 +718,7 @@ export const PngSplitterWorkspace: React.FC<PngSplitterWorkspaceProps> = ({
                       ) : (
                         <>
                           <FolderArchive className="w-3.5 h-3.5 text-emerald-200" />
-                          <span>Tải thư mục ZIP ({selectedCount} ảnh)</span>
+                          <span>Tải ZIP PNG tách nền ({selectedCount} ảnh)</span>
                         </>
                       )}
                     </button>
@@ -802,7 +802,7 @@ export const PngSplitterWorkspace: React.FC<PngSplitterWorkspaceProps> = ({
                               downloadSingleExtractedPng(item);
                             }}
                             className="p-1 hover:text-blue-600 hover:bg-blue-100 rounded-md transition cursor-pointer text-slate-500"
-                            title="Tải riêng ảnh PNG này"
+                            title="Tải ảnh PNG tách nền này về máy"
                           >
                             <Download className="w-3.5 h-3.5" />
                           </button>

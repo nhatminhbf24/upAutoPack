@@ -211,34 +211,72 @@ export async function exportPagesToPdf(
           ctx.fillStyle = '#ffffff';
           ctx.fillRect(drawX, drawY, drawW, drawH);
 
-          // Apply Shape Clip with Bleed
-          if (item.shape === 'circle') {
-            ctx.beginPath();
+          if (item.shape === 'circle' && item.badgeMode && item.badgeFaceDiameter) {
+            // 🏅 Chế độ phôi huy hiệu cài áo (Badge Pin)
             const diam = Math.min(pxW, pxH);
-            ctx.arc(pxX + pxW / 2, pxY + pxH / 2, (diam + bleedPx * 2) / 2, 0, Math.PI * 2);
-            ctx.clip();
-          } else if (item.shape === 'heart') {
-            ctx.translate(drawX, drawY);
-            ctx.scale(drawW / 24, drawH / 24);
-            const heartPath = new Path2D(
-              'M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z'
-            );
-            ctx.clip(heartPath);
-            ctx.setTransform(1, 0, 0, 1, 0, 0);
-          }
+            const centerX = pxX + pxW / 2;
+            const centerY = pxY + pxH / 2;
+            const cutRadius = (diam + bleedPx * 2) / 2;
 
-          // Draw Image with exact pixel crop (expanded for bleed if set)
-          ctx.drawImage(
-            img,
-            item.cropX,
-            item.cropY,
-            actualCropW,
-            actualCropH,
-            drawX,
-            drawY,
-            drawW,
-            drawH
-          );
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, cutRadius, 0, Math.PI * 2);
+            ctx.clip();
+
+            // Đổ màu nền viền bọc (Bleed margin)
+            ctx.fillStyle = item.badgeBleedColor || '#ffffff';
+            ctx.fillRect(centerX - cutRadius, centerY - cutRadius, cutRadius * 2, cutRadius * 2);
+
+            // Mặt trước chính diện
+            const faceRatio = Math.min(1, item.badgeFaceDiameter / (item.targetWidth || 55));
+            const faceDiam = diam * faceRatio;
+            const faceRadius = faceDiam / 2;
+
+            ctx.save();
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, faceRadius, 0, Math.PI * 2);
+            ctx.clip();
+            ctx.drawImage(
+              img,
+              item.cropX,
+              item.cropY,
+              actualCropW,
+              actualCropH,
+              centerX - faceRadius,
+              centerY - faceRadius,
+              faceDiam,
+              faceDiam
+            );
+            ctx.restore();
+          } else {
+            // Apply Shape Clip with Bleed
+            if (item.shape === 'circle') {
+              ctx.beginPath();
+              const diam = Math.min(pxW, pxH);
+              ctx.arc(pxX + pxW / 2, pxY + pxH / 2, (diam + bleedPx * 2) / 2, 0, Math.PI * 2);
+              ctx.clip();
+            } else if (item.shape === 'heart') {
+              ctx.translate(drawX, drawY);
+              ctx.scale(drawW / 24, drawH / 24);
+              const heartPath = new Path2D(
+                'M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z'
+              );
+              ctx.clip(heartPath);
+              ctx.setTransform(1, 0, 0, 1, 0, 0);
+            }
+
+            // Draw Image with exact pixel crop (expanded for bleed if set)
+            ctx.drawImage(
+              img,
+              item.cropX,
+              item.cropY,
+              actualCropW,
+              actualCropH,
+              drawX,
+              drawY,
+              drawW,
+              drawH
+            );
+          }
         }
 
         ctx.restore();

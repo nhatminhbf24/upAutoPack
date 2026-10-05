@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { PhotoItem, LayoutSettings, ShapeType, SizePreset, DEFAULT_SIZE_PRESETS, OrientationMode } from './types';
 import { packImagesToPages } from './utils/packing';
-import { exportPagesToImage, calculateCrop, formatPhotoToPreset, getShortPresetLabel } from './utils/imageUtils';
+import { exportPagesToImage, calculateCrop, formatPhotoToPreset, getShortPresetLabel, exportAllPhotosAsZip } from './utils/imageUtils';
 import { exportPagesToPdf } from './utils/pdfExport';
 import {
   saveProjectMeta,
@@ -740,6 +740,63 @@ export default function App() {
     }
   }, [photos.length, packedPages, settings, addToast]);
 
+  const handleExportTransparentPng = useCallback(async () => {
+    if (photos.length === 0) {
+      addToast('error', 'Chưa có ảnh để xuất file');
+      return;
+    }
+
+    setIsExporting(true);
+    setExportProgress({ current: 1, total: packedPages.length });
+    addToast('info', `Đang xuất ${packedPages.length} trang PNG tách nền (300 DPI)...`);
+
+    try {
+      await exportPagesToImage(
+        packedPages,
+        settings,
+        'png-transparent',
+        (current, total) => {
+          setExportProgress({ current, total });
+        },
+        { transparentBackground: true }
+      );
+      addToast('success', `Đã xuất xong ${packedPages.length} trang PNG tách nền`);
+    } catch (err) {
+      console.error('Error exporting transparent PNG:', err);
+      addToast('error', 'Lỗi khi xuất PNG tách nền');
+    } finally {
+      setIsExporting(false);
+      setExportProgress(null);
+    }
+  }, [photos.length, packedPages, settings, addToast]);
+
+  const handleExportAllPhotosZip = useCallback(async () => {
+    if (photos.length === 0) {
+      addToast('error', 'Chưa có ảnh để tải');
+      return;
+    }
+
+    setIsExporting(true);
+    addToast('info', `Đang đóng gói ${photos.length} ảnh PNG tách nền (.zip)...`);
+
+    try {
+      await exportAllPhotosAsZip(
+        photos,
+        `bo_anh_da_tach_nen_${photos.length}_anh.zip`,
+        (current, total) => {
+          setExportProgress({ current, total });
+        }
+      );
+      addToast('success', `Đã tải về file ZIP ${photos.length} ảnh PNG tách nền`);
+    } catch (err) {
+      console.error('Error exporting all photos zip:', err);
+      addToast('error', 'Lỗi khi đóng gói file ZIP');
+    } finally {
+      setIsExporting(false);
+      setExportProgress(null);
+    }
+  }, [photos, addToast]);
+
   const handleSaveCustomPreset = useCallback((preset: SizePreset) => {
     setCustomPresets((prev) => {
       // If already exists with same dimensions and shape, replace it
@@ -908,6 +965,7 @@ export default function App() {
             onToggleAutoMatchOrientation={handleToggleAutoMatchOrientation}
             customPresets={customPresets}
             onOpenCustomSizeModal={() => setCustomSizeModalConfig({ isOpen: true, targetPhoto: null })}
+            onExportAllPhotosZip={handleExportAllPhotosZip}
           />
 
           {/* Column 3: Settings Sidebar */}
@@ -919,6 +977,8 @@ export default function App() {
             onAddPhotos={handleAddPhotos}
             onPrint={handlePrint}
             onExport={handleExport}
+            onExportTransparentPng={handleExportTransparentPng}
+            onExportAllPhotosZip={handleExportAllPhotosZip}
             onExportPdf={handleExportPdf}
             onExportProject={handleExportProject}
             onImportProject={handleImportProject}

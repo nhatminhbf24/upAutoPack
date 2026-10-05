@@ -2,6 +2,7 @@ import React, { useRef, useState, useEffect } from 'react';
 import { UploadCloud, Image as ImageIcon, Images, Plus, Loader2, FileImage, Save, FolderOpen, ChevronDown } from 'lucide-react';
 import { PhotoItem, ShapeType, SizePreset, OrientationMode } from '../types';
 import { readFileAsDataURL, getImageDimensions, calculateCrop, createOptimizedPreview, getOrientedDimensions, rotateImageBase64, getShortPresetLabel } from '../utils/imageUtils';
+import { detectBadgeBleedColors } from '../utils/badgeUtils';
 
 interface UploaderProps {
   onAddPhotos: (newPhotos: PhotoItem[]) => void;
@@ -146,6 +147,19 @@ export const Uploader: React.FC<UploaderProps> = ({
 
           const baseWorkingSrc = finalRotation === 90 ? finalOriginalSrc : dataUrl;
 
+          const isBadge = Boolean(activePreset.isBadgePreset);
+          let badgeBleedColor: string | undefined;
+          let badgeBleedPalette: string[] | undefined;
+          if (isBadge) {
+            try {
+              const analysis = await detectBadgeBleedColors(finalOriginalSrc);
+              badgeBleedColor = analysis.dominantColor;
+              badgeBleedPalette = analysis.palette;
+            } catch (e) {
+              badgeBleedColor = '#ffffff';
+            }
+          }
+
           addedPhotos.push({
             id: 'photo_' + Math.random().toString(36).substring(2, 9) + '_' + Date.now() + '_' + i,
             name: file.name || 'Ảnh tải lên',
@@ -175,6 +189,12 @@ export const Uploader: React.FC<UploaderProps> = ({
             cropW: crop.cropW,
             cropH: crop.cropH,
             rotation: finalRotation,
+            badgeMode: isBadge,
+            badgeFaceDiameter: isBadge ? (activePreset.badgeFaceDiameter || 44) : undefined,
+            badgeBleedColor: isBadge ? (badgeBleedColor || '#ffffff') : undefined,
+            badgeBleedPalette: isBadge ? badgeBleedPalette : undefined,
+            badgeGuideLines: false,
+            badgeBleedMode: isBadge ? 'solid' : undefined,
           });
         } catch (err) {
           console.error('Error processing single image:', err);

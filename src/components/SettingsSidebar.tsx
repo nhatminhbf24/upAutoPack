@@ -27,6 +27,8 @@ import {
   Boxes,
   Layers,
   SplitSquareHorizontal,
+  Sparkles,
+  FolderArchive,
 } from 'lucide-react';
 import { LayoutSettings, SizePreset, FreeformTextTag, CutMarkFeature, OrientationMode } from '../types';
 import { Uploader } from './Uploader';
@@ -42,6 +44,8 @@ interface SettingsSidebarProps {
   onAddPhotos: (photos: PhotoItem[]) => void;
   onPrint: () => void;
   onExport: (format: 'png' | 'jpeg') => void;
+  onExportTransparentPng?: () => void;
+  onExportAllPhotosZip?: () => void;
   onExportPdf?: () => void;
   onExportProject?: () => void;
   onImportProject?: (file: File) => void;
@@ -70,6 +74,8 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
   onAddPhotos,
   onPrint,
   onExport,
+  onExportTransparentPng,
+  onExportAllPhotosZip,
   onExportPdf,
   onExportProject,
   onImportProject,
@@ -1180,7 +1186,7 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
                 )}
               </div>
 
-              {/* Row 2: Export PNG & Export JPG */}
+              {/* Row 2: Export PNG (White paper) & Export JPG */}
               <div className="grid grid-cols-2 gap-2">
                 <button
                   type="button"
@@ -1188,10 +1194,10 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
                   onClick={() => onExport('png')}
                   disabled={totalPhotos === 0 || isExporting}
                   className="flex items-center justify-center gap-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-bold py-2 rounded-xl text-xs transition shadow-xs active:scale-95 cursor-pointer truncate"
-                  title="Xuất file ảnh PNG chất lượng cao"
+                  title="Xuất file ảnh PNG chất lượng cao có nền trắng giấy in"
                 >
                   <Download className="w-3.5 h-3.5 shrink-0" />
-                  <span className="truncate">Xuất PNG</span>
+                  <span className="truncate">Xuất PNG (Nền trắng)</span>
                 </button>
                 <button
                   type="button"
@@ -1204,6 +1210,37 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
                   <Download className="w-3.5 h-3.5 shrink-0" />
                   <span className="truncate">Xuất JPG</span>
                 </button>
+              </div>
+
+              {/* Row 3: Tải PNG Tách Nền (Trong suốt) */}
+              <div className="pt-0.5 space-y-1.5">
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    id="btn-export-png-transparent"
+                    onClick={() => onExportTransparentPng?.()}
+                    disabled={totalPhotos === 0 || isExporting}
+                    className="flex-1 flex items-center justify-center gap-1.5 bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-700 hover:to-purple-700 disabled:opacity-50 text-white font-bold py-2 px-2.5 rounded-xl text-xs transition shadow-sm shadow-purple-500/20 active:scale-95 cursor-pointer truncate"
+                    title="Xuất trang A4 định dạng PNG 300 DPI với nền trong suốt (loại bỏ nền trắng giấy in)"
+                  >
+                    <Sparkles className="w-3.5 h-3.5 shrink-0 text-amber-300" />
+                    <span className="truncate">Tải PNG tách nền (A4)</span>
+                  </button>
+
+                  {onExportAllPhotosZip && (
+                    <button
+                      type="button"
+                      id="btn-export-all-photos-zip"
+                      onClick={() => onExportAllPhotosZip?.()}
+                      disabled={totalPhotos === 0 || isExporting}
+                      className="flex items-center justify-center gap-1 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 disabled:opacity-50 font-bold py-2 px-2.5 rounded-xl text-xs transition shadow-2xs active:scale-95 cursor-pointer shrink-0"
+                      title={`Đóng gói toàn bộ ${totalPhotos} ảnh con đã cắt & tách nền vào 1 file ZIP`}
+                    >
+                      <FolderArchive className="w-3.5 h-3.5 shrink-0 text-purple-600" />
+                      <span>ZIP ảnh con</span>
+                    </button>
+                  )}
+                </div>
               </div>
 
               {/* Print 100% Scale Calibration Tip */}

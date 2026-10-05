@@ -16,9 +16,11 @@ import {
   AlertTriangle,
   Zap,
   Check,
+  SlidersHorizontal,
 } from 'lucide-react';
 import { PhotoItem, DEFAULT_SIZE_PRESETS, SizePreset } from '../types';
 import { rotateImageBase64, calculateCrop, createOptimizedPreview } from '../utils/imageUtils';
+import { detectBadgeBleedColors } from '../utils/badgeUtils';
 import { enhanceImageQuality, calculatePrintDPI, getRecommendedUpscaleFactor } from '../utils/imageEnhancer';
 
 interface ImageListSidebarProps {
@@ -251,7 +253,7 @@ export const ImageListSidebar: React.FC<ImageListSidebarProps> = ({
     }
   };
 
-  const handleSizePresetChange = (photo: PhotoItem, presetId: string) => {
+  const handleSizePresetChange = async (photo: PhotoItem, presetId: string) => {
     if (presetId === '__custom_new__') {
       if (onOpenCustomSizeModal) {
         onOpenCustomSizeModal(photo);
@@ -261,6 +263,20 @@ export const ImageListSidebar: React.FC<ImageListSidebarProps> = ({
 
     const preset = allPresets.find((p) => p.id === presetId);
     if (!preset) return;
+
+    const isBadge = Boolean(preset.isBadgePreset);
+    let badgeBleedColor = photo.badgeBleedColor;
+    let badgeBleedPalette = photo.badgeBleedPalette;
+
+    if (isBadge) {
+      try {
+        const analysis = await detectBadgeBleedColors(photo.originalSrc);
+        badgeBleedColor = analysis.dominantColor;
+        badgeBleedPalette = analysis.palette;
+      } catch (e) {
+        badgeBleedColor = badgeBleedColor || '#ffffff';
+      }
+    }
 
     const crop = calculateCrop(photo.imgWidth, photo.imgHeight, preset.width, preset.height, smartCrop);
     onUpdatePhoto(photo.id, {
@@ -272,7 +288,27 @@ export const ImageListSidebar: React.FC<ImageListSidebarProps> = ({
       cropW: crop.cropW,
       cropH: crop.cropH,
       scale: 1,
+      badgeMode: isBadge,
+      badgeFaceDiameter: isBadge ? (preset.badgeFaceDiameter || 44) : undefined,
+      badgeBleedColor: isBadge ? (badgeBleedColor || '#ffffff') : undefined,
+      badgeBleedPalette: isBadge ? badgeBleedPalette : undefined,
+      badgeGuideLines: false,
+      badgeBleedMode: isBadge ? (photo.badgeBleedMode || 'solid') : undefined,
     });
+  };
+
+  const handleRescanPhotoBleedColor = async (photo: PhotoItem) => {
+    try {
+      const analysis = await detectBadgeBleedColors(photo.originalSrc);
+      onUpdatePhoto(photo.id, {
+        badgeBleedColor: analysis.dominantColor,
+        badgeBleedPalette: analysis.palette,
+      });
+      onToast('success', `Đã nhận diện màu nền: ${analysis.dominantColor.toUpperCase()}`);
+    } catch (err) {
+      console.error(err);
+      onToast('error', 'Không thể nhận diện màu nền');
+    }
   };
 
   // Group default presets by category
@@ -587,6 +623,60 @@ export const ImageListSidebar: React.FC<ImageListSidebarProps> = ({
                             </button>
                           )}
                         </div>
+
+                        {/* 🏅 Phôi Huy hiệu: Gộp gọn trên 1 dòng duy nhất, không cuộn, không chật chội */}
+                        {photo.badgeMode && (
+                          <div className="flex items-center justify-between bg-pink-50/80 border border-pink-200/90 rounded-lg px-2 py-1 text-[11px] gap-1">
+                            {/* Nút Auto màu nền (gọn gàng, không icon) */}
+                            <button
+                              type="button"
+                              onClick={() => handleRescanPhotoBleedColor(photo)}
+                              className="text-[10px] font-bold text-pink-700 hover:text-pink-900 bg-white hover:bg-pink-100 border border-pink-200 px-2 py-0.5 rounded transition cursor-pointer shadow-2xs active:scale-95 shrink-0"
+                              title="Tự động phân tích ảnh và chọn màu nền chuẩn xác"
+                            >
+                              Auto màu nền
+                            </button>
+
+                            {/* Gợi ý swatches từ ảnh: 4 màu nhỏ gọn liền kề, KHÔNG thanh trượt */}
+                            {photo.badgeBleedPalette && photo.badgeBleedPalette.length > 0 && (
+                              <div className="flex items-center gap-1 shrink-0">
+                                {photo.badgeBleedPalette.slice(0, 4).map((col, cIdx) => (
+                                  <button
+                                    key={`swatch-${photo.id}-${cIdx}`}
+                                    type="button"
+                                    onClick={() => onUpdatePhoto(photo.id, { badgeBleedColor: col })}
+                                    style={{ backgroundColor: col }}
+                                    className={`w-3.5 h-3.5 rounded-full border transition cursor-pointer shrink-0 ${
+                                      (photo.badgeBleedColor || '').toLowerCase() === col.toLowerCase()
+                                        ? 'border-pink-600 ring-2 ring-pink-400 scale-110'
+                                        : 'border-white hover:scale-110'
+                                    }`}
+                                    title={`Chọn màu ${col}`}
+                                  />
+                                ))}
+                              </div>
+                            )}
+
+                            {/* Màu hiện tại + Native color picker */}
+                            <div className="flex items-center gap-1 shrink-0">
+                              <label className="relative flex items-center cursor-pointer" title="Đổi màu viền bọc mép">
+                                <input
+                                  type="color"
+                                  value={photo.badgeBleedColor || '#ffffff'}
+                                  onChange={(e) => onUpdatePhoto(photo.id, { badgeBleedColor: e.target.value })}
+                                  className="opacity-0 absolute inset-0 w-4 h-4 cursor-pointer"
+                                />
+                                <span
+                                  className="w-3.5 h-3.5 rounded-full border border-pink-400 shadow-2xs block"
+                                  style={{ backgroundColor: photo.badgeBleedColor || '#ffffff' }}
+                                />
+                              </label>
+                              <span className="font-mono text-[9px] text-pink-700 font-bold uppercase">
+                                {photo.badgeBleedColor || '#FFFFFF'}
+                              </span>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </div>
 
@@ -621,46 +711,16 @@ export const ImageListSidebar: React.FC<ImageListSidebarProps> = ({
                       </div>
 
                       {/* Action Buttons */}
-                      <div className="flex items-center gap-1">
-                        {/* Enhance Single Button */}
+                      <div className="flex items-center gap-1.5">
+                        {/* 1 Nút Chỉnh sửa duy nhất mở popup chỉnh ảnh (cắt cúp, chỉnh màu, làm nét, kích thước...) */}
                         <button
                           type="button"
-                          onClick={() => handleEnhanceSingle(photo)}
-                          disabled={enhancingId === photo.id}
-                          className={`p-1.5 rounded-md border transition shadow-2xs cursor-pointer ${
-                            photo.isEnhanced
-                              ? 'bg-amber-100 border-amber-300 text-amber-800 hover:bg-amber-200'
-                              : 'bg-white border-slate-200 text-amber-600 hover:bg-amber-50 hover:border-amber-300'
-                          }`}
-                          title={photo.isEnhanced ? 'Khôi phục ảnh gốc ban đầu' : 'Làm nét & Tăng chất lượng ảnh'}
+                          onClick={() => onOpenCropModal(photo)}
+                          className="flex items-center gap-1 px-2 py-1 rounded-md bg-white hover:bg-blue-50 border border-slate-200 hover:border-blue-300 text-slate-700 hover:text-blue-700 transition shadow-2xs cursor-pointer text-xs font-bold active:scale-95"
+                          title="Mở popup chỉnh sửa ảnh (cắt cúp, chỉnh màu, làm nét, kích thước...)"
                         >
-                          {enhancingId === photo.id ? (
-                            <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-600" />
-                          ) : photo.isEnhanced ? (
-                            <Undo2 className="w-3.5 h-3.5" />
-                          ) : (
-                            <Sparkles className="w-3.5 h-3.5" />
-                          )}
-                        </button>
-
-                        {/* Crop / Adjust framing */}
-                        <button
-                          type="button"
-                          onClick={() => onOpenCropModal(photo, 'size')}
-                          className="p-1.5 rounded-md bg-white border border-slate-200 text-slate-700 hover:text-blue-600 hover:border-blue-300 transition shadow-2xs cursor-pointer"
-                          title="Cài đặt hình: Khổ in, khung & chỉnh sửa"
-                        >
-                          <Crop className="w-3.5 h-3.5" />
-                        </button>
-
-                        {/* Color & Light Adjustments */}
-                        <button
-                          type="button"
-                          onClick={() => onOpenCropModal(photo, 'adjust')}
-                          className="p-1.5 rounded-md bg-white border border-slate-200 text-purple-600 hover:bg-purple-50 hover:border-purple-300 transition shadow-2xs cursor-pointer"
-                          title="Chỉnh màu, cân bằng trắng & ánh sáng"
-                        >
-                          <Sliders className="w-3.5 h-3.5" />
+                          <SlidersHorizontal className="w-3.5 h-3.5 text-blue-600" />
+                          <span>Chỉnh sửa</span>
                         </button>
 
                         {/* Rotate 90° */}
