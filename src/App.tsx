@@ -1302,6 +1302,7 @@ export default function App() {
             {cropModalConfig && (
             <CropModal
               photo={cropModalConfig.photo}
+              allPhotos={photos}
               initialTab={cropModalConfig.initialTab || 'size'}
               onClose={() => setCropModalConfig(null)}
               onSave={handleUpdatePhoto}

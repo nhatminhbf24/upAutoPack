@@ -26,8 +26,9 @@ import {
   HelpCircle,
   Download,
   Pipette,
+  LayoutTemplate,
 } from 'lucide-react';
-import { PhotoItem, ShapeType, ImageAdjustments, DEFAULT_ADJUSTMENTS } from '../types';
+import { PhotoItem, ShapeType, ImageAdjustments, DEFAULT_ADJUSTMENTS, TemplateConfig } from '../types';
 import {
   rotateImageBase64,
   calculateCrop,
@@ -38,6 +39,8 @@ import {
 import { detectBadgeBleedColors, STANDARD_BADGE_SPECS } from '../utils/badgeUtils';
 import { enhanceImageQuality, calculatePrintDPI, getRecommendedUpscaleFactor } from '../utils/imageEnhancer';
 import { PhotoAdjustmentsPanel } from './PhotoAdjustmentsPanel';
+import { TemplateSettingsPanel } from './TemplateSettingsPanel';
+import { TemplateFramePreview } from './TemplateFramePreview';
 import {
   applyAdjustmentsToImage,
   calculateAutoAdjustments,
@@ -45,13 +48,14 @@ import {
 
 interface CropModalProps {
   photo: PhotoItem | null;
+  allPhotos?: PhotoItem[];
   onClose: () => void;
   onSave: (photoId: string, updates: Partial<PhotoItem>) => void;
   smartCrop: boolean;
-  initialTab?: 'crop' | 'adjust' | 'size' | 'enhance';
+  initialTab?: 'crop' | 'adjust' | 'size' | 'enhance' | 'template';
 }
 
-type EditTab = 'size' | 'crop' | 'enhance' | 'adjust';
+type EditTab = 'size' | 'crop' | 'template' | 'enhance' | 'adjust';
 type CropRatioPreset = 'free' | '1:1' | 'target' | '3:4' | '4:3' | '9:16' | '16:9';
 
 interface CropBoxCoords {
@@ -63,6 +67,7 @@ interface CropBoxCoords {
 
 export const CropModal: React.FC<CropModalProps> = ({
   photo,
+  allPhotos = [],
   onClose,
   onSave,
   smartCrop,
@@ -75,13 +80,18 @@ export const CropModal: React.FC<CropModalProps> = ({
     if (initialTab === 'adjust') return 'adjust';
     if (initialTab === 'enhance') return 'enhance';
     if (initialTab === 'crop') return 'crop';
+    if (initialTab === 'template' || (photo.templateConfig && photo.templateConfig.type !== 'none')) return 'template';
     return 'size';
   };
 
   const [activeTab, setActiveTab] = useState<EditTab>(getInitialTab);
+  const [templateConfig, setTemplateConfig] = useState<TemplateConfig>(
+    () => photo.templateConfig || { type: 'none' }
+  );
 
   useEffect(() => {
     setActiveTab(getInitialTab());
+    setTemplateConfig(photo.templateConfig || { type: 'none' });
   }, [initialTab, photo.id]);
 
   // Support closing modal via Escape key
@@ -1070,6 +1080,7 @@ export const CropModal: React.FC<CropModalProps> = ({
         badgeBleedPalette: badgeMode ? badgeBleedPalette : undefined,
         badgeGuideLines: badgeMode ? badgeGuideLines : undefined,
         badgeBleedMode: badgeMode ? badgeBleedMode : undefined,
+        templateConfig: templateConfig.type !== 'none' ? templateConfig : undefined,
       });
       onClose();
     } catch (err) {
@@ -1104,20 +1115,19 @@ export const CropModal: React.FC<CropModalProps> = ({
   const cropRightPct = 100 - (cropLeftPct + cropWidthPct);
   const cropBottomPct = 100 - (cropTopPct + cropHeightPct);
 
-  // Dynamic box sizing calculation based on canvas dimensions
-  const availableW = Math.max(260, containerDimensions.width - 56);
-  const availableH = Math.max(260, containerDimensions.height - 70);
+  // Dynamic box sizing calculation based on canvas dimensions (Bảo toàn 100% tỷ lệ khung hình chuẩn)
+  const maxW = Math.min(Math.max(260, containerDimensions.width - 56), 720);
+  const maxH = Math.min(Math.max(260, containerDimensions.height - 70), 620);
   const aspect = effectiveTargetW / effectiveTargetH;
 
-  let fitBoxW = availableW;
+  let fitBoxW = maxW;
   let fitBoxH = fitBoxW / aspect;
-  if (fitBoxH > availableH) {
-    fitBoxH = availableH;
+  if (fitBoxH > maxH) {
+    fitBoxH = maxH;
     fitBoxW = fitBoxH * aspect;
   }
-  // Max cap for aesthetics
-  fitBoxW = Math.round(Math.min(fitBoxW, 720));
-  fitBoxH = Math.round(Math.min(fitBoxH, 620));
+  fitBoxW = Math.round(fitBoxW);
+  fitBoxH = Math.round(fitBoxH);
 
   // Max bounds for interactive crop image
   const maxCropImgW = Math.max(300, containerDimensions.width - 48);
@@ -1200,6 +1210,23 @@ export const CropModal: React.FC<CropModalProps> = ({
             >
               <Scissors className="w-3.5 h-3.5" />
               <span>Khổ in & Cắt cúp</span>
+            </button>
+
+            {/* Tab: Template Design */}
+            <button
+              type="button"
+              onClick={() => setActiveTab('template')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                activeTab === 'template'
+                  ? 'bg-white text-indigo-700 shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
+              }`}
+            >
+              <LayoutTemplate className="w-3.5 h-3.5 text-indigo-600" />
+              <span>Mẫu thiết kế</span>
+              {(templateConfig.type !== 'none' || badgeMode) && (
+                <span className="w-1.5 h-1.5 rounded-full bg-indigo-600" />
+              )}
             </button>
 
             {/* Tab 2: HD Enhance & AI */}
@@ -1409,6 +1436,21 @@ export const CropModal: React.FC<CropModalProps> = ({
                           />
                         )}
                       </div>
+                    ) : templateConfig && templateConfig.type !== 'none' ? (
+                      <TemplateFramePreview
+                        photo={{
+                          ...photo,
+                          targetWidth: effectiveTargetW,
+                          targetHeight: effectiveTargetH,
+                          templateConfig,
+                          scale,
+                          cropX,
+                          cropY,
+                          cropW,
+                          cropH,
+                        }}
+                        displaySrc={displayImageSrc}
+                      />
                     ) : (
                       <img
                         src={displayImageSrc}
@@ -1764,6 +1806,17 @@ export const CropModal: React.FC<CropModalProps> = ({
                     </div>
                   </>
                 )}
+                {activeTab === 'template' && (
+                  <>
+                    <div className="p-1.5 rounded-lg bg-indigo-100 text-indigo-700">
+                      <LayoutTemplate className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-bold text-slate-900">Mẫu in & Khung thiết kế</h4>
+                      <p className="text-[10px] text-slate-500">Polaroid, Instagram, Photostrip, Viền film & Thẻ sách</p>
+                    </div>
+                  </>
+                )}
                 {activeTab === 'crop' && (
                   <>
                     <div className="p-1.5 rounded-lg bg-blue-100 text-blue-700">
@@ -1801,10 +1854,11 @@ export const CropModal: React.FC<CropModalProps> = ({
 
               {/* Sub-tag indicator */}
               <span className="text-[10.5px] font-bold text-slate-600 bg-white px-2 py-0.5 rounded-full border border-slate-200">
-                {activeTab === 'size' && '1 / 4'}
-                {activeTab === 'crop' && '2 / 4'}
-                {activeTab === 'enhance' && '3 / 4'}
-                {activeTab === 'adjust' && '4 / 4'}
+                {activeTab === 'size' && '1 / 5'}
+                {activeTab === 'template' && '2 / 5'}
+                {activeTab === 'crop' && '3 / 5'}
+                {activeTab === 'enhance' && '4 / 5'}
+                {activeTab === 'adjust' && '5 / 5'}
               </span>
             </div>
 
@@ -2374,6 +2428,47 @@ export const CropModal: React.FC<CropModalProps> = ({
                 </div>
               )}
 
+              {/* TAB: MẪU IN & KHUNG THIẾT KẾ (Template Studio) */}
+              {activeTab === 'template' && (
+                <TemplateSettingsPanel
+                  photo={photo}
+                  allPhotos={allPhotos}
+                  curTargetWidth={effectiveTargetW}
+                  curTargetHeight={effectiveTargetH}
+                  shape={shape}
+                  templateConfig={templateConfig}
+                  onChangeTemplateConfig={(newConfig, newDims) => {
+                    setTemplateConfig(newConfig);
+                    if (newDims) {
+                      updateTargetDimensions(newDims.w, newDims.h);
+                      if (newDims.shape && newDims.shape !== shape) {
+                        handleShapeChange(newDims.shape);
+                      }
+                    }
+                  }}
+                  badgeMode={badgeMode}
+                  badgeFaceDiameter={badgeFaceDiameter}
+                  badgeBleedColor={badgeBleedColor}
+                  badgeBleedPalette={badgeBleedPalette}
+                  badgeGuideLines={badgeGuideLines}
+                  badgeBleedMode={badgeBleedMode}
+                  onUpdateBadge={(updates) => {
+                    if (updates.badgeMode !== undefined) setBadgeMode(updates.badgeMode);
+                    if (updates.badgeFaceDiameter !== undefined) setBadgeFaceDiameter(updates.badgeFaceDiameter);
+                    if (updates.badgeBleedColor !== undefined) setBadgeBleedColor(updates.badgeBleedColor);
+                    if (updates.badgeGuideLines !== undefined) setBadgeGuideLines(updates.badgeGuideLines);
+                    if (updates.badgeBleedMode !== undefined) setBadgeBleedMode(updates.badgeBleedMode);
+                    if (updates.shape !== undefined) handleShapeChange(updates.shape);
+                    if (updates.width !== undefined) setCurTargetWidth(updates.width);
+                    if (updates.height !== undefined) setCurTargetHeight(updates.height);
+                  }}
+                  onToast={(type, text) => {
+                    setCropSuccessToast(text);
+                    setTimeout(() => setCropSuccessToast(null), 3000);
+                  }}
+                />
+              )}
+
               {/* TAB 2: CẮT XÉN ẢNH (Crop Tool) */}
               {activeTab === 'crop' && (
                 <div className="space-y-4">
@@ -2711,6 +2806,9 @@ export const CropModal: React.FC<CropModalProps> = ({
             {activeTab === 'size' && (
               <span>Mẹo: Kéo chuột trực tiếp trên ảnh để dịch tâm, lăn chuột để phóng to.</span>
             )}
+            {activeTab === 'template' && (
+              <span>Chọn mẫu in bên phải để tự động áp dụng khung và các tùy biến chuyên biệt.</span>
+            )}
             {activeTab === 'crop' && (
               <span>Kéo các điểm neo để chọn vùng cắt &bull; Bấm &quot;Áp dụng cắt&quot; để cắt ảnh.</span>
             )}
@@ -2747,6 +2845,7 @@ export const CropModal: React.FC<CropModalProps> = ({
                     badgeBleedPalette: badgeMode ? badgeBleedPalette : undefined,
                     badgeGuideLines: badgeMode ? badgeGuideLines : undefined,
                     badgeBleedMode: badgeMode ? badgeBleedMode : undefined,
+                    templateConfig: templateConfig.type !== 'none' ? templateConfig : undefined,
                   };
                   await exportSinglePhotoAsPng(currentSnapshot, true);
                 } catch (err) {

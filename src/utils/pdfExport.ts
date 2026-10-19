@@ -3,6 +3,7 @@ import { PackedPage, LayoutSettings } from '../types';
 import { MM_TO_PX_300DPI, A4_WIDTH_MM, A4_HEIGHT_MM } from './packing';
 import { loadImage } from './imageUtils';
 import { renderTextTagOnCanvas } from './textTagUtils';
+import { renderTemplateOnCanvas } from './templateRenderUtils';
 
 /**
  * Export Multi-Page High Quality PDF (300 DPI Rendering per A4 page)
@@ -157,7 +158,8 @@ export async function exportPagesToPdf(
       ctx.restore();
     }
 
-    for (const item of page.items) {
+    for (let itemIndex = 0; itemIndex < page.items.length; itemIndex++) {
+      const item = page.items[itemIndex];
       try {
         const img = await loadImage(item.originalSrc);
         const pxX = Math.round(item.x * MM_TO_PX_300DPI);
@@ -168,6 +170,21 @@ export async function exportPagesToPdf(
         const scale = item.scale || 1;
         const actualCropW = item.cropW / scale;
         const actualCropH = item.cropH / scale;
+
+        let slotImgs: Record<number, HTMLImageElement> | undefined;
+        if (item.templateConfig?.type === 'photostrip' && item.templateConfig.photostrip?.slots?.length) {
+          slotImgs = {};
+          for (let sIdx = 0; sIdx < item.templateConfig.photostrip.slots.length; sIdx++) {
+            const slotCfg = item.templateConfig.photostrip.slots[sIdx];
+            if (slotCfg?.photoSrc) {
+              try {
+                slotImgs[sIdx] = await loadImage(slotCfg.photoSrc);
+              } catch {
+                // fallback to main img
+              }
+            }
+          }
+        }
 
         ctx.save();
 
@@ -188,18 +205,29 @@ export async function exportPagesToPdf(
           ctx.fillStyle = '#ffffff';
           ctx.fillRect(unrotDrawX, unrotDrawY, unrotDrawW, unrotDrawH);
 
-          // Draw Image with exact pixel crop (expanded for bleed if set)
-          ctx.drawImage(
-            img,
-            item.cropX,
-            item.cropY,
-            actualCropW,
-            actualCropH,
-            unrotDrawX,
-            unrotDrawY,
-            unrotDrawW,
-            unrotDrawH
-          );
+          if (item.templateConfig && item.templateConfig.type !== 'none') {
+            renderTemplateOnCanvas(
+              ctx,
+              item,
+              img,
+              { x: -pxH / 2, y: -pxW / 2, w: pxH, h: pxW },
+              MM_TO_PX_300DPI,
+              { frameIndex: itemIndex, slotImgs }
+            );
+          } else {
+            // Draw Image with exact pixel crop (expanded for bleed if set)
+            ctx.drawImage(
+              img,
+              item.cropX,
+              item.cropY,
+              actualCropW,
+              actualCropH,
+              unrotDrawX,
+              unrotDrawY,
+              unrotDrawW,
+              unrotDrawH
+            );
+          }
         } else {
           // When Bleed is active, image is drawn expanded by bleedPx outwards
           const drawX = pxX - bleedPx;
@@ -211,7 +239,16 @@ export async function exportPagesToPdf(
           ctx.fillStyle = '#ffffff';
           ctx.fillRect(drawX, drawY, drawW, drawH);
 
-          if (item.shape === 'circle' && item.badgeMode && item.badgeFaceDiameter) {
+          if (item.templateConfig && item.templateConfig.type !== 'none') {
+            renderTemplateOnCanvas(
+              ctx,
+              item,
+              img,
+              { x: pxX, y: pxY, w: pxW, h: pxH },
+              MM_TO_PX_300DPI,
+              { frameIndex: itemIndex, slotImgs }
+            );
+          } else if (item.shape === 'circle' && item.badgeMode && item.badgeFaceDiameter) {
             // 🏅 Chế độ phôi huy hiệu cài áo (Badge Pin)
             const diam = Math.min(pxW, pxH);
             const centerX = pxX + pxW / 2;

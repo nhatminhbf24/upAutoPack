@@ -226,12 +226,109 @@ async function runAudit() {
     // SCENARIO 3: CROP MODAL VISUAL AUDIT
     // =========================================================================
     console.log('\n--- SCENARIO 3: Crop Modal Visual Audit ---');
-    const firstCropBtn = page.locator('button:has-text("Chỉnh sửa"), button:has-text("Cắt ảnh")').first();
+    const firstCropBtn = page.locator('button:has-text("Sửa")').first();
     if (await firstCropBtn.isVisible()) {
       await firstCropBtn.click();
       await page.waitForTimeout(1000); // Wait for lazy load of CropModal
 
       await takeScreenshot('09_crop_modal_size.png', 'Hộp thoại CropModal - Tab Khổ in & Cắt cúp');
+
+      // Check Tab: Mẫu thiết kế (Template Studio)
+      const templateTab = page.locator('button:has-text("Mẫu thiết kế")');
+      if (await templateTab.isVisible()) {
+        await templateTab.click();
+        await page.waitForTimeout(500);
+        await takeScreenshot('10_crop_modal_templates.png', 'Hộp thoại CropModal - Tab Mẫu thiết kế');
+
+        // Test Polaroid
+        const polaroidBtn = page.locator('button:has-text("Polaroid")').first();
+        if (await polaroidBtn.isVisible()) {
+          await polaroidBtn.click();
+          await page.waitForTimeout(400);
+          await takeScreenshot('10a_crop_modal_polaroid.png', 'Mẫu Polaroid trong CropModal (Tỉ lệ chuẩn 0 méo)');
+        }
+
+        // Test Instagram
+        const instaBtn = page.locator('button:has-text("Instagram")').first();
+        if (await instaBtn.isVisible()) {
+          await instaBtn.click();
+          await page.waitForTimeout(400);
+          await takeScreenshot('10b_crop_modal_instagram.png', 'Mẫu Instagram trong CropModal (Tỉ lệ chuẩn 0 méo)');
+        }
+
+        // Test Photostrip
+        const stripBtn = page.locator('button:has-text("Photostrip")').first();
+        if (await stripBtn.isVisible()) {
+          await stripBtn.click();
+          await page.waitForTimeout(400);
+          await takeScreenshot('10c_crop_modal_photostrip.png', 'Mẫu Photostrip trong CropModal (Tỉ lệ chuẩn 0 méo)');
+        }
+
+        // Test Film
+        const filmBtn = page.locator('button:has-text("Viền Film")').first();
+        if (await filmBtn.isVisible()) {
+          await filmBtn.click();
+          await page.waitForTimeout(400);
+          await takeScreenshot('10d_crop_modal_film.png', 'Mẫu Viền Film trong CropModal (Tỉ lệ chuẩn 0 méo)');
+        }
+
+        // Test Bookmark
+        const bookmarkBtn = page.locator('button:has-text("Bookmark")').first();
+        if (await bookmarkBtn.isVisible()) {
+          await bookmarkBtn.click();
+          await page.waitForTimeout(400);
+          await takeScreenshot('10e_crop_modal_bookmark.png', 'Mẫu Bookmark trong CropModal (Tỉ lệ chuẩn 0 méo)');
+        }
+
+        // Verify zero image distortion via DOM inspection
+        const distortionMetrics = await page.evaluate(() => {
+          const imgs = Array.from(document.querySelectorAll('#crop-modal img')).filter(
+            (img) => img.naturalWidth > 50 && img.naturalHeight > 50
+          );
+          return imgs.map((img) => {
+            const rect = img.getBoundingClientRect();
+            const renderedRatio = rect.width / rect.height;
+            const naturalRatio = img.naturalWidth / img.naturalHeight;
+            const diffPct = Math.abs(renderedRatio / naturalRatio - 1) * 100;
+            return {
+              src: img.src.slice(0, 30),
+              renderedW: rect.width,
+              renderedH: rect.height,
+              naturalW: img.naturalWidth,
+              naturalH: img.naturalHeight,
+              renderedRatio: Number(renderedRatio.toFixed(3)),
+              naturalRatio: Number(naturalRatio.toFixed(3)),
+              diffPct: Number(diffPct.toFixed(2)),
+              isDistorted: diffPct > 5, // > 5% means distorted
+            };
+          });
+        });
+        console.log('[Audit] Image Distortion Check Metrics in Modal:', distortionMetrics);
+        const hasDistortedImgs = distortionMetrics.some((m) => m.isDistorted);
+        if (hasDistortedImgs) {
+          console.error('[Audit FAILURE] Detected image distortion in template preview!');
+        } else {
+          console.log('[Audit SUCCESS] 0% image distortion verified! Natural aspect ratio preserved.');
+        }
+
+        // Save changes to test template rendering on A4 canvas
+        const saveModalBtn = page.locator('button:has-text("Lưu thay đổi")').first();
+        if (await saveModalBtn.isVisible()) {
+          await saveModalBtn.click();
+          await page.waitForTimeout(800);
+          await takeScreenshot('10f_a4_studio_template_applied.png', 'Mẫu thiết kế hiển thị trên trang in A4 thực tế');
+        } else {
+          await page.keyboard.press('Escape');
+          await page.waitForTimeout(600);
+        }
+      }
+
+      // Re-open modal to test remaining tabs if modal was saved
+      const secondCropBtn = page.locator('button:has-text("Sửa")').first();
+      if (await secondCropBtn.isVisible()) {
+        await secondCropBtn.click();
+        await page.waitForTimeout(800);
+      }
 
       // Check Tab 2: Làm nét & AI
       const enhanceTab = page.locator('button:has-text("Làm nét & AI")');

@@ -160,9 +160,9 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
               <h1 className="text-[15.5px] font-black text-[#e02475] tracking-tight whitespace-nowrap select-none">
                 Dâu Dâu AutoPack
               </h1>
-              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9.5px] font-black uppercase tracking-wider bg-gradient-to-r from-amber-500 to-[#e02475] text-white shadow-2xs shrink-0 select-none">
-                <Sparkles className="w-2.5 h-2.5" />
-                PRO v2.5
+              <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[9.5px] font-black tracking-wider bg-gradient-to-r from-amber-500 to-[#e02475] text-white shadow-2xs shrink-0 select-none">
+
+                Pro 3.0
               </span>
             </div>
           )}

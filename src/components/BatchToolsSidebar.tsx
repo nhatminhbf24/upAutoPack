@@ -14,12 +14,18 @@ import {
   Download,
   ChevronsLeft,
   ChevronsRight,
+  LayoutTemplate,
+  Camera,
+  Film,
+  Bookmark as BookmarkIcon,
+  Instagram,
 } from 'lucide-react';
-import { PhotoItem, DEFAULT_ADJUSTMENTS, LayoutSettings } from '../types';
+import { PhotoItem, DEFAULT_ADJUSTMENTS, LayoutSettings, PhotostripSlot } from '../types';
 import { rotateImageBase64, calculateCrop, createOptimizedPreview, formatPhotoToPreset, getImageDimensions } from '../utils/imageUtils';
 import { enhanceImageQuality, getRecommendedUpscaleFactor } from '../utils/imageEnhancer';
 import { calculateAutoAdjustments, applyAdjustmentsToImage } from '../utils/imageAdjustmentEngine';
 import { PageLayoutSettings } from './PageLayoutSettings';
+import { createDefaultTemplateConfig } from '../utils/templateRenderUtils';
 
 interface BatchToolsSidebarProps {
   photos: PhotoItem[];
@@ -57,6 +63,7 @@ export const BatchToolsSidebar: React.FC<BatchToolsSidebarProps> = ({
   const sidebarRef = useRef<HTMLElement>(null);
   const [batchQuantity, setBatchQuantity] = useState<number>(1);
   const [enhanceStrength, setEnhanceStrength] = useState<number>(50);
+  const [twinStrips, setTwinStrips] = useState<boolean>(false);
 
   // Tự động ẩn tab Thao tác hàng loạt khi click chuột ra ngoài hoặc ấn Esc
   useEffect(() => {
@@ -465,6 +472,295 @@ export const BatchToolsSidebar: React.FC<BatchToolsSidebarProps> = ({
     onToast('success', 'Đã xoay tất cả ảnh 90°');
   };
 
+  // --- CÁC THAO TÁC ÁP DỤNG MẪU IN HÀNG LOẠT ---
+  const handleBatchApplyPolaroid = (size: '60x90' | '90x120' = '60x90') => {
+    if (photos.length === 0) {
+      onToast('error', 'Chưa có ảnh để áp dụng mẫu');
+      return;
+    }
+    const targetW = size === '60x90' ? 60 : 90;
+    const targetH = size === '60x90' ? 90 : 120;
+    photos.forEach((photo) => {
+      const config = createDefaultTemplateConfig('polaroid', photo.name);
+      const newCrop = calculateCrop(photo.imgWidth, photo.imgHeight, targetW, targetH, smartCrop);
+      onUpdatePhoto(photo.id, {
+        targetWidth: targetW,
+        targetHeight: targetH,
+        shape: 'rect',
+        badgeMode: false,
+        templateConfig: config,
+        cropX: newCrop.cropX,
+        cropY: newCrop.cropY,
+        cropW: newCrop.cropW,
+        cropH: newCrop.cropH,
+        scale: 1,
+      });
+    });
+    onToast('success', `Đã chuyển toàn bộ ${photos.length} ảnh sang mẫu Polaroid (${targetW / 10}x${targetH / 10} cm)`);
+  };
+
+  const handleBatchApplyInstagram = () => {
+    if (photos.length === 0) {
+      onToast('error', 'Chưa có ảnh để áp dụng mẫu');
+      return;
+    }
+    let savedProfile: any = null;
+    try {
+      const raw = localStorage.getItem('daudau_instagram_profile');
+      if (raw) savedProfile = JSON.parse(raw);
+    } catch {}
+
+    const targetW = 90;
+    const targetH = 120;
+    photos.forEach((photo) => {
+      const config = createDefaultTemplateConfig('instagram', photo.name);
+      if (savedProfile && config.instagram) {
+        config.instagram.username = savedProfile.username || config.instagram.username;
+        config.instagram.avatarType = savedProfile.avatarType || config.instagram.avatarType;
+        config.instagram.avatarSrc = savedProfile.avatarSrc || config.instagram.avatarSrc;
+      }
+      const newCrop = calculateCrop(photo.imgWidth, photo.imgHeight, targetW, targetH, smartCrop);
+      onUpdatePhoto(photo.id, {
+        targetWidth: targetW,
+        targetHeight: targetH,
+        shape: 'rect',
+        badgeMode: false,
+        templateConfig: config,
+        cropX: newCrop.cropX,
+        cropY: newCrop.cropY,
+        cropW: newCrop.cropW,
+        cropH: newCrop.cropH,
+        scale: 1,
+      });
+    });
+    onToast('success', `Đã chuyển toàn bộ ${photos.length} ảnh sang mẫu Instagram (9x12 cm)`);
+  };
+
+  const handleSyncInstagramProfileAll = () => {
+    const instagramPhotos = photos.filter((p) => p.templateConfig?.type === 'instagram');
+    if (instagramPhotos.length === 0) {
+      onToast('info', 'Chưa có ảnh mẫu Instagram nào trên bàn in');
+      return;
+    }
+    const firstInstagram = instagramPhotos[0].templateConfig?.instagram;
+    let username = firstInstagram?.username || 'daudau_print';
+    let avatarType = firstInstagram?.avatarType || 'main';
+    let avatarSrc = firstInstagram?.avatarSrc;
+
+    try {
+      const raw = localStorage.getItem('daudau_instagram_profile');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        username = parsed.username || username;
+        avatarType = parsed.avatarType || avatarType;
+        avatarSrc = parsed.avatarSrc || avatarSrc;
+      }
+    } catch {}
+
+    instagramPhotos.forEach((photo) => {
+      if (photo.templateConfig?.instagram) {
+        onUpdatePhoto(photo.id, {
+          templateConfig: {
+            ...photo.templateConfig,
+            instagram: {
+              ...photo.templateConfig.instagram,
+              username,
+              avatarType,
+              avatarSrc,
+            },
+          },
+        });
+      }
+    });
+    onToast('success', `Đã đồng bộ Tên & Avatar cho ${instagramPhotos.length} mẫu Instagram`);
+  };
+
+  const handleBatchAutoChunkPhotostrip = (slotCount: 3 | 4) => {
+    if (photos.length === 0) {
+      onToast('error', 'Chưa có ảnh để ghép dải Photostrip');
+      return;
+    }
+    if (!onBatchUpdatePhotos) {
+      onToast('error', 'Hệ thống chưa hỗ trợ cập nhật danh sách ảnh');
+      return;
+    }
+
+    const targetW = 50;
+    const targetH = 150;
+    const chunks: PhotoItem[][] = [];
+    for (let i = 0; i < photos.length; i += slotCount) {
+      chunks.push(photos.slice(i, i + slotCount));
+    }
+
+    const newStripPhotos: PhotoItem[] = chunks.map((chunk, chunkIdx) => {
+      const primaryPhoto = chunk[0];
+      const slots: PhotostripSlot[] = [];
+
+      for (let s = 0; s < slotCount; s++) {
+        const p = chunk[s] || chunk[chunk.length - 1];
+        slots.push({
+          id: `slot-${chunkIdx}-${s}-${Date.now()}`,
+          photoId: p.id,
+          photoName: p.name,
+          photoSrc: p.previewSrc || p.originalSrc,
+          imgWidth: p.imgWidth,
+          imgHeight: p.imgHeight,
+          rotation: p.rotation || 0,
+        });
+      }
+
+      const config = createDefaultTemplateConfig('photostrip', primaryPhoto.name);
+      if (config.photostrip) {
+        config.photostrip.slotCount = slotCount;
+        config.photostrip.slots = slots;
+      }
+
+      const newCrop = calculateCrop(primaryPhoto.imgWidth, primaryPhoto.imgHeight, targetW, targetH, smartCrop);
+
+      return {
+        ...primaryPhoto,
+        id: crypto.randomUUID(),
+        name: `Photostrip_${chunkIdx + 1} (${chunk.map((c) => c.name.slice(0, 8)).join(', ')})`,
+        targetWidth: targetW,
+        targetHeight: targetH,
+        quantity: twinStrips ? 2 : 1,
+        shape: 'rect',
+        badgeMode: false,
+        templateConfig: config,
+        cropX: newCrop.cropX,
+        cropY: newCrop.cropY,
+        cropW: newCrop.cropW,
+        cropH: newCrop.cropH,
+        scale: 1,
+      };
+    });
+
+    onBatchUpdatePhotos(newStripPhotos);
+    onToast(
+      'success',
+      `Đã tự động ghép ${photos.length} ảnh thành ${newStripPhotos.length} dải Photostrip (${slotCount} ô${
+        twinStrips ? ' • In dải đôi x2' : ''
+      })`
+    );
+  };
+
+  const handleBatchApplyPhotostripSingle = (slotCount: 3 | 4 = 4) => {
+    if (photos.length === 0) {
+      onToast('error', 'Chưa có ảnh để áp dụng mẫu');
+      return;
+    }
+    const targetW = 50;
+    const targetH = 150;
+    photos.forEach((photo) => {
+      const config = createDefaultTemplateConfig('photostrip', photo.name);
+      if (config.photostrip) {
+        config.photostrip.slotCount = slotCount;
+        config.photostrip.slots = Array.from({ length: slotCount }).map((_, i) => ({
+          id: `slot-${i}-${Date.now()}`,
+          photoId: photo.id,
+          photoName: photo.name,
+          photoSrc: photo.previewSrc || photo.originalSrc,
+          imgWidth: photo.imgWidth,
+          imgHeight: photo.imgHeight,
+          rotation: 0,
+        }));
+      }
+      const newCrop = calculateCrop(photo.imgWidth, photo.imgHeight, targetW, targetH, smartCrop);
+      onUpdatePhoto(photo.id, {
+        targetWidth: targetW,
+        targetHeight: targetH,
+        shape: 'rect',
+        badgeMode: false,
+        templateConfig: config,
+        cropX: newCrop.cropX,
+        cropY: newCrop.cropY,
+        cropW: newCrop.cropW,
+        cropH: newCrop.cropH,
+        scale: 1,
+        quantity: twinStrips ? 2 : photo.quantity,
+      });
+    });
+    onToast(
+      'success',
+      `Đã chuyển toàn bộ ${photos.length} ảnh thành từng dải Photostrip riêng (${slotCount} ô${
+        twinStrips ? ' • In dải đôi x2' : ''
+      })`
+    );
+  };
+
+  const handleBatchApplyFilm = (size: '60x90' | '100x150' = '60x90') => {
+    if (photos.length === 0) {
+      onToast('error', 'Chưa có ảnh để áp dụng mẫu');
+      return;
+    }
+    const targetW = size === '60x90' ? 60 : 100;
+    const targetH = size === '60x90' ? 90 : 150;
+    photos.forEach((photo, idx) => {
+      const config = createDefaultTemplateConfig('film', photo.name);
+      if (config.film) {
+        config.film.frameNumber = String(idx + 1).padStart(2, '0');
+        config.film.autoIncrement = true;
+      }
+      const newCrop = calculateCrop(photo.imgWidth, photo.imgHeight, targetW, targetH, smartCrop);
+      onUpdatePhoto(photo.id, {
+        targetWidth: targetW,
+        targetHeight: targetH,
+        shape: 'rect',
+        badgeMode: false,
+        templateConfig: config,
+        cropX: newCrop.cropX,
+        cropY: newCrop.cropY,
+        cropW: newCrop.cropW,
+        cropH: newCrop.cropH,
+        scale: 1,
+      });
+    });
+    onToast('success', `Đã chuyển toàn bộ ${photos.length} ảnh sang Viền Film (đánh số 01-${String(photos.length).padStart(2, '0')})`);
+  };
+
+  const handleBatchApplyBookmark = () => {
+    if (photos.length === 0) {
+      onToast('error', 'Chưa có ảnh để áp dụng mẫu');
+      return;
+    }
+    const targetW = 50;
+    const targetH = 150;
+    photos.forEach((photo) => {
+      const config = createDefaultTemplateConfig('bookmark', photo.name);
+      const newCrop = calculateCrop(photo.imgWidth, photo.imgHeight, targetW, targetH, smartCrop);
+      onUpdatePhoto(photo.id, {
+        targetWidth: targetW,
+        targetHeight: targetH,
+        shape: 'rect',
+        badgeMode: false,
+        templateConfig: config,
+        cropX: newCrop.cropX,
+        cropY: newCrop.cropY,
+        cropW: newCrop.cropW,
+        cropH: newCrop.cropH,
+        scale: 1,
+      });
+    });
+    onToast('success', `Đã chuyển toàn bộ ${photos.length} ảnh sang mẫu Bookmark (5x15 cm)`);
+  };
+
+  const handleBatchResetTemplate = () => {
+    let count = 0;
+    photos.forEach((photo) => {
+      if (photo.templateConfig && photo.templateConfig.type !== 'none') {
+        count++;
+        onUpdatePhoto(photo.id, {
+          templateConfig: { type: 'none' },
+        });
+      }
+    });
+    if (count > 0) {
+      onToast('info', `Đã đưa ${count} ảnh về định dạng chuẩn thường`);
+    } else {
+      onToast('info', 'Không có ảnh nào đang dùng mẫu thiết kế đặc thù');
+    }
+  };
+
   const enhancedCount = photos.filter((p) => p.isEnhanced).length;
 
   return (
@@ -561,6 +857,130 @@ export const BatchToolsSidebar: React.FC<BatchToolsSidebarProps> = ({
             onResetFreeformPositions={onResetFreeformPositions}
             onToast={onToast}
           />
+
+          {/* CỤM MẪU IN THÀNH PHẨM HÀNG LOẠT */}
+          <div className="bg-indigo-50/70 rounded-xl p-3.5 border border-indigo-200/90 shadow-sm hover:shadow-md space-y-2.5 transition-all duration-200 hover:border-indigo-300">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5 text-indigo-950 font-bold">
+                <LayoutTemplate className="w-3.5 h-3.5 text-indigo-600" />
+                <span className="text-[11px] uppercase tracking-wide">MẪU IN THÀNH PHẨM HÀNG LOẠT</span>
+              </div>
+              <span className="text-[10px] text-indigo-700 font-bold bg-indigo-100 border border-indigo-200 px-1.5 py-0.5 rounded">
+                1-Click
+              </span>
+            </div>
+
+            <p className="text-[11px] text-slate-600 leading-snug">
+              Chuyển toàn bộ ảnh sang một mẫu in thống nhất, giữ nguyên số lượng bản in.
+            </p>
+
+            <div className="grid grid-cols-2 gap-1.5">
+              <button
+                type="button"
+                onClick={() => handleBatchApplyPolaroid('60x90')}
+                className="py-1.5 px-2 bg-white hover:bg-indigo-600 hover:text-white border border-indigo-200 hover:border-indigo-600 rounded-lg text-xs font-bold text-slate-700 transition flex items-center justify-center gap-1 shadow-2xs cursor-pointer active:scale-95 group"
+              >
+                <span>📸 Polaroid 6x9</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleBatchApplyPolaroid('90x120')}
+                className="py-1.5 px-2 bg-white hover:bg-indigo-600 hover:text-white border border-indigo-200 hover:border-indigo-600 rounded-lg text-xs font-bold text-slate-700 transition flex items-center justify-center gap-1 shadow-2xs cursor-pointer active:scale-95 group"
+              >
+                <span>📸 Polaroid 9x12</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleBatchApplyInstagram}
+                className="py-1.5 px-2 bg-white hover:bg-indigo-600 hover:text-white border border-indigo-200 hover:border-indigo-600 rounded-lg text-xs font-bold text-slate-700 transition flex items-center justify-center gap-1 shadow-2xs cursor-pointer active:scale-95 group"
+              >
+                <span>📱 Instagram 9x12</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleSyncInstagramProfileAll}
+                className="py-1.5 px-2 bg-indigo-100 hover:bg-indigo-200 text-indigo-900 border border-indigo-300 rounded-lg text-[10.5px] font-bold transition flex items-center justify-center gap-1 shadow-2xs cursor-pointer active:scale-95"
+                title="Đồng bộ Tên & Avatar dùng chung cho tất cả mẫu Instagram trên bàn in"
+              >
+                <span>🔄 Đồng bộ Avatar</span>
+              </button>
+
+              <div className="col-span-2 pt-1 border-t border-indigo-200/60">
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-[11px] font-bold text-slate-800 flex items-center gap-1">
+                    <span>🎞️ Dải Photostrip (50 × 150 mm)</span>
+                  </span>
+                  <label
+                    className="flex items-center gap-1 text-[10.5px] font-medium text-slate-600 cursor-pointer"
+                    title="In nhân đôi mỗi dải ảnh (Số lượng x2) chuẩn tiệm Photobooth"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={twinStrips}
+                      onChange={(e) => setTwinStrips(e.target.checked)}
+                      className="rounded text-indigo-600 text-xs"
+                    />
+                    <span>Dải đôi (x2)</span>
+                  </label>
+                </div>
+                <div className="grid grid-cols-2 gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => handleBatchAutoChunkPhotostrip(4)}
+                    className="py-1.5 px-2 bg-indigo-50 hover:bg-indigo-600 hover:text-white border border-indigo-200 hover:border-indigo-600 rounded-lg text-[11px] font-bold text-indigo-900 transition flex items-center justify-center gap-1 shadow-2xs cursor-pointer active:scale-95"
+                    title="Tự động chia danh sách ảnh thành các dải Photostrip 4 ảnh riêng biệt"
+                  >
+                    <span>⚡ Ghép dải 4 ô</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleBatchAutoChunkPhotostrip(3)}
+                    className="py-1.5 px-2 bg-indigo-50 hover:bg-indigo-600 hover:text-white border border-indigo-200 hover:border-indigo-600 rounded-lg text-[11px] font-bold text-indigo-900 transition flex items-center justify-center gap-1 shadow-2xs cursor-pointer active:scale-95"
+                    title="Tự động chia danh sách ảnh thành các dải Photostrip 3 ảnh riêng biệt"
+                  >
+                    <span>⚡ Ghép dải 3 ô</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleBatchApplyPhotostripSingle(4)}
+                    className="py-1.5 px-2 bg-white hover:bg-slate-100 border border-slate-200 rounded-lg text-[10.5px] font-medium text-slate-700 transition flex items-center justify-center gap-1 cursor-pointer col-span-2"
+                    title="Chuyển mỗi ảnh trong danh sách thành một dải Photostrip riêng biệt"
+                  >
+                    <span>Mỗi ảnh 1 dải độc lập</span>
+                  </button>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => handleBatchApplyFilm('60x90')}
+                className="py-1.5 px-2 bg-white hover:bg-indigo-600 hover:text-white border border-indigo-200 hover:border-indigo-600 rounded-lg text-xs font-bold text-slate-700 transition flex items-center justify-center gap-1 shadow-2xs cursor-pointer active:scale-95 group"
+              >
+                <span>🎬 Viền Film 6x9</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleBatchApplyBookmark}
+                className="py-1.5 px-2 bg-white hover:bg-indigo-600 hover:text-white border border-indigo-200 hover:border-indigo-600 rounded-lg text-xs font-bold text-slate-700 transition flex items-center justify-center gap-1 shadow-2xs cursor-pointer active:scale-95 group"
+              >
+                <span>🔖 Bookmark 5x15</span>
+              </button>
+            </div>
+
+            {photos.some((p) => p.templateConfig && p.templateConfig.type !== 'none') && (
+              <button
+                type="button"
+                onClick={handleBatchResetTemplate}
+                className="w-full py-1.5 px-2 bg-slate-100 hover:bg-slate-200 text-slate-600 border border-slate-300 rounded-lg text-[11px] font-bold transition flex items-center justify-center gap-1 cursor-pointer"
+              >
+                <span>↩️ Hủy mẫu (Về ảnh thường)</span>
+              </button>
+            )}
+          </div>
 
           {/* CỤM VIỀN HUY HIỆU BLUR & MÀU ĐƠN SẮC HÀNG LOẠT */}
           {photos.some((p) => p.badgeMode) && (

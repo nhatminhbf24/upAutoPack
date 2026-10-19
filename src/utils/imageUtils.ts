@@ -3,6 +3,7 @@ import { PhotoItem, PackedPage, LayoutSettings, SizePreset, OrientationMode, Sha
 import { MM_TO_PX_300DPI, A4_WIDTH_MM, A4_HEIGHT_MM } from './packing';
 import { renderTextTagOnCanvas } from './textTagUtils';
 import { detectBadgeBleedColors } from './badgeUtils';
+import { createDefaultTemplateConfig, renderTemplateOnCanvas } from './templateRenderUtils';
 
 export function getShortPresetLabel(label: string): string {
   if (!label) return '';
@@ -428,6 +429,9 @@ export async function formatPhotoToPreset(
       badgeBleedPalette: isBadge ? badgeBleedPalette : undefined,
       badgeGuideLines: false,
       badgeBleedMode: isBadge ? (photo.badgeBleedMode || 'solid') : undefined,
+      templateConfig: preset.templateType
+        ? createDefaultTemplateConfig(preset.templateType, photo.name)
+        : photo.templateConfig,
     },
     didRotate,
   };
@@ -614,6 +618,24 @@ export async function exportPagesToImage(
   }
 }
 
+async function getPhotostripSlotImages(photo: PhotoItem): Promise<Record<number, HTMLImageElement> | undefined> {
+  if (photo.templateConfig?.type !== 'photostrip' || !photo.templateConfig.photostrip?.slots?.length) {
+    return undefined;
+  }
+  const slotImgs: Record<number, HTMLImageElement> = {};
+  for (let sIdx = 0; sIdx < photo.templateConfig.photostrip.slots.length; sIdx++) {
+    const slotCfg = photo.templateConfig.photostrip.slots[sIdx];
+    if (slotCfg?.photoSrc) {
+      try {
+        slotImgs[sIdx] = await loadImage(slotCfg.photoSrc);
+      } catch {
+        // fallback
+      }
+    }
+  }
+  return slotImgs;
+}
+
 /**
  * Xuất 1 ảnh đơn lẻ định dạng PNG chuẩn 300 DPI với nền trong suốt (tách nền theo khuôn)
  */
@@ -643,10 +665,20 @@ export async function exportSinglePhotoAsPng(
 
   try {
     const img = await loadImage(photo.originalSrc);
+    const slotImgs = await getPhotostripSlotImages(photo);
 
     ctx.save();
 
-    if (photo.shape === 'circle' && photo.badgeMode && photo.badgeFaceDiameter) {
+    if (photo.templateConfig && photo.templateConfig.type !== 'none') {
+      renderTemplateOnCanvas(
+        ctx,
+        photo,
+        img,
+        { x: 0, y: 0, w: canvasW, h: canvasH },
+        MM_TO_PX_300DPI,
+        { slotImgs }
+      );
+    } else if (photo.shape === 'circle' && photo.badgeMode && photo.badgeFaceDiameter) {
       // 🏅 Huy hiệu chuyên dụng (Badge Pin)
       const diam = Math.min(canvasW, canvasH);
       const centerX = canvasW / 2;
@@ -773,9 +805,19 @@ export async function exportAllPhotosAsZip(
 
     try {
       const img = await loadImage(photo.originalSrc);
+      const slotImgs = await getPhotostripSlotImages(photo);
       ctx.save();
 
-      if (photo.shape === 'circle' && photo.badgeMode && photo.badgeFaceDiameter) {
+      if (photo.templateConfig && photo.templateConfig.type !== 'none') {
+        renderTemplateOnCanvas(
+          ctx,
+          photo,
+          img,
+          { x: 0, y: 0, w: canvasW, h: canvasH },
+          MM_TO_PX_300DPI,
+          { frameIndex: i, slotImgs }
+        );
+      } else if (photo.shape === 'circle' && photo.badgeMode && photo.badgeFaceDiameter) {
         // 🏅 Huy hiệu chuyên dụng (Badge Pin)
         const diam = Math.min(canvasW, canvasH);
         const centerX = canvasW / 2;
@@ -922,6 +964,7 @@ export async function exportPagesToZip(
     for (const item of page.items) {
       try {
         const img = await loadImage(item.originalSrc);
+        const slotImgs = await getPhotostripSlotImages(item);
         const pxX = Math.round(item.x * MM_TO_PX_300DPI);
         const pxY = Math.round(item.y * MM_TO_PX_300DPI);
         const pxW = Math.round(item.w * MM_TO_PX_300DPI);
@@ -933,33 +976,44 @@ export async function exportPagesToZip(
 
         ctx.save();
 
-        // Apply Shape Clip
-        if (item.shape === 'circle') {
-          ctx.beginPath();
-          ctx.arc(pxX + pxW / 2, pxY + pxH / 2, Math.min(pxW, pxH) / 2, 0, Math.PI * 2);
-          ctx.clip();
-        } else if (item.shape === 'heart') {
-          ctx.translate(pxX, pxY);
-          ctx.scale(pxW / 24, pxH / 24);
-          const heartPath = new Path2D(
-            'M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z'
+        if (item.templateConfig && item.templateConfig.type !== 'none') {
+          renderTemplateOnCanvas(
+            ctx,
+            item,
+            img,
+            { x: pxX, y: pxY, w: pxW, h: pxH },
+            MM_TO_PX_300DPI,
+            { slotImgs }
           );
-          ctx.clip(heartPath);
-          ctx.setTransform(1, 0, 0, 1, 0, 0);
-        }
+        } else {
+          // Apply Shape Clip
+          if (item.shape === 'circle') {
+            ctx.beginPath();
+            ctx.arc(pxX + pxW / 2, pxY + pxH / 2, Math.min(pxW, pxH) / 2, 0, Math.PI * 2);
+            ctx.clip();
+          } else if (item.shape === 'heart') {
+            ctx.translate(pxX, pxY);
+            ctx.scale(pxW / 24, pxH / 24);
+            const heartPath = new Path2D(
+              'M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z'
+            );
+            ctx.clip(heartPath);
+            ctx.setTransform(1, 0, 0, 1, 0, 0);
+          }
 
-        // Draw Image
-        ctx.drawImage(
-          img,
-          item.cropX,
-          item.cropY,
-          actualCropW,
-          actualCropH,
-          pxX,
-          pxY,
-          pxW,
-          pxH
-        );
+          // Draw Image
+          ctx.drawImage(
+            img,
+            item.cropX,
+            item.cropY,
+            actualCropW,
+            actualCropH,
+            pxX,
+            pxY,
+            pxW,
+            pxH
+          );
+        }
 
         ctx.restore();
 

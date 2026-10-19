@@ -41,7 +41,7 @@ export const ToolSelectorHub: React.FC<ToolSelectorHubProps> = ({
                 Dâu Dâu AutoPack Studio
               </h1>
               <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-pink-500/20 text-pink-300 border border-pink-500/30">
-                PRO v2.5
+                Pro 3.0
               </span>
             </div>
             <p className="text-xs text-slate-400">

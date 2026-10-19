@@ -75,6 +75,79 @@ export interface PhotoItem {
   badgeBleedPalette?: string[]; // 5 màu gợi ý từ biên ảnh
   badgeGuideLines?: boolean; // Hiển thị vòng căn dập mặt chính (mặc định false)
   badgeBleedMode?: 'solid' | 'blur_expand'; // 'solid': màu trơn | 'blur_expand': kéo giãn nhòe viền
+  templateConfig?: TemplateConfig; // Cấu hình mẫu thiết kế đặc thù (Polaroid, Instagram, Photostrip, Viền Film, Bookmark)
+}
+
+export type PrintTemplateType = 'none' | 'polaroid' | 'instagram' | 'photostrip' | 'film' | 'bookmark' | 'badge';
+
+export interface PhotostripSlot {
+  id: string;
+  photoId?: string; // ID của ảnh gốc trong danh sách nếu có
+  photoName?: string;
+  photoSrc: string; // URL hoặc Base64 ảnh riêng cho ô này
+  imgWidth?: number;
+  imgHeight?: number;
+  cropX?: number;
+  cropY?: number;
+  cropW?: number;
+  cropH?: number;
+  scale?: number;
+  rotation?: number;
+}
+
+export interface TemplateConfig {
+  type: PrintTemplateType;
+  frameColor?: string; // Màu nền / khung viền (mặc định '#ffffff' hoặc '#111827')
+  textColor?: string; // Màu chữ (mặc định '#1e293b' hoặc '#f8fafc')
+  fontFamily?: string; // Phông chữ (hỗ trợ 11 phông tiếng Việt Google Fonts và font hệ thống)
+  fontSizePt?: number; // Cỡ chữ pt
+  textAlign?: 'left' | 'center' | 'right'; // Căn lề chữ
+  textLine1?: string; // Lời nhắn dòng 1
+  textLine2?: string; // Lời nhắn dòng 2
+
+  // 1. Polaroid
+  polaroid?: {
+    borderMm?: number; // Viền trái, phải, trên (mặc định 3 mm)
+    bottomMm?: number; // Chân dưới ghi lời nhắn (mặc định 16 mm)
+  };
+
+  // 2. Instagram
+  instagram?: {
+    username: string; // Tên hiển thị (tối đa 30 ký tự)
+    avatarType: 'main' | 'custom' | 'initial' | 'logo';
+    avatarSrc?: string; // Ảnh avatar tải riêng hoặc logo tiệm
+    layoutMode?: 'rect' | 'square'; // Vùng ảnh 82x72 mm hoặc vuông 82x82 mm
+    showFollowBtn?: boolean; // Nút Follow
+    showActions?: boolean; // Cụm biểu tượng tương tác (Tim, Comment, Share, Bookmark)
+    liked?: boolean; // Trạng thái tim đỏ
+    likesCount?: string; // Số lượt thích (ví dụ: "1,280 lượt thích" hoặc "2,368 likes")
+    hasGradientRing?: boolean; // Vòng màu gradient Instagram story quanh avatar
+  };
+
+  // 3. Photostrip
+  photostrip?: {
+    slotCount: 3 | 4; // 3 ô (ảnh ~44x44.33mm) hoặc 4 ô (ảnh ~44x32.75mm)
+    borderMm?: number; // Viền trái, phải, trên (mặc định 3 mm)
+    gapMm?: number; // Khoảng cách giữa các ô (mặc định 2 mm)
+    bottomMm?: number; // Chân dưới dành cho lời nhắn (mặc định 10 mm)
+    slots?: PhotostripSlot[]; // Danh sách các ô ảnh
+  };
+
+  // 4. Viền Film
+  film?: {
+    frameNumber?: string; // Số khung (mặc định "01")
+    autoIncrement?: boolean; // Tự tăng dần theo bộ ảnh
+    sideText?: string; // Dòng chữ kỷ niệm chạy dọc mép trái
+    filmStyle?: 'classic_black' | 'vintage_warm' | 'clean_white';
+  };
+
+  // 5. Bookmark
+  bookmark?: {
+    borderMm?: number; // Viền trái, phải, trên (mặc định 3 mm)
+    photoHeightMm?: number; // Vùng ảnh phía trên (mặc định 109.5 mm)
+    hasHolePunchGuide?: boolean; // Dấu vị trí đục lỗ xỏ dây
+    fullBleed?: boolean; // Ảnh tràn toàn thẻ
+  };
 }
 
 export interface FreeformTextTag {
@@ -140,9 +213,19 @@ export interface SizePreset {
   isCustom?: boolean;
   isBadgePreset?: boolean; // Preset huy hiệu chuyên dụng (tự động viền bọc & căn mặt chính diện)
   badgeFaceDiameter?: number; // Đường kính mặt huy hiệu (mm), ví dụ 44mm
+  templateType?: PrintTemplateType; // Kiểu mẫu thiết kế (polaroid, instagram, photostrip, film, bookmark)
 }
 
 export const DEFAULT_SIZE_PRESETS: SizePreset[] = [
+  // 📸 Mẫu in & Thiết kế đặc thù (Polaroid, Instagram, Photostrip, Viền Film, Bookmark)
+  { id: 'polaroid_60x90', label: '📸 Polaroid 6 x 9 cm', category: '📸 Mẫu in & Thiết kế đặc thù', width: 60, height: 90, shape: 'rect', templateType: 'polaroid' },
+  { id: 'polaroid_90x120', label: '📸 Polaroid 9 x 12 cm', category: '📸 Mẫu in & Thiết kế đặc thù', width: 90, height: 120, shape: 'rect', templateType: 'polaroid' },
+  { id: 'instagram_90x120', label: '📱 Instagram Post 9 x 12 cm', category: '📸 Mẫu in & Thiết kế đặc thù', width: 90, height: 120, shape: 'rect', templateType: 'instagram' },
+  { id: 'photostrip_50x150', label: '🎞️ Photostrip 5 x 15 cm (3-4 ô)', category: '📸 Mẫu in & Thiết kế đặc thù', width: 50, height: 150, shape: 'rect', templateType: 'photostrip' },
+  { id: 'film_60x90', label: '🎬 Viền Film 6 x 9 cm', category: '📸 Mẫu in & Thiết kế đặc thù', width: 60, height: 90, shape: 'rect', templateType: 'film' },
+  { id: 'film_100x150', label: '🎬 Viền Film 10 x 15 cm', category: '📸 Mẫu in & Thiết kế đặc thù', width: 100, height: 150, shape: 'rect', templateType: 'film' },
+  { id: 'bookmark_50x150', label: '🔖 Bookmark 5 x 15 cm', category: '📸 Mẫu in & Thiết kế đặc thù', width: 50, height: 150, shape: 'rect', templateType: 'bookmark' },
+
   // 🏅 Huy hiệu cài áo chuyên dụng (Badge Pin - Tự động đổ nền viền bọc mép)
   { id: 'badge_44_to_55', label: 'Huy hiệu 4.4 cm (Khuôn 5.4 cm)', category: '🏅 Huy hiệu cài áo (Badge Pin)', width: 54, height: 54, shape: 'circle', isBadgePreset: true, badgeFaceDiameter: 43 },
   { id: 'badge_58_to_70', label: 'Huy hiệu 5.8 cm (Khuôn 6.9 cm)', category: '🏅 Huy hiệu cài áo (Badge Pin)', width: 69, height: 69, shape: 'circle', isBadgePreset: true, badgeFaceDiameter: 57 },

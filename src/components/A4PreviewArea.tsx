@@ -28,6 +28,7 @@ import { rotateImageBase64, calculateCrop, createOptimizedPreview } from '../uti
 import { getDefaultTextTag, getEffectiveTextTagForPage } from '../utils/textTagUtils';
 import { DraggableTextTag } from './DraggableTextTag';
 import { calculateAlignmentSnap, AlignmentGuideLine, SnapTarget } from '../utils/alignmentGuides';
+import { TemplateFramePreview } from './TemplateFramePreview';
 
 interface A4PreviewAreaProps {
   pages: PackedPage[];
@@ -1474,7 +1475,7 @@ export const A4PreviewArea: React.FC<A4PreviewAreaProps> = ({
                   />
 
                   {/* Placed Photo Items */}
-                  {page.items.map((item) => {
+                  {page.items.map((item, idx) => {
                     const actualCropW = item.cropW / (item.scale || 1);
                     const actualCropH = item.cropH / (item.scale || 1);
                     const percentW = (item.imgWidth / actualCropW) * 100;
@@ -1681,6 +1682,11 @@ export const A4PreviewArea: React.FC<A4PreviewAreaProps> = ({
                               />
                             )}
                           </div>
+                        ) : item.templateConfig && item.templateConfig.type !== 'none' ? (
+                          <TemplateFramePreview
+                            photo={item}
+                            frameIndex={idx}
+                          />
                         ) : item.isRotated ? (
                           <div
                             className="absolute pointer-events-none"
