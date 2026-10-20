@@ -1,6 +1,7 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "daudau-autopack-print",
+  "main": "src/worker.ts",
   "compatibility_date": "2026-10-19",
   "assets": {
     "directory": "./dist",

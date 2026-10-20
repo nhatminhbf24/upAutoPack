@@ -5,7 +5,7 @@ interface ActivationModalProps {
   onUnlock: () => void;
 }
 
-// SHA-256 hash của mã kích hoạt hợp lệ (bảo vệ bản quyền, chống đọc trộm mã từ source code bundle)
+// SHA-256 hash của mã mặc định (chỉ dùng làm dự phòng khi chạy offline/local dev)
 const VALID_CODE_HASH = 'c94af02011125cb23374163642351496ea71a9300ea1d4582791b356d53dea3c';
 
 async function sha256Hex(str: string): Promise<string> {
@@ -37,13 +37,34 @@ export const ActivationModal: React.FC<ActivationModalProps> = ({ onUnlock }) =>
 
     setIsVerifying(true);
     try {
+      // 1. Xác thực bảo mật trực tiếp trên Cloudflare Server (so khớp với biến bí mật trong .env/Cloudflare Secrets)
+      try {
+        const response = await fetch('/api/verify-code', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code: cleanCode }),
+        });
+
+        if (response.ok) {
+          const data = (await response.json()) as { success: boolean };
+          if (data.success) {
+            localStorage.setItem('daudau_unlocked', 'true');
+            onUnlock();
+            return;
+          }
+        } else if (response.status === 401) {
+          setError(true);
+          setErrorMessage('Mã kích hoạt không chính xác. Vui lòng kiểm tra lại!');
+          return;
+        }
+      } catch (networkErr) {
+        console.warn('API xác thực server tạm thời không phản hồi, chuyển sang dự phòng offline...', networkErr);
+      }
+
+      // 2. Dự phòng offline / local dev qua SHA-256 hash
       const hash = await sha256Hex(cleanCode);
       if (hash === VALID_CODE_HASH) {
-        try {
-          localStorage.setItem('daudau_unlocked', 'true');
-        } catch (err) {
-          console.warn('Cannot write to localStorage', err);
-        }
+        localStorage.setItem('daudau_unlocked', 'true');
         onUnlock();
       } else {
         setError(true);
@@ -97,7 +118,7 @@ export const ActivationModal: React.FC<ActivationModalProps> = ({ onUnlock }) =>
                   setCode(e.target.value);
                   if (error) setError(false);
                 }}
-                placeholder="Nhập mã 10 số bí mật..."
+                placeholder="Nhập mã bí mật..."
                 autoFocus
                 className={`w-full bg-slate-50 border ${
                   error
@@ -123,7 +144,7 @@ export const ActivationModal: React.FC<ActivationModalProps> = ({ onUnlock }) =>
             disabled={isVerifying}
             className="w-full py-3.5 px-4 rounded-xl text-sm font-bold text-white bg-gradient-to-r from-pink-600 to-rose-600 hover:from-pink-700 hover:to-rose-700 shadow-lg shadow-pink-600/30 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98 disabled:opacity-50"
           >
-            <span>Mở khóa & Bắt đầu sử dụng</span>
+            <span>{isVerifying ? 'Đang xác thực...' : 'Mở khóa & Bắt đầu sử dụng'}</span>
             <ArrowRight className="w-4 h-4" />
           </button>
         </form>
@@ -131,7 +152,7 @@ export const ActivationModal: React.FC<ActivationModalProps> = ({ onUnlock }) =>
         {/* Security Footer Note */}
         <div className="flex items-center justify-center gap-1.5 text-[11px] text-slate-400 font-medium pt-2 border-t border-slate-100">
           <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
-          <span>Mã sẽ được lưu tự động trên trình duyệt này</span>
+          <span>Bảo mật bằng Cloudflare Edge Secrets</span>
         </div>
       </div>
     </div>
