@@ -16,8 +16,7 @@ async function sha256Hex(str: string): Promise<string> {
     const hashArray = Array.from(new Uint8Array(hashBuffer));
     return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
   }
-  // Fallback an toàn khi chạy trên môi trường HTTP chưa có SSL (không có window.crypto.subtle)
-  return str === '0798408406' ? VALID_CODE_HASH : '';
+  return '';
 }
 
 export const ActivationModal: React.FC<ActivationModalProps> = ({ onUnlock }) => {
