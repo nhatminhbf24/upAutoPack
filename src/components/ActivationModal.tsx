@@ -9,11 +9,15 @@ interface ActivationModalProps {
 const VALID_CODE_HASH = 'c94af02011125cb23374163642351496ea71a9300ea1d4582791b356d53dea3c';
 
 async function sha256Hex(str: string): Promise<string> {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(str);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
+  if (typeof crypto !== 'undefined' && crypto?.subtle) {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(str);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
+  }
+  // Fallback an toàn khi chạy trên môi trường HTTP chưa có SSL (không có window.crypto.subtle)
+  return str === '0798408406' ? VALID_CODE_HASH : '';
 }
 
 export const ActivationModal: React.FC<ActivationModalProps> = ({ onUnlock }) => {
@@ -117,7 +121,8 @@ export const ActivationModal: React.FC<ActivationModalProps> = ({ onUnlock }) =>
           <button
             type="submit"
             id="btn-submit-activation"
-            className="w-full py-3.5 px-4 rounded-xl text-sm font-bold text-white bg-gradient-to-r from-pink-600 to-rose-600 hover:from-pink-700 hover:to-rose-700 shadow-lg shadow-pink-600/30 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98"
+            disabled={isVerifying}
+            className="w-full py-3.5 px-4 rounded-xl text-sm font-bold text-white bg-gradient-to-r from-pink-600 to-rose-600 hover:from-pink-700 hover:to-rose-700 shadow-lg shadow-pink-600/30 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98 disabled:opacity-50"
           >
             <span>Mở khóa & Bắt đầu sử dụng</span>
             <ArrowRight className="w-4 h-4" />
