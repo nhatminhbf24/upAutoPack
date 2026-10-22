@@ -103,15 +103,15 @@ describe('templateRenderUtils tests', () => {
     const config = createDefaultTemplateConfig('spotify');
     const dims = getTemplateDimensions(60, 90, config);
     expect(dims.photoW).toBe(52); // 60 - 2 * 4
-    expect(dims.photoH).toBeCloseTo(49.5, 1); // 90 * 0.55
+    expect(dims.photoH).toBe(52); // Square 1:1 album art
   });
 
   it('should calculate accurate dimensions for Ticket 60x140 mm', () => {
     const config = createDefaultTemplateConfig('ticket');
     const dims = getTemplateDimensions(60, 140, config);
-    expect(dims.photoW).toBe(54); // 60 - 2 * 3
+    expect(dims.photoW).toBe(53); // 60 - 2 * 3.5
     expect(dims.headerH).toBe(11);
-    expect(dims.stubDividerY).toBeCloseTo(103.6, 1);
+    expect(dims.stubDividerY).toBe(102);
   });
 
   describe('calculateTemplateFitCrop - Zero Distortion tests', () => {

@@ -155,8 +155,16 @@ export function createDefaultTemplateConfig(type: PrintTemplateType, photoName: 
           flight: 'VN-2026',
           from: 'HAN',
           to: 'SGN',
+          fromCity: 'HANOI',
+          toCity: 'HO CHI MINH',
+          flightClass: 'FIRST CLASS',
+          boardingTime: '07:15',
+          departureTime: '07:45',
           gate: '08',
           seat: '12A',
+          zone: '2',
+          seq: '042',
+          etkt: '738-2401-9284',
           date: new Date().toLocaleDateString('vi-VN'),
           barcodeText: 'DAU-DAU-PRINT-2026',
           theme: 'airline_blue',
@@ -347,7 +355,9 @@ export function getTemplateDimensions(
     case 'spotify': {
       const border = config.spotify?.borderMm ?? 4;
       const photoW = Math.max(10, targetWidthMm - border * 2);
-      const photoH = Math.min(photoW, Math.max(20, targetHeightMm * 0.55));
+      // Album cover là hình vuông 1:1 chuẩn Spotify, chừa ít nhất 34mm cho thông tin & nút điều khiển
+      const maxAllowedH = Math.max(15, targetHeightMm - border - 34);
+      const photoH = Math.min(photoW, maxAllowedH);
       const photoX = border;
       const photoY = border;
       const infoY = photoY + photoH;
@@ -365,13 +375,14 @@ export function getTemplateDimensions(
     }
 
     case 'ticket': {
-      const border = 3;
+      const border = 3.5;
       const headerH = 11;
       const photoW = Math.max(10, targetWidthMm - border * 2);
-      const photoH = Math.max(20, targetHeightMm * 0.42);
+      // Tỷ lệ ảnh ~ 4:3 (ví dụ 53x40 mm trên vé 60x140 mm), không bao giờ bị bóp dẹp
+      const photoH = Math.min(photoW * 0.75, Math.max(25, targetHeightMm * 0.29));
       const photoX = border;
-      const photoY = headerH;
-      const stubDividerY = targetHeightMm * 0.74;
+      const photoY = headerH + 2;
+      const stubDividerY = Math.round(targetHeightMm * 0.73);
       return {
         type: 'ticket',
         border,
@@ -1263,7 +1274,7 @@ export function renderTemplateOnCanvas(
     // Cụm nút điều khiển máy nghe nhạc (Shuffle, Prev, Play Circle, Next, Heart)
     const controlsY = curY + 2 * pxPerMm;
     const centerX = pxPhotoX + pxPhotoW / 2;
-    const playCircleR = Math.max(8, 3.8 * pxPerMm);
+    const playCircleR = Math.max(10, 4.8 * pxPerMm);
 
     ctx.save();
     // Nút Play tròn to ở giữa
@@ -1275,7 +1286,7 @@ export function renderTemplateOnCanvas(
     // Tam giác Play bên trong nút tròn
     ctx.fillStyle = isDark ? '#121212' : '#ffffff';
     ctx.beginPath();
-    const triSize = playCircleR * 0.7;
+    const triSize = playCircleR * 0.75;
     ctx.moveTo(centerX - triSize * 0.35, controlsY + playCircleR - triSize * 0.6);
     ctx.lineTo(centerX + triSize * 0.65, controlsY + playCircleR);
     ctx.lineTo(centerX - triSize * 0.35, controlsY + playCircleR + triSize * 0.6);
@@ -1283,7 +1294,7 @@ export function renderTemplateOnCanvas(
     ctx.fill();
 
     // Nút Prev (⏮)
-    const prevX = centerX - playCircleR * 2.2;
+    const prevX = centerX - playCircleR * 2.3;
     ctx.fillStyle = config.textColor || textColor;
     ctx.beginPath();
     ctx.moveTo(prevX + 4, controlsY + playCircleR - 5);
@@ -1294,7 +1305,7 @@ export function renderTemplateOnCanvas(
     ctx.fillRect(prevX - 6, controlsY + playCircleR - 5, 2, 10);
 
     // Nút Next (⏭)
-    const nextX = centerX + playCircleR * 2.2;
+    const nextX = centerX + playCircleR * 2.3;
     ctx.beginPath();
     ctx.moveTo(nextX - 4, controlsY + playCircleR - 5);
     ctx.lineTo(nextX + 3, controlsY + playCircleR);
@@ -1322,10 +1333,26 @@ export function renderTemplateOnCanvas(
     const isKraft = theme === 'vintage_kraft';
     const isDark = theme === 'airline_blue';
 
-    const headerBg = isKraft ? '#78350f' : isDark ? '#0284c7' : '#1e293b';
+    const headerBg = isKraft ? '#78350f' : isDark ? '#0369a1' : '#0f172a';
     const cardBg = isKraft ? '#fef3c7' : '#ffffff';
     const textColor = isKraft ? '#451a03' : '#0f172a';
     const subTextColor = isKraft ? '#92400e' : '#64748b';
+
+    const passengerName = config.ticket?.passengerName || config.textLine2 || 'NGUYEN VAN A';
+    const fromCode = config.ticket?.from || 'HAN';
+    const toCode = config.ticket?.to || 'SGN';
+    const fromCity = config.ticket?.fromCity || 'HANOI';
+    const toCity = config.ticket?.toCity || 'HO CHI MINH';
+    const flight = config.ticket?.flight || 'VN-2026';
+    const gate = config.ticket?.gate || '08';
+    const seat = config.ticket?.seat || '12A';
+    const flightClass = config.ticket?.flightClass || 'FIRST CLASS';
+    const boardingTime = config.ticket?.boardingTime || '07:15';
+    const departureTime = config.ticket?.departureTime || '07:45';
+    const zone = config.ticket?.zone || '2';
+    const seq = config.ticket?.seq || '042';
+    const etkt = config.ticket?.etkt || '738-2401-9284';
+    const flightDate = config.ticket?.date || new Date().toLocaleDateString('vi-VN');
 
     // Đổ nền vé
     ctx.save();
@@ -1344,12 +1371,13 @@ export function renderTemplateOnCanvas(
     ctx.textBaseline = 'middle';
     ctx.fillText('✈ BOARDING PASS', rect.x + 3 * pxPerMm, rect.y + headerH / 2);
 
+    // Badge FIRST CLASS & flight number
     ctx.textAlign = 'right';
-    ctx.font = `600 ${headerFontPx * 0.9}px monospace`;
-    ctx.fillText(config.ticket?.flight || 'VN-2026', rect.x + rect.w - 3 * pxPerMm, rect.y + headerH / 2);
+    ctx.font = `bold ${headerFontPx * 0.8}px monospace`;
+    ctx.fillText(`${flightClass} • ${flight}`, rect.x + rect.w - 3 * pxPerMm, rect.y + headerH / 2);
     ctx.restore();
 
-    // 2. Vùng ảnh du lịch / ảnh kỷ niệm
+    // 2. Vùng ảnh du lịch / ảnh kỷ niệm (Tỉ lệ chuẩn, chống méo hình)
     const pxPhotoX = rect.x + dims.photoX * pxPerMm;
     const pxPhotoY = rect.y + dims.photoY * pxPerMm;
     const pxPhotoW = dims.photoW * pxPerMm;
@@ -1360,20 +1388,27 @@ export function renderTemplateOnCanvas(
     ctx.clip();
     const fitCrop = calculateTemplateFitCrop(photo.imgWidth, photo.imgHeight, dims.photoW, dims.photoH, photo);
     ctx.drawImage(img, fitCrop.cropX, fitCrop.cropY, fitCrop.cropW, fitCrop.cropH, pxPhotoX, pxPhotoY, pxPhotoW, pxPhotoH);
+
+    // Badge MEMORY PASS trên ảnh
+    const badgeW = 24 * pxPerMm;
+    const badgeH = 4.2 * pxPerMm;
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.65)';
+    drawRoundedRectPath(ctx, pxPhotoX + 2 * pxPerMm, pxPhotoY + pxPhotoH - badgeH - 2 * pxPerMm, badgeW, badgeH, 1.2 * pxPerMm);
+    ctx.fill();
+    ctx.fillStyle = '#ffffff';
+    ctx.font = `600 ${Math.round(5.5 * (pxPerMm / 2.83465))}px sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('✈ MEMORY PASS', pxPhotoX + 2 * pxPerMm + badgeW / 2, pxPhotoY + pxPhotoH - badgeH / 2 - 2 * pxPerMm);
     ctx.restore();
 
-    // 3. Thông tin chuyến bay & Hành khách
-    let infoY = pxPhotoY + pxPhotoH + 3 * pxPerMm;
-    const passengerName = config.ticket?.passengerName || config.textLine2 || 'NGUYEN VAN A';
-    const fromCode = config.ticket?.from || 'HAN';
-    const toCode = config.ticket?.to || 'SGN';
-    const gate = config.ticket?.gate || '08';
-    const seat = config.ticket?.seat || '12A';
-    const flightDate = config.ticket?.date || new Date().toLocaleDateString('vi-VN');
+    // 3. Thông tin chuyến bay & Hành khách (Bố cục đầy đặn, sang trọng chuẩn xưởng)
+    let infoY = pxPhotoY + pxPhotoH + 2.5 * pxPerMm;
 
     ctx.save();
-    // Route FROM ✈ TO
-    const routeFontPx = Math.round(14 * (pxPerMm / 2.83465));
+    // A. Route FROM ➔ TO
+    const routeFontPx = Math.round(13 * (pxPerMm / 2.83465));
+    const cityFontPx = Math.round(6 * (pxPerMm / 2.83465));
     ctx.font = `bold ${routeFontPx}px ${getFontFamilyCss(config.fontFamily)}`;
     ctx.fillStyle = headerBg;
     ctx.textAlign = 'left';
@@ -1381,49 +1416,117 @@ export function renderTemplateOnCanvas(
     ctx.fillText(fromCode, pxPhotoX, infoY);
 
     ctx.textAlign = 'center';
-    ctx.font = `600 ${routeFontPx * 0.8}px sans-serif`;
-    ctx.fillStyle = subTextColor;
-    ctx.fillText('✈ ➔', pxPhotoX + pxPhotoW / 2, infoY + 2);
+    ctx.font = `bold ${routeFontPx * 0.75}px sans-serif`;
+    ctx.fillStyle = '#2563eb';
+    ctx.fillText('✈ ────➔', pxPhotoX + pxPhotoW / 2, infoY + 1 * pxPerMm);
 
     ctx.textAlign = 'right';
     ctx.font = `bold ${routeFontPx}px ${getFontFamilyCss(config.fontFamily)}`;
     ctx.fillStyle = headerBg;
     ctx.fillText(toCode, pxPhotoX + pxPhotoW, infoY);
 
-    infoY += routeFontPx * 1.3;
+    // City subtitles under airport codes
+    infoY += routeFontPx * 1.15;
+    ctx.font = `bold ${cityFontPx}px sans-serif`;
+    ctx.fillStyle = subTextColor;
+    ctx.textAlign = 'left';
+    ctx.fillText(fromCity, pxPhotoX, infoY);
 
-    // Chi tiết Passenger Name
-    const labelFontPx = Math.round(6 * (pxPerMm / 2.83465));
+    ctx.textAlign = 'center';
+    ctx.font = `bold ${cityFontPx * 0.9}px sans-serif`;
+    ctx.fillStyle = '#16a34a';
+    ctx.fillText('ON TIME', pxPhotoX + pxPhotoW / 2, infoY);
+
+    ctx.textAlign = 'right';
+    ctx.font = `bold ${cityFontPx}px sans-serif`;
+    ctx.fillStyle = subTextColor;
+    ctx.fillText(toCity, pxPhotoX + pxPhotoW, infoY);
+
+    infoY += cityFontPx * 1.8;
+
+    // Line divider
+    ctx.strokeStyle = 'rgba(203, 213, 225, 0.8)';
+    ctx.lineWidth = 0.5 * (pxPerMm / 2.83465);
+    ctx.beginPath();
+    ctx.moveTo(pxPhotoX, infoY);
+    ctx.lineTo(pxPhotoX + pxPhotoW, infoY);
+    ctx.stroke();
+
+    infoY += 1.8 * pxPerMm;
+
+    // B. PASSENGER NAME & SKYPRIORITY
+    const labelFontPx = Math.round(5.5 * (pxPerMm / 2.83465));
     const valFontPx = Math.round(8.5 * (pxPerMm / 2.83465));
 
-    ctx.font = `600 ${labelFontPx}px sans-serif`;
+    ctx.font = `bold ${labelFontPx}px sans-serif`;
     ctx.fillStyle = subTextColor;
     ctx.textAlign = 'left';
     ctx.fillText('PASSENGER NAME', pxPhotoX, infoY);
 
-    infoY += labelFontPx * 1.3;
+    ctx.textAlign = 'right';
+    ctx.font = `600 ${labelFontPx * 0.95}px monospace`;
+    ctx.fillText(`ETKT: ${etkt}`, pxPhotoX + pxPhotoW, infoY);
+
+    infoY += labelFontPx * 1.35;
 
     ctx.font = `bold ${valFontPx}px ${getFontFamilyCss(config.fontFamily)}`;
     ctx.fillStyle = textColor;
-    ctx.fillText(truncateTextToWidth(ctx, passengerName.toUpperCase(), pxPhotoW), pxPhotoX, infoY);
+    ctx.textAlign = 'left';
+    ctx.fillText(truncateTextToWidth(ctx, passengerName.toUpperCase(), pxPhotoW - 25 * pxPerMm), pxPhotoX, infoY);
 
-    infoY += valFontPx * 1.4;
+    // SKYPRIORITY Badge
+    ctx.textAlign = 'right';
+    ctx.font = `bold ${labelFontPx}px sans-serif`;
+    ctx.fillStyle = '#b45309';
+    ctx.fillText('SKYPRIORITY ★', pxPhotoX + pxPhotoW, infoY);
 
-    // Bảng nhỏ: GATE | SEAT | DATE
-    const colW = pxPhotoW / 3;
-    ctx.font = `600 ${labelFontPx}px sans-serif`;
+    infoY += valFontPx * 1.5;
+
+    // C. 4-Column Flight Metric Box: BOARDING | GATE | SEAT | ZONE
+    const gridH = 9 * pxPerMm;
+    const gridY = infoY;
+    ctx.fillStyle = 'rgba(241, 245, 249, 0.7)';
+    drawRoundedRectPath(ctx, pxPhotoX, gridY, pxPhotoW, gridH, 1.5 * pxPerMm);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(203, 213, 225, 0.7)';
+    ctx.stroke();
+
+    const colW = pxPhotoW / 4;
+    const gridLabels = ['BOARDING', 'GATE', 'SEAT', 'ZONE'];
+    const gridVals = [boardingTime, gate, seat, zone];
+
+    for (let c = 0; c < 4; c++) {
+      const cx = pxPhotoX + colW * c + colW / 2;
+      ctx.textAlign = 'center';
+      ctx.font = `bold ${labelFontPx * 0.95}px sans-serif`;
+      ctx.fillStyle = subTextColor;
+      ctx.fillText(gridLabels[c], cx, gridY + 1.2 * pxPerMm);
+
+      ctx.font = `bold ${valFontPx * 1.05}px monospace`;
+      ctx.fillStyle = c === 0 ? '#e11d48' : textColor;
+      ctx.fillText(gridVals[c], cx, gridY + gridH - 1.2 * pxPerMm);
+    }
+
+    infoY += gridH + 2 * pxPerMm;
+
+    // D. Secondary row: DEPARTURE | SEQ | DATE
+    ctx.textAlign = 'left';
+    ctx.font = `600 ${labelFontPx}px monospace`;
     ctx.fillStyle = subTextColor;
-    ctx.fillText('GATE', pxPhotoX, infoY);
-    ctx.fillText('SEAT', pxPhotoX + colW, infoY);
-    ctx.fillText('DATE', pxPhotoX + colW * 2, infoY);
+    ctx.fillText(`DEP: ${departureTime}  •  SEQ: ${seq}  •  DATE: ${flightDate}`, pxPhotoX, infoY);
 
-    infoY += labelFontPx * 1.3;
+    infoY += labelFontPx * 1.6;
 
-    ctx.font = `bold ${valFontPx}px monospace`;
-    ctx.fillStyle = textColor;
-    ctx.fillText(gate, pxPhotoX, infoY);
-    ctx.fillText(seat, pxPhotoX + colW, infoY);
-    ctx.fillText(flightDate, pxPhotoX + colW * 2, infoY);
+    // E. Notice banner
+    const noticeH = 4 * pxPerMm;
+    ctx.fillStyle = 'rgba(254, 243, 199, 0.9)';
+    drawRoundedRectPath(ctx, pxPhotoX, infoY, pxPhotoW, noticeH, 1 * pxPerMm);
+    ctx.fill();
+    ctx.fillStyle = '#92400e';
+    ctx.font = `bold ${labelFontPx * 0.95}px sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('• CỔNG ĐÓNG 15 PHÚT TRƯỚC GIỜ KHỞI HÀNH •', pxPhotoX + pxPhotoW / 2, infoY + noticeH / 2);
 
     ctx.restore();
 
@@ -1457,20 +1560,57 @@ export function renderTemplateOnCanvas(
     }
     ctx.restore();
 
-    // 5. Phần cuống vé (Stub): Mã vạch Barcode
-    const barcodeY = stubY + 3.5 * pxPerMm;
-    const barcodeH = Math.max(16, rect.y + rect.h - barcodeY - 7 * pxPerMm);
-    const barcodeW = pxPhotoW;
+    // 5. Phần cuống vé (Stub): Header + Tóm tắt + Mã vạch Barcode
+    ctx.save();
+    let stubCurY = stubY + 2.5 * pxPerMm;
 
+    // Header cuống vé
+    ctx.font = `bold ${labelFontPx}px sans-serif`;
+    ctx.fillStyle = headerBg;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.fillText('CUỐNG VÉ / PASSENGER STUB', pxPhotoX, stubCurY);
+
+    ctx.textAlign = 'right';
+    ctx.font = `bold ${labelFontPx}px monospace`;
+    ctx.fillStyle = subTextColor;
+    ctx.fillText(`${flight} • ${seat}`, pxPhotoX + pxPhotoW, stubCurY);
+
+    stubCurY += labelFontPx * 1.4;
+
+    // Tóm tắt tên hành khách & chặng bay
+    ctx.font = `bold ${valFontPx * 0.85}px sans-serif`;
+    ctx.fillStyle = textColor;
+    ctx.textAlign = 'left';
+    ctx.fillText(truncateTextToWidth(ctx, passengerName.toUpperCase(), pxPhotoW - 20 * pxPerMm), pxPhotoX, stubCurY);
+
+    ctx.textAlign = 'right';
+    ctx.font = `bold ${labelFontPx}px monospace`;
+    ctx.fillStyle = subTextColor;
+    ctx.fillText(`${fromCode} ➔ ${toCode}`, pxPhotoX + pxPhotoW, stubCurY);
+
+    stubCurY += valFontPx * 1.3;
+
+    // Barcode
+    const barcodeH = Math.max(12, rect.y + rect.h - stubCurY - 6 * pxPerMm);
     drawBarcode(
       ctx,
       pxPhotoX,
-      barcodeY,
-      barcodeW,
+      stubCurY,
+      pxPhotoW,
       barcodeH,
       textColor,
       config.ticket?.barcodeText || 'DAU-DAU-PRINT-2026'
     );
+
+    // Chữ cảm ơn chân cuống vé
+    ctx.font = `bold ${labelFontPx * 0.9}px sans-serif`;
+    ctx.fillStyle = subTextColor;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'bottom';
+    ctx.fillText('THANK YOU FOR FLYING WITH US', pxPhotoX + pxPhotoW / 2, rect.y + rect.h - 1.2 * pxPerMm);
+
+    ctx.restore();
 
     return true;
   }

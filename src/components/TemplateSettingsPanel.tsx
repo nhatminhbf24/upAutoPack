@@ -733,8 +733,17 @@ export const TemplateSettingsPanel: React.FC<TemplateSettingsPanelProps> = ({
                     flight: templateConfig.ticket.flight,
                     from: templateConfig.ticket.from,
                     to: templateConfig.ticket.to,
+                    fromCity: templateConfig.ticket.fromCity,
+                    toCity: templateConfig.ticket.toCity,
                     gate: templateConfig.ticket.gate,
                     seat: templateConfig.ticket.seat,
+                    flightClass: templateConfig.ticket.flightClass,
+                    boardingTime: templateConfig.ticket.boardingTime,
+                    departureTime: templateConfig.ticket.departureTime,
+                    zone: templateConfig.ticket.zone,
+                    seq: templateConfig.ticket.seq,
+                    etkt: templateConfig.ticket.etkt,
+                    barcodeText: templateConfig.ticket.barcodeText,
                     theme: templateConfig.ticket.theme,
                   },
                 }
@@ -2939,45 +2948,77 @@ export const TemplateSettingsPanel: React.FC<TemplateSettingsPanelProps> = ({
               />
             </div>
 
-            {/* Chặng bay: FROM -> TO */}
+            {/* Chặng bay: FROM -> TO & Tên thành phố */}
             <div className="grid grid-cols-2 gap-2">
               <div>
                 <label className="text-[11px] font-bold text-slate-700 block mb-1">
-                  Nơi đi (FROM):
+                  Nơi đi (Mã & TP):
                 </label>
-                <input
-                  type="text"
-                  value={templateConfig.ticket?.from ?? 'HAN'}
-                  onChange={(e) =>
-                    onChangeTemplateConfig({
-                      ...templateConfig,
-                      ticket: { ...(templateConfig.ticket || {}), from: e.target.value.toUpperCase() },
-                    })
-                  }
-                  placeholder="HAN"
-                  className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 uppercase font-bold text-sky-700"
-                />
+                <div className="flex gap-1.5">
+                  <input
+                    type="text"
+                    value={templateConfig.ticket?.from ?? 'HAN'}
+                    onChange={(e) =>
+                      onChangeTemplateConfig({
+                        ...templateConfig,
+                        ticket: { ...(templateConfig.ticket || {}), from: e.target.value.toUpperCase() },
+                      })
+                    }
+                    placeholder="HAN"
+                    className="w-16 text-xs px-2 py-1.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 uppercase font-bold text-sky-700 text-center"
+                    title="Mã sân bay đi"
+                  />
+                  <input
+                    type="text"
+                    value={templateConfig.ticket?.fromCity ?? 'HANOI'}
+                    onChange={(e) =>
+                      onChangeTemplateConfig({
+                        ...templateConfig,
+                        ticket: { ...(templateConfig.ticket || {}), fromCity: e.target.value.toUpperCase() },
+                      })
+                    }
+                    placeholder="HANOI"
+                    className="flex-1 text-xs px-2 py-1.5 border border-slate-300 rounded-lg uppercase text-slate-700 font-medium"
+                    title="Tên thành phố đi"
+                  />
+                </div>
               </div>
               <div>
                 <label className="text-[11px] font-bold text-slate-700 block mb-1">
-                  Nơi đến (TO):
+                  Nơi đến (Mã & TP):
                 </label>
-                <input
-                  type="text"
-                  value={templateConfig.ticket?.to ?? 'SGN'}
-                  onChange={(e) =>
-                    onChangeTemplateConfig({
-                      ...templateConfig,
-                      ticket: { ...(templateConfig.ticket || {}), to: e.target.value.toUpperCase() },
-                    })
-                  }
-                  placeholder="SGN"
-                  className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 uppercase font-bold text-sky-700"
-                />
+                <div className="flex gap-1.5">
+                  <input
+                    type="text"
+                    value={templateConfig.ticket?.to ?? 'SGN'}
+                    onChange={(e) =>
+                      onChangeTemplateConfig({
+                        ...templateConfig,
+                        ticket: { ...(templateConfig.ticket || {}), to: e.target.value.toUpperCase() },
+                      })
+                    }
+                    placeholder="SGN"
+                    className="w-16 text-xs px-2 py-1.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 uppercase font-bold text-sky-700 text-center"
+                    title="Mã sân bay đến"
+                  />
+                  <input
+                    type="text"
+                    value={templateConfig.ticket?.toCity ?? 'HO CHI MINH'}
+                    onChange={(e) =>
+                      onChangeTemplateConfig({
+                        ...templateConfig,
+                        ticket: { ...(templateConfig.ticket || {}), toCity: e.target.value.toUpperCase() },
+                      })
+                    }
+                    placeholder="HO CHI MINH"
+                    className="flex-1 text-xs px-2 py-1.5 border border-slate-300 rounded-lg uppercase text-slate-700 font-medium"
+                    title="Tên thành phố đến"
+                  />
+                </div>
               </div>
             </div>
 
-            {/* Mã chuyến bay & Cổng & Ghế */}
+            {/* Mã chuyến bay & Hạng vé & Giờ lên máy bay */}
             <div className="grid grid-cols-3 gap-2">
               <div>
                 <label className="text-[11px] font-bold text-slate-700 block mb-1">
@@ -2996,6 +3037,44 @@ export const TemplateSettingsPanel: React.FC<TemplateSettingsPanelProps> = ({
                   className="w-full text-xs px-2 py-1.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 font-mono text-center"
                 />
               </div>
+              <div>
+                <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                  Hạng vé:
+                </label>
+                <input
+                  type="text"
+                  value={templateConfig.ticket?.flightClass ?? 'FIRST CLASS'}
+                  onChange={(e) =>
+                    onChangeTemplateConfig({
+                      ...templateConfig,
+                      ticket: { ...(templateConfig.ticket || {}), flightClass: e.target.value.toUpperCase() },
+                    })
+                  }
+                  placeholder="FIRST CLASS"
+                  className="w-full text-xs px-1.5 py-1.5 border border-slate-300 rounded-lg text-center uppercase font-bold text-amber-700"
+                />
+              </div>
+              <div>
+                <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                  Giờ lên máy bay:
+                </label>
+                <input
+                  type="text"
+                  value={templateConfig.ticket?.boardingTime ?? '07:15'}
+                  onChange={(e) =>
+                    onChangeTemplateConfig({
+                      ...templateConfig,
+                      ticket: { ...(templateConfig.ticket || {}), boardingTime: e.target.value },
+                    })
+                  }
+                  placeholder="07:15"
+                  className="w-full text-xs px-2 py-1.5 border border-slate-300 rounded-lg font-mono text-center text-rose-600 font-bold"
+                />
+              </div>
+            </div>
+
+            {/* Cổng & Ghế & Giờ khởi hành */}
+            <div className="grid grid-cols-3 gap-2">
               <div>
                 <label className="text-[11px] font-bold text-slate-700 block mb-1">
                   Cổng (Gate):
@@ -3028,6 +3107,23 @@ export const TemplateSettingsPanel: React.FC<TemplateSettingsPanelProps> = ({
                   }
                   placeholder="12A"
                   className="w-full text-xs px-2 py-1.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 font-mono text-center"
+                />
+              </div>
+              <div>
+                <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                  Giờ khởi hành:
+                </label>
+                <input
+                  type="text"
+                  value={templateConfig.ticket?.departureTime ?? '07:45'}
+                  onChange={(e) =>
+                    onChangeTemplateConfig({
+                      ...templateConfig,
+                      ticket: { ...(templateConfig.ticket || {}), departureTime: e.target.value },
+                    })
+                  }
+                  placeholder="07:45"
+                  className="w-full text-xs px-2 py-1.5 border border-slate-300 rounded-lg font-mono text-center text-slate-700 font-bold"
                 />
               </div>
             </div>

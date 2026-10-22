@@ -10,6 +10,7 @@ import {
   SkipForward,
   Shuffle,
   Plane,
+  Scissors,
 } from 'lucide-react';
 import { PhotoItem, TemplateConfig } from '../types';
 import { getTemplateDimensions, getFontFamilyCss, calculateTemplateFitCrop, isDarkColor } from '../utils/templateRenderUtils';
@@ -638,7 +639,10 @@ export const TemplateFramePreview: React.FC<TemplateFramePreviewProps> = ({
     const subTextColor = isDark ? '#a7a7a7' : '#64748b';
     const accentColor = '#1db954';
 
-    const photoHeightPercent = (dims.photoH / targetH) * 100;
+    const leftPercent = (dims.photoX / targetW) * 100;
+    const topPercent = (dims.photoY / targetH) * 100;
+    const widthPercent = (dims.photoW / targetW) * 100;
+    const heightPercent = (dims.photoH / targetH) * 100;
 
     const fitCrop = calculateTemplateFitCrop(imgW, imgH, dims.photoW, dims.photoH, photo);
     const slotPercentW = (imgW / fitCrop.cropW) * 100;
@@ -650,19 +654,29 @@ export const TemplateFramePreview: React.FC<TemplateFramePreviewProps> = ({
     const artistName = config.spotify?.artistName || config.textLine2 || 'Nghệ Sĩ Thể Hiện';
     const progressPercent = Math.min(100, Math.max(0, config.spotify?.progressPercent ?? 38));
 
+    // Info area percentages
+    const infoTopPercent = ((dims.photoY + dims.photoH + 2) / targetH) * 100;
+    const infoBottomPercent = (dims.border / targetH) * 100;
+
     return (
       <div
-        className="w-full h-full relative overflow-hidden select-none flex flex-col p-2.5"
+        className="w-full h-full relative overflow-hidden select-none"
         style={{
           backgroundColor: config.frameColor && config.frameColor !== '#ffffff' ? config.frameColor : bgColor,
           color: textColor,
           fontFamily: getFontFamilyCss(config.fontFamily),
         }}
       >
-        {/* Album Art */}
+        {/* Album Art (Tỷ lệ vuông 1:1 chuẩn xác tuyệt đối theo mm, không bao giờ bị bóp hình) */}
         <div
-          className="relative overflow-hidden rounded-lg shadow-md shrink-0 w-full"
-          style={{ height: `${photoHeightPercent}%` }}
+          className="absolute overflow-hidden rounded-xl shadow-md pointer-events-none"
+          style={{
+            left: `${leftPercent}%`,
+            top: `${topPercent}%`,
+            width: `${widthPercent}%`,
+            height: `${heightPercent}%`,
+            backgroundColor: isDark ? '#282828' : '#e2e8f0',
+          }}
         >
           <img
             src={imgSrc}
@@ -678,15 +692,23 @@ export const TemplateFramePreview: React.FC<TemplateFramePreviewProps> = ({
           />
         </div>
 
-        {/* Content Section */}
-        <div className="flex-1 flex flex-col justify-between pt-2 overflow-hidden pointer-events-none">
+        {/* Content Section (Cân đối không gian, nút Play to nổi bật) */}
+        <div
+          className="absolute flex flex-col justify-between pointer-events-none overflow-hidden"
+          style={{
+            left: `${leftPercent}%`,
+            right: `${leftPercent}%`,
+            top: `${infoTopPercent}%`,
+            bottom: `${infoBottomPercent}%`,
+          }}
+        >
           {/* Soundwave Code */}
           {config.spotify?.showSpotifyCode !== false && (
-            <div className="flex items-center justify-center gap-0.5 h-3 my-0.5 opacity-90">
+            <div className="flex items-center justify-center gap-[2.5px] h-3.5 opacity-90 shrink-0">
               {[4, 8, 12, 6, 10, 14, 7, 11, 5, 9, 13, 7, 11, 4, 9, 12, 6, 11, 14, 8, 5, 10, 12, 6, 9, 5].map((h, i) => (
                 <div
                   key={i}
-                  className="w-[2px] rounded-full"
+                  className="w-[2.5px] rounded-full"
                   style={{
                     height: `${h}px`,
                     backgroundColor: isDark ? '#ffffff' : '#0f172a',
@@ -698,17 +720,29 @@ export const TemplateFramePreview: React.FC<TemplateFramePreviewProps> = ({
 
           {/* Song Info */}
           <div className="min-w-0">
-            <h4 className="font-bold text-xs truncate leading-tight" style={{ color: config.textColor || textColor }}>
+            <h4
+              className="font-bold truncate leading-tight tracking-tight"
+              style={{
+                fontSize: `clamp(11px, 3.8cqi, 15px)`,
+                color: config.textColor || textColor,
+              }}
+            >
               {songTitle}
             </h4>
-            <p className="text-[10px] truncate mt-0.5 leading-tight" style={{ color: subTextColor }}>
+            <p
+              className="truncate mt-0.5 leading-tight opacity-80"
+              style={{
+                fontSize: `clamp(9px, 3cqi, 12px)`,
+                color: subTextColor,
+              }}
+            >
               {artistName}
             </p>
           </div>
 
           {/* Progress Bar */}
           <div className="space-y-1">
-            <div className="h-1 w-full bg-slate-700/40 rounded-full relative overflow-hidden">
+            <div className="h-1.5 w-full bg-slate-700/40 rounded-full relative overflow-hidden">
               <div
                 className="h-full rounded-full"
                 style={{
@@ -717,29 +751,30 @@ export const TemplateFramePreview: React.FC<TemplateFramePreviewProps> = ({
                 }}
               />
             </div>
-            <div className="flex justify-between text-[8px] font-mono" style={{ color: subTextColor }}>
+            <div className="flex justify-between text-[9px] font-mono leading-none" style={{ color: subTextColor }}>
               <span>{config.spotify?.currentTime || '01:28'}</span>
               <span>{config.spotify?.duration || '03:45'}</span>
             </div>
           </div>
 
-          {/* Player Controls */}
-          <div className="flex items-center justify-between px-1">
-            <Shuffle className="w-2.5 h-2.5 opacity-70" />
-            <div className="flex items-center gap-2">
-              <SkipBack className="w-3 h-3 fill-current opacity-80" />
+          {/* Player Controls (Nút Play to nổi bật w-9 h-9, cân đối phong cách Spotify) */}
+          <div className="flex items-center justify-between px-0.5 pt-0.5">
+            <Shuffle className="w-3.5 h-3.5 opacity-70" />
+            <div className="flex items-center gap-3">
+              <SkipBack className="w-4.5 h-4.5 fill-current opacity-90 cursor-pointer" />
+              {/* Nút Play to nổi bật w-9 h-9 (36px) */}
               <div
-                className="w-6 h-6 rounded-full flex items-center justify-center shadow-xs"
+                className="w-9 h-9 rounded-full flex items-center justify-center shadow-md transition-transform"
                 style={{
                   backgroundColor: isDark ? '#ffffff' : '#0f172a',
                   color: isDark ? '#121212' : '#ffffff',
                 }}
               >
-                <Play className="w-3 h-3 fill-current ml-0.5" />
+                <Play className="w-4.5 h-4.5 fill-current ml-0.5" />
               </div>
-              <SkipForward className="w-3 h-3 fill-current opacity-80" />
+              <SkipForward className="w-4.5 h-4.5 fill-current opacity-90 cursor-pointer" />
             </div>
-            <Heart className="w-2.5 h-2.5 fill-current text-green-500" />
+            <Heart className="w-3.5 h-3.5 fill-current text-[#1db954]" />
           </div>
         </div>
       </div>
@@ -752,18 +787,15 @@ export const TemplateFramePreview: React.FC<TemplateFramePreviewProps> = ({
     const isKraft = theme === 'vintage_kraft';
     const isDark = theme === 'airline_blue';
 
-    const headerBg = isKraft ? '#78350f' : isDark ? '#0284c7' : '#1e293b';
+    const headerBg = isKraft ? '#78350f' : isDark ? '#0369a1' : '#0f172a';
     const cardBg = isKraft ? '#fef3c7' : '#ffffff';
     const textColor = isKraft ? '#451a03' : '#0f172a';
     const subTextColor = isKraft ? '#92400e' : '#64748b';
 
-    const passengerName = config.ticket?.passengerName || config.textLine2 || 'NGUYEN VAN A';
-    const fromCode = config.ticket?.from || 'HAN';
-    const toCode = config.ticket?.to || 'SGN';
-    const flight = config.ticket?.flight || 'VN-2026';
-    const gate = config.ticket?.gate || '08';
-    const seat = config.ticket?.seat || '12A';
-    const flightDate = config.ticket?.date || new Date().toLocaleDateString('vi-VN');
+    const leftPercent = (dims.photoX / targetW) * 100;
+    const topPercent = (dims.photoY / targetH) * 100;
+    const widthPercent = (dims.photoW / targetW) * 100;
+    const heightPercent = (dims.photoH / targetH) * 100;
 
     const fitCrop = calculateTemplateFitCrop(imgW, imgH, dims.photoW, dims.photoH, photo);
     const slotPercentW = (imgW / fitCrop.cropW) * 100;
@@ -771,98 +803,222 @@ export const TemplateFramePreview: React.FC<TemplateFramePreviewProps> = ({
     const slotPercentX = (-fitCrop.cropX / fitCrop.cropW) * 100;
     const slotPercentY = (-fitCrop.cropY / fitCrop.cropH) * 100;
 
-    const photoHeightPercent = (dims.photoH / targetH) * 100;
+    const passengerName = config.ticket?.passengerName || config.textLine2 || 'NGUYEN VAN A';
+    const fromCode = config.ticket?.from || 'HAN';
+    const toCode = config.ticket?.to || 'SGN';
+    const fromCity = config.ticket?.fromCity || 'HANOI';
+    const toCity = config.ticket?.toCity || 'HO CHI MINH';
+    const flight = config.ticket?.flight || 'VN-2026';
+    const gate = config.ticket?.gate || '08';
+    const seat = config.ticket?.seat || '12A';
+    const flightClass = config.ticket?.flightClass || 'FIRST CLASS';
+    const boardingTime = config.ticket?.boardingTime || '07:15';
+    const departureTime = config.ticket?.departureTime || '07:45';
+    const zone = config.ticket?.zone || '2';
+    const seq = config.ticket?.seq || '042';
+    const etkt = config.ticket?.etkt || '738-2401-9284';
+    const flightDate = config.ticket?.date || new Date().toLocaleDateString('vi-VN');
+
+    const headerHeightPercent = (dims.headerH / targetH) * 100;
+    const detailsTopPercent = ((dims.photoY + dims.photoH + 2) / targetH) * 100;
+    const stubYPercent = (dims.stubDividerY / targetH) * 100;
+    const stubTopPercent = ((dims.stubDividerY + 2.5) / targetH) * 100;
 
     return (
       <div
-        className="w-full h-full relative overflow-hidden select-none flex flex-col shadow-xs"
+        className="w-full h-full relative overflow-hidden select-none shadow-xs"
         style={{
           backgroundColor: cardBg,
           color: textColor,
           fontFamily: getFontFamilyCss(config.fontFamily),
         }}
       >
-        {/* Header Bar */}
+        {/* 1. Header Bar */}
         <div
-          className="h-7 px-2 flex items-center justify-between text-white shrink-0"
-          style={{ backgroundColor: headerBg }}
+          className="absolute left-0 right-0 top-0 px-2 flex items-center justify-between text-white shrink-0 pointer-events-none"
+          style={{
+            height: `${headerHeightPercent}%`,
+            backgroundColor: headerBg,
+          }}
         >
-          <div className="flex items-center gap-1 font-bold text-[10px]">
-            <Plane className="w-3 h-3" />
+          <div className="flex items-center gap-1.5 font-extrabold text-[10px] tracking-wider">
+            <Plane className="w-3.5 h-3.5 fill-current" />
             <span>BOARDING PASS</span>
           </div>
-          <span className="font-mono font-bold text-[9px]">{flight}</span>
-        </div>
-
-        {/* Photo Area */}
-        <div className="p-2 pb-1 shrink-0">
-          <div
-            className="relative overflow-hidden rounded-md shadow-2xs w-full"
-            style={{ height: `${photoHeightPercent * 1.5}px` }}
-          >
-            <img
-              src={imgSrc}
-              alt={photo.name}
-              draggable={false}
-              className="absolute max-w-none pointer-events-none transition-none"
-              style={{
-                width: `${slotPercentW}%`,
-                height: `${slotPercentH}%`,
-                left: `${slotPercentX}%`,
-                top: `${slotPercentY}%`,
-              }}
-            />
+          <div className="flex items-center gap-1.5">
+            <span className="text-[7.5px] font-bold tracking-widest px-1.5 py-0.5 rounded-full bg-white/20 uppercase">
+              {flightClass}
+            </span>
+            <span className="font-mono font-bold text-[9.5px] tracking-tight">{flight}</span>
           </div>
         </div>
 
-        {/* Flight Details */}
-        <div className="px-2.5 py-1 flex-1 flex flex-col justify-between pointer-events-none min-h-0">
-          <div className="flex items-center justify-between">
+        {/* 2. Photo Area (Định vị % tuyệt đối theo mm, tỉ lệ chuẩn 4:3, chống bóp hình 100%) */}
+        <div
+          className="absolute overflow-hidden rounded-md shadow-2xs pointer-events-none"
+          style={{
+            left: `${leftPercent}%`,
+            top: `${topPercent}%`,
+            width: `${widthPercent}%`,
+            height: `${heightPercent}%`,
+            backgroundColor: '#f1f5f9',
+          }}
+        >
+          <img
+            src={imgSrc}
+            alt={photo.name}
+            draggable={false}
+            className="absolute max-w-none pointer-events-none transition-none"
+            style={{
+              width: `${slotPercentW}%`,
+              height: `${slotPercentH}%`,
+              left: `${slotPercentX}%`,
+              top: `${slotPercentY}%`,
+            }}
+          />
+          {/* Stylish overlay badge on photo */}
+          <div className="absolute bottom-1 left-1.5 px-1.5 py-0.5 rounded-sm bg-black/60 backdrop-blur-xs text-white text-[7.5px] font-medium tracking-wide">
+            ✈ MEMORY PASS
+          </div>
+        </div>
+
+        {/* 3. Middle Flight Details Area (Đầy đủ thông tin vé chuẩn xưởng, không còn trống trải) */}
+        <div
+          className="absolute flex flex-col justify-between pointer-events-none overflow-hidden"
+          style={{
+            left: `${leftPercent}%`,
+            right: `${leftPercent}%`,
+            top: `${detailsTopPercent}%`,
+            bottom: `${100 - stubYPercent + 1}%`,
+          }}
+        >
+          {/* Route Section */}
+          <div className="flex items-center justify-between border-b border-slate-200/70 pb-1">
             <div>
-              <span className="text-[7.5px] font-bold block" style={{ color: subTextColor }}>FROM</span>
-              <span className="text-sm font-extrabold tracking-tight" style={{ color: headerBg }}>{fromCode}</span>
+              <span className="text-base font-black tracking-tight leading-none block" style={{ color: headerBg }}>
+                {fromCode}
+              </span>
+              <span className="text-[7.5px] font-bold uppercase tracking-wider block mt-0.5" style={{ color: subTextColor }}>
+                {fromCity}
+              </span>
             </div>
-            <div className="flex flex-col items-center">
-              <span className="text-[7px] font-mono" style={{ color: subTextColor }}>FLIGHT</span>
-              <span className="text-xs font-bold">➔</span>
+
+            <div className="flex flex-col items-center px-1">
+              <span className="text-[7.5px] font-mono font-bold tracking-wider" style={{ color: subTextColor }}>
+                {flight}
+              </span>
+              <div className="flex items-center gap-1 text-xs font-bold leading-none my-0.5 text-blue-600">
+                <span>✈</span>
+                <span className="tracking-tighter">─────➔</span>
+              </div>
+              <span className="text-[6.5px] font-bold text-emerald-600 bg-emerald-50 px-1 rounded-sm border border-emerald-200">
+                ON TIME
+              </span>
             </div>
+
             <div className="text-right">
-              <span className="text-[7.5px] font-bold block" style={{ color: subTextColor }}>TO</span>
-              <span className="text-sm font-extrabold tracking-tight" style={{ color: headerBg }}>{toCode}</span>
+              <span className="text-base font-black tracking-tight leading-none block" style={{ color: headerBg }}>
+                {toCode}
+              </span>
+              <span className="text-[7.5px] font-bold uppercase tracking-wider block mt-0.5" style={{ color: subTextColor }}>
+                {toCity}
+              </span>
             </div>
           </div>
 
-          <div>
-            <span className="text-[7px] font-bold block" style={{ color: subTextColor }}>PASSENGER</span>
-            <p className="font-bold text-[10px] truncate uppercase">{passengerName}</p>
+          {/* Passenger & E-Ticket Row */}
+          <div className="flex items-center justify-between pt-0.5">
+            <div className="min-w-0 pr-1">
+              <span className="text-[6.5px] font-bold uppercase tracking-wider block leading-none" style={{ color: subTextColor }}>
+                PASSENGER NAME
+              </span>
+              <p className="font-extrabold text-[11px] truncate uppercase leading-tight mt-0.5">
+                {passengerName}
+              </p>
+            </div>
+            <div className="text-right shrink-0">
+              <span className="text-[6px] font-mono uppercase block leading-none opacity-70">
+                ETKT: {etkt}
+              </span>
+              <span className="text-[7px] font-bold text-amber-700 bg-amber-100/80 px-1 py-0.5 rounded-sm border border-amber-300/80 inline-block mt-0.5">
+                SKYPRIORITY
+              </span>
+            </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-1 pt-0.5 border-t border-slate-200/60">
+          {/* 4-Metric Grid */}
+          <div className="grid grid-cols-4 gap-1 py-1 px-1 bg-slate-50/80 rounded-md border border-slate-200/60 text-center">
             <div>
-              <span className="text-[6.5px] font-bold block" style={{ color: subTextColor }}>GATE</span>
-              <span className="font-mono font-bold text-[9px]">{gate}</span>
+              <span className="text-[6px] font-bold block leading-none" style={{ color: subTextColor }}>BOARDING</span>
+              <span className="font-mono font-black text-[10px] text-rose-600 leading-tight block mt-0.5">{boardingTime}</span>
             </div>
             <div>
-              <span className="text-[6.5px] font-bold block" style={{ color: subTextColor }}>SEAT</span>
-              <span className="font-mono font-bold text-[9px]">{seat}</span>
+              <span className="text-[6px] font-bold block leading-none" style={{ color: subTextColor }}>GATE</span>
+              <span className="font-mono font-black text-[10px] leading-tight block mt-0.5" style={{ color: headerBg }}>{gate}</span>
             </div>
             <div>
-              <span className="text-[6.5px] font-bold block" style={{ color: subTextColor }}>DATE</span>
-              <span className="font-mono text-[8px] truncate block">{flightDate}</span>
+              <span className="text-[6px] font-bold block leading-none" style={{ color: subTextColor }}>SEAT</span>
+              <span className="font-mono font-black text-[10px] leading-tight block mt-0.5" style={{ color: headerBg }}>{seat}</span>
             </div>
+            <div>
+              <span className="text-[6px] font-bold block leading-none" style={{ color: subTextColor }}>ZONE</span>
+              <span className="font-mono font-black text-[10px] leading-tight block mt-0.5">{zone}</span>
+            </div>
+          </div>
+
+          {/* Secondary Info & Warning Banner */}
+          <div className="flex items-center justify-between text-[7px] font-mono border-t border-slate-200/60 pt-0.5" style={{ color: subTextColor }}>
+            <span>DEP: {departureTime}</span>
+            <span>SEQ: {seq}</span>
+            <span>DATE: {flightDate}</span>
+          </div>
+
+          <div className="text-center text-[6.5px] font-bold text-amber-800 bg-amber-50/90 py-0.5 rounded-sm border border-amber-200/60 leading-none">
+            • CỔNG ĐÓNG 15 PHÚT TRƯỚC GIỜ KHỞI HÀNH •
           </div>
         </div>
 
-        {/* Perforated Stub Line with notches */}
-        <div className="relative flex items-center justify-between my-0.5">
-          <div className="w-2.5 h-2.5 rounded-r-full bg-slate-200 -ml-1 border-r border-slate-300/60 shadow-inner" />
-          <div className="flex-1 border-b border-dashed border-slate-300 mx-1" />
-          <div className="w-2.5 h-2.5 rounded-l-full bg-slate-200 -mr-1 border-l border-slate-300/60 shadow-inner" />
+        {/* 4. Perforated Stub Divider Line with Cutout Notches */}
+        <div
+          className="absolute left-0 right-0 flex items-center justify-between pointer-events-none z-10"
+          style={{ top: `${stubYPercent}%`, transform: 'translateY(-50%)' }}
+        >
+          {config.ticket?.notchCut !== false ? (
+            <div className="w-2.5 h-3 rounded-r-full bg-slate-200 border-r border-slate-300 shadow-inner -ml-0.5" />
+          ) : <div className="w-2" />}
+          <div className="flex-1 border-b-2 border-dashed border-slate-300 mx-1 relative flex items-center justify-center">
+            <span className="absolute bg-white px-1 text-[6.5px] font-mono font-bold text-slate-400 flex items-center gap-0.5">
+              <Scissors className="w-2.5 h-2.5" />
+              <span>TEAR HERE</span>
+            </span>
+          </div>
+          {config.ticket?.notchCut !== false ? (
+            <div className="w-2.5 h-3 rounded-l-full bg-slate-200 border-l border-slate-300 shadow-inner -mr-0.5" />
+          ) : <div className="w-2" />}
         </div>
 
-        {/* Stub Section with Barcode */}
-        <div className="px-3 pb-1.5 text-center pointer-events-none">
-          <div className="h-5 flex items-center justify-center gap-[1.5px] overflow-hidden my-0.5">
+        {/* 5. Passenger Stub Section (Cuống vé) */}
+        <div
+          className="absolute flex flex-col justify-between pointer-events-none text-center overflow-hidden"
+          style={{
+            left: `${leftPercent}%`,
+            right: `${leftPercent}%`,
+            top: `${stubTopPercent}%`,
+            bottom: '2%',
+          }}
+        >
+          <div className="flex items-center justify-between text-[7.5px] font-bold leading-tight pb-0.5 border-b border-slate-200/60">
+            <span className="uppercase" style={{ color: headerBg }}>CUỐNG VÉ / STUB</span>
+            <span className="font-mono text-slate-500">{flight} • {seat}</span>
+          </div>
+
+          <div className="flex items-center justify-between text-[7.5px] font-semibold text-slate-600 truncate py-0.5">
+            <span className="truncate uppercase font-bold">{passengerName}</span>
+            <span className="font-mono shrink-0 ml-1 font-bold">{fromCode}➔{toCode}</span>
+          </div>
+
+          {/* Barcode */}
+          <div className="h-6 flex items-center justify-center gap-[1.5px] overflow-hidden my-0.5">
             {[2, 1, 3, 1, 2, 4, 1, 2, 3, 1, 1, 2, 3, 2, 1, 4, 1, 3, 2, 1, 2, 3, 1, 2, 1, 4, 2, 1, 3, 1, 2].map((w, idx) => (
               <div
                 key={idx}
@@ -871,8 +1027,12 @@ export const TemplateFramePreview: React.FC<TemplateFramePreviewProps> = ({
               />
             ))}
           </div>
-          <span className="font-mono text-[7px] tracking-widest uppercase opacity-75">
+
+          <span className="font-mono text-[7px] tracking-widest uppercase opacity-75 leading-none block">
             {config.ticket?.barcodeText || 'DAU-DAU-PRINT-2026'}
+          </span>
+          <span className="text-[6.5px] font-bold text-slate-400 block tracking-tight">
+            THANK YOU FOR FLYING WITH US
           </span>
         </div>
       </div>

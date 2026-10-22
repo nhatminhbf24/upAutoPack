@@ -178,8 +178,16 @@ export interface TemplateConfig {
     flight?: string; // Mã chuyến bay (vd: "VN-2026")
     from?: string; // Mã sân bay đi (vd: "HAN")
     to?: string; // Mã sân bay đến (vd: "SGN")
+    fromCity?: string; // Tên thành phố đi (vd: "HANOI")
+    toCity?: string; // Tên thành phố đến (vd: "HO CHI MINH")
+    flightClass?: string; // Hạng vé (vd: "FIRST CLASS" hoặc "BUSINESS")
+    boardingTime?: string; // Giờ lên máy bay (vd: "07:15")
+    departureTime?: string; // Giờ khởi hành (vd: "07:45")
     gate?: string; // Cổng lên máy bay (vd: "08")
     seat?: string; // Vị trí ghế ngồi (vd: "12A")
+    zone?: string; // Khu vực lên máy bay (vd: "2")
+    seq?: string; // Số thứ tự boarding (vd: "042")
+    etkt?: string; // Mã vé điện tử (vd: "738-2401-9284")
     date?: string; // Ngày bay
     barcodeText?: string; // Ký tự mã vạch
     theme?: 'airline_blue' | 'vintage_kraft' | 'clean_white'; // Phong cách màu vé
