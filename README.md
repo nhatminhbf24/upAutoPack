@@ -123,14 +123,14 @@ autopack-print/
 
 ## 🌐 Triển khai lên Hosting (Deployment)
 
-### Cloudflare Pages: autopackdaudau.pages.dev
+### Cloudflare Workers: print.daushop.pro.vn
 
-Chạy `npm run deploy:cf` để build giao diện và triển khai lên Pages, nhánh production `main`.
-Cấu hình Pages và API nằm trong `cloudflare/pages/`; cấu hình Worker hiện có vẫn nằm ở `wrangler.jsonc`.
+Chạy `npm run deploy:cf` để build giao diện và triển khai Worker `daudau-autopack-print` theo cấu hình `wrangler.jsonc`.
+Website chính là `https://print.daushop.pro.vn`; địa chỉ `workers.dev` và URL preview được tắt theo cấu hình hiện tại.
 
-API `/api/verify-code` trên Pages gọi nội bộ Worker `daudau-autopack-print` qua service binding `ACTIVATION_WORKER`.
-Mã kích hoạt tiếp tục dùng secret `ACTIVATION_CODE` của Worker này, không cần sao chép hay đưa secret vào giao diện.
-Giữ Worker hoạt động và cập nhật secret tại đó khi cần đổi mã. Các xử lý ảnh và dữ liệu dự án vẫn nằm hoàn toàn trong trình duyệt.
+Worker phục vụ giao diện từ `dist/` qua binding `ASSETS` và xử lý API `/api/verify-code` trong `src/worker.ts`.
+Mã kích hoạt dùng secret `ACTIVATION_CODE` trên Worker; lệnh triển khai giữ các biến cấu hình hiện có.
+Các xử lý ảnh và dữ liệu dự án vẫn nằm hoàn toàn trong trình duyệt.
 
 ### Node.js Hosting
 
