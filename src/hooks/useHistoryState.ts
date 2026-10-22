@@ -78,11 +78,21 @@ export function useHistoryState<T>(initialPresent: T, maxHistoryLength = 13) {
     });
   }, []);
 
+  // Clear history: resets past & future stacks to immediately free memory, and optionally sets a new present state
+  const clearHistory = useCallback((newPresent?: T) => {
+    setState((currentState) => ({
+      past: [],
+      present: newPresent !== undefined ? newPresent : currentState.present,
+      future: [],
+    }));
+  }, []);
+
   return {
     state: state.present,
     set,
     undo,
     redo,
+    clearHistory,
     canUndo,
     canRedo,
     historyCount: state.past.length,

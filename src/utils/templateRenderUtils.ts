@@ -100,6 +100,70 @@ export function createDefaultTemplateConfig(type: PrintTemplateType, photoName: 
         },
       };
 
+    case 'photocard':
+      return {
+        type: 'photocard',
+        frameColor: '#ffffff',
+        textColor: '#1e293b',
+        fontFamily: 'be_vietnam_pro',
+        fontSizePt: 11,
+        textAlign: 'center',
+        textLine1: cleanName || 'Idol Photocard',
+        textLine2: '',
+        photocard: {
+          borderRadiusMm: 3.5,
+          borderMm: 0,
+          bottomMm: 0,
+          backDesign: 'symmetry',
+        },
+      };
+
+    case 'spotify':
+      return {
+        type: 'spotify',
+        frameColor: '#121212',
+        textColor: '#ffffff',
+        fontFamily: 'be_vietnam_pro',
+        fontSizePt: 10,
+        textAlign: 'left',
+        textLine1: cleanName || 'Bài Hát Yêu Thích',
+        textLine2: 'Nghệ Sĩ Thể Hiện',
+        spotify: {
+          borderMm: 4,
+          songTitle: cleanName || 'Bài Hát Yêu Thích',
+          artistName: 'Nghệ Sĩ Thể Hiện',
+          duration: '03:45',
+          currentTime: '01:28',
+          progressPercent: 38,
+          showSpotifyCode: true,
+          theme: 'dark',
+        },
+      };
+
+    case 'ticket':
+      return {
+        type: 'ticket',
+        frameColor: '#ffffff',
+        textColor: '#1e293b',
+        fontFamily: 'be_vietnam_pro',
+        fontSizePt: 9,
+        textAlign: 'left',
+        textLine1: 'PASSENGER TICKET / BOARDING PASS',
+        textLine2: cleanName || 'NGUYEN VAN A',
+        ticket: {
+          passengerName: cleanName || 'NGUYEN VAN A',
+          flight: 'VN-2026',
+          from: 'HAN',
+          to: 'SGN',
+          gate: '08',
+          seat: '12A',
+          date: new Date().toLocaleDateString('vi-VN'),
+          barcodeText: 'DAU-DAU-PRINT-2026',
+          theme: 'airline_blue',
+          notchCut: true,
+        },
+      };
+
     default:
       return {
         type: 'none',
@@ -258,6 +322,68 @@ export function getTemplateDimensions(
       };
     }
 
+    case 'photocard': {
+      const border = config.photocard?.borderMm ?? 0;
+      const bottom = config.photocard?.bottomMm ?? 0;
+      const borderRadius = config.photocard?.borderRadiusMm ?? 3.5;
+      const photoW = Math.max(10, targetWidthMm - border * 2);
+      const photoH = Math.max(10, targetHeightMm - border * 2 - bottom);
+      return {
+        type: 'photocard',
+        border,
+        bottom,
+        borderRadius,
+        photoX: border,
+        photoY: border,
+        photoW,
+        photoH,
+        textX: border,
+        textY: targetHeightMm - bottom,
+        textW: photoW,
+        textH: bottom,
+      };
+    }
+
+    case 'spotify': {
+      const border = config.spotify?.borderMm ?? 4;
+      const photoW = Math.max(10, targetWidthMm - border * 2);
+      const photoH = Math.min(photoW, Math.max(20, targetHeightMm * 0.55));
+      const photoX = border;
+      const photoY = border;
+      const infoY = photoY + photoH;
+      const infoH = Math.max(10, targetHeightMm - infoY - border);
+      return {
+        type: 'spotify',
+        border,
+        photoX,
+        photoY,
+        photoW,
+        photoH,
+        infoY,
+        infoH,
+      };
+    }
+
+    case 'ticket': {
+      const border = 3;
+      const headerH = 11;
+      const photoW = Math.max(10, targetWidthMm - border * 2);
+      const photoH = Math.max(20, targetHeightMm * 0.42);
+      const photoX = border;
+      const photoY = headerH;
+      const stubDividerY = targetHeightMm * 0.74;
+      return {
+        type: 'ticket',
+        border,
+        headerH,
+        photoX,
+        photoY,
+        photoW,
+        photoH,
+        stubDividerY,
+      };
+    }
+
     default:
       return {
         type: 'none',
@@ -378,6 +504,99 @@ export function truncateTextToWidth(ctx: CanvasRenderingContext2D, text: string,
     str = str.slice(0, -1);
   }
   return str.length > 0 ? str + '...' : '';
+}
+
+/**
+ * Vẽ đường bao góc tròn (Rounded Rectangle Path) tương thích mọi trình duyệt
+ */
+export function drawRoundedRectPath(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  radius: number
+): void {
+  const r = Math.max(0, Math.min(radius, w / 2, h / 2));
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.arcTo(x + w, y, x + w, y + r, r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+  ctx.lineTo(x + r, y + h);
+  ctx.arcTo(x, y + h, x, y + h - r, r);
+  ctx.lineTo(x, y + r);
+  ctx.arcTo(x, y, x + r, y, r);
+  ctx.closePath();
+}
+
+/**
+ * Vẽ thanh sóng âm Spotify Soundwave Code chân thực chuẩn phong cách Spotify
+ */
+export function drawSpotifySoundwave(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  color: string
+): void {
+  ctx.save();
+  ctx.fillStyle = color;
+  const barCount = 26;
+  const gap = Math.max(1, w / (barCount * 2.8));
+  const barW = Math.max(1.5, (w - (barCount - 1) * gap) / barCount);
+  const pattern = [
+    0.3, 0.65, 0.9, 0.45, 0.8, 1.0, 0.55, 0.85, 0.35, 0.75,
+    0.95, 0.5, 0.85, 0.3, 0.7, 0.9, 0.4, 0.8, 1.0, 0.6,
+    0.35, 0.75, 0.85, 0.45, 0.7, 0.4
+  ];
+  for (let i = 0; i < barCount; i++) {
+    const barH = Math.max(3, h * (pattern[i % pattern.length] || 0.5));
+    const bx = x + i * (barW + gap);
+    const by = y + (h - barH) / 2;
+    drawRoundedRectPath(ctx, bx, by, barW, barH, barW / 2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+/**
+ * Vẽ mã vạch Barcode sắc nét độ phân giải cao cho vé máy bay boarding pass
+ */
+export function drawBarcode(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  color: string,
+  text?: string
+): void {
+  ctx.save();
+  ctx.fillStyle = color;
+  const pattern = [2, 1, 3, 1, 2, 4, 1, 2, 3, 1, 1, 2, 3, 2, 1, 4, 1, 3, 2, 1, 2, 3, 1, 2, 1, 4, 2, 1, 3, 1, 2];
+  const totalUnits = pattern.reduce((a, b) => a + b, 0);
+  const unitW = w / totalUnits;
+  let curX = x;
+  let isBar = true;
+  for (const p of pattern) {
+    const barW = p * unitW;
+    if (isBar) {
+      ctx.fillRect(curX, y, barW, h);
+    }
+    curX += barW;
+    isBar = !isBar;
+  }
+  if (text) {
+    const textFontPx = Math.max(8, Math.round(h * 0.28));
+    ctx.font = `600 ${textFontPx}px monospace`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    ctx.fillText(text, x + w / 2, y + h + 2);
+  }
+  ctx.restore();
 }
 
 /**
@@ -874,6 +1093,385 @@ export function renderTemplateOnCanvas(
       }
       ctx.restore();
     }
+    return true;
+  }
+
+  // 6. Photocard (K-Pop Idol Photocard bo góc)
+  if (config.type === 'photocard' && dims.type === 'photocard') {
+    const rPx = (dims.borderRadius || 3.5) * pxPerMm;
+    const borderPx = (dims.border || 0) * pxPerMm;
+    const bottomPx = (dims.bottom || 0) * pxPerMm;
+
+    const pxPhotoX = rect.x + borderPx;
+    const pxPhotoY = rect.y + borderPx;
+    const pxPhotoW = rect.w - borderPx * 2;
+    const pxPhotoH = rect.h - borderPx * 2 - bottomPx;
+
+    const innerRadius = Math.max(0, rPx - borderPx);
+
+    // Vùng vẽ ảnh bo góc
+    ctx.save();
+    drawRoundedRectPath(ctx, pxPhotoX, pxPhotoY, pxPhotoW, pxPhotoH, innerRadius);
+    ctx.clip();
+
+    const fitCrop = calculateTemplateFitCrop(photo.imgWidth, photo.imgHeight, dims.photoW, dims.photoH, photo);
+    ctx.drawImage(img, fitCrop.cropX, fitCrop.cropY, fitCrop.cropW, fitCrop.cropH, pxPhotoX, pxPhotoY, pxPhotoW, pxPhotoH);
+    ctx.restore();
+
+    // Chân dưới ghi lời nhắn / tên idol (nếu có)
+    const textLines = [config.textLine1, config.textLine2].filter(Boolean) as string[];
+    if (bottomPx > 0 && textLines.length > 0) {
+      ctx.save();
+      const fontSizePx = Math.round((config.fontSizePt || 10) * (pxPerMm / 2.83465));
+      ctx.font = `600 ${fontSizePx}px ${getFontFamilyCss(config.fontFamily)}`;
+      ctx.fillStyle = config.textColor || (isDarkColor(config.frameColor) ? '#f8fafc' : '#1e293b');
+      ctx.textAlign = config.textAlign || 'center';
+      ctx.textBaseline = 'middle';
+
+      const pxTextX =
+        config.textAlign === 'left'
+          ? pxPhotoX + 2 * pxPerMm
+          : config.textAlign === 'right'
+          ? pxPhotoX + pxPhotoW - 2 * pxPerMm
+          : pxPhotoX + pxPhotoW / 2;
+
+      const pxTextCenterY = rect.y + rect.h - bottomPx / 2;
+      const lineHeightPx = fontSizePx * 1.3;
+
+      if (textLines.length === 1) {
+        ctx.fillText(textLines[0], pxTextX, pxTextCenterY);
+      } else {
+        ctx.fillText(textLines[0], pxTextX, pxTextCenterY - lineHeightPx * 0.5);
+        ctx.fillText(textLines[1], pxTextX, pxTextCenterY + lineHeightPx * 0.5);
+      }
+      ctx.restore();
+    }
+
+    // Đường chỉ góc bo hướng dẫn cắt kéo (chỉ viền mờ 0.5px để khách dễ cắt bo tròn)
+    ctx.save();
+    ctx.strokeStyle = isDarkColor(config.frameColor) ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.15)';
+    ctx.lineWidth = 1;
+    drawRoundedRectPath(ctx, rect.x, rect.y, rect.w, rect.h, rPx);
+    ctx.stroke();
+    ctx.restore();
+
+    return true;
+  }
+
+  // 7. Spotify Music Player
+  if (config.type === 'spotify' && dims.type === 'spotify') {
+    const isDark = config.spotify?.theme !== 'light';
+    const bgColor = isDark ? '#121212' : '#ffffff';
+    const textColor = isDark ? '#ffffff' : '#0f172a';
+    const subTextColor = isDark ? '#a7a7a7' : '#64748b';
+    const accentColor = '#1db954'; // Màu xanh lá biểu tượng Spotify
+
+    // Nền card máy nghe nhạc
+    ctx.save();
+    ctx.fillStyle = config.frameColor && config.frameColor !== '#ffffff' ? config.frameColor : bgColor;
+    ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
+    ctx.restore();
+
+    const pxPhotoX = rect.x + dims.photoX * pxPerMm;
+    const pxPhotoY = rect.y + dims.photoY * pxPerMm;
+    const pxPhotoW = dims.photoW * pxPerMm;
+    const pxPhotoH = dims.photoH * pxPerMm;
+
+    // Album cover bo góc nhẹ 3mm
+    const coverRadius = 3 * pxPerMm;
+    ctx.save();
+    drawRoundedRectPath(ctx, pxPhotoX, pxPhotoY, pxPhotoW, pxPhotoH, coverRadius);
+    ctx.clip();
+    const fitCrop = calculateTemplateFitCrop(photo.imgWidth, photo.imgHeight, dims.photoW, dims.photoH, photo);
+    ctx.drawImage(img, fitCrop.cropX, fitCrop.cropY, fitCrop.cropW, fitCrop.cropH, pxPhotoX, pxPhotoY, pxPhotoW, pxPhotoH);
+    ctx.restore();
+
+    let curY = pxPhotoY + pxPhotoH + 3 * pxPerMm;
+
+    // Mã vạch sóng âm Spotify Code (nếu bật)
+    if (config.spotify?.showSpotifyCode !== false) {
+      const soundwaveH = Math.max(14, 5.5 * pxPerMm);
+      drawSpotifySoundwave(ctx, pxPhotoX, curY, pxPhotoW, soundwaveH, isDark ? '#ffffff' : '#0f172a');
+      curY += soundwaveH + 3.5 * pxPerMm;
+    }
+
+    // Tên bài hát & Tên ca sĩ
+    const title = config.spotify?.songTitle || config.textLine1 || 'Bài Hát Yêu Thích';
+    const artist = config.spotify?.artistName || config.textLine2 || 'Nghệ Sĩ Thể Hiện';
+
+    ctx.save();
+    const titleFontPx = Math.round(11 * (pxPerMm / 2.83465));
+    ctx.font = `bold ${titleFontPx}px ${getFontFamilyCss(config.fontFamily)}`;
+    ctx.fillStyle = config.textColor || textColor;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    const truncatedTitle = truncateTextToWidth(ctx, title, pxPhotoW - 20);
+    ctx.fillText(truncatedTitle, pxPhotoX, curY);
+
+    curY += titleFontPx * 1.35;
+
+    const artistFontPx = Math.round(8.5 * (pxPerMm / 2.83465));
+    ctx.font = `500 ${artistFontPx}px ${getFontFamilyCss(config.fontFamily)}`;
+    ctx.fillStyle = subTextColor;
+    const truncatedArtist = truncateTextToWidth(ctx, artist, pxPhotoW);
+    ctx.fillText(truncatedArtist, pxPhotoX, curY);
+    ctx.restore();
+
+    curY += artistFontPx * 1.7;
+
+    // Thanh tiến trình phát nhạc (Progress Bar)
+    const barH = Math.max(2.5, 0.8 * pxPerMm);
+    const progressPercent = Math.min(100, Math.max(0, config.spotify?.progressPercent ?? 38));
+    const activeBarW = (pxPhotoW * progressPercent) / 100;
+
+    ctx.save();
+    // Track nền
+    ctx.fillStyle = isDark ? '#3e3e3e' : '#e2e8f0';
+    drawRoundedRectPath(ctx, pxPhotoX, curY, pxPhotoW, barH, barH / 2);
+    ctx.fill();
+
+    // Track đang phát
+    ctx.fillStyle = isDark ? '#ffffff' : accentColor;
+    drawRoundedRectPath(ctx, pxPhotoX, curY, activeBarW, barH, barH / 2);
+    ctx.fill();
+
+    // Nút tròn playhead
+    const dotR = Math.max(3, 1.2 * pxPerMm);
+    ctx.beginPath();
+    ctx.arc(pxPhotoX + activeBarW, curY + barH / 2, dotR, 0, Math.PI * 2);
+    ctx.fillStyle = isDark ? '#ffffff' : '#0f172a';
+    ctx.fill();
+    ctx.restore();
+
+    curY += barH + 2 * pxPerMm;
+
+    // Thời gian bài hát (vd: 01:28 / 03:45)
+    const timeFontPx = Math.round(6.5 * (pxPerMm / 2.83465));
+    ctx.save();
+    ctx.font = `500 ${timeFontPx}px sans-serif`;
+    ctx.fillStyle = subTextColor;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.fillText(config.spotify?.currentTime || '01:28', pxPhotoX, curY);
+
+    ctx.textAlign = 'right';
+    ctx.fillText(config.spotify?.duration || '03:45', pxPhotoX + pxPhotoW, curY);
+    ctx.restore();
+
+    curY += timeFontPx * 1.8;
+
+    // Cụm nút điều khiển máy nghe nhạc (Shuffle, Prev, Play Circle, Next, Heart)
+    const controlsY = curY + 2 * pxPerMm;
+    const centerX = pxPhotoX + pxPhotoW / 2;
+    const playCircleR = Math.max(8, 3.8 * pxPerMm);
+
+    ctx.save();
+    // Nút Play tròn to ở giữa
+    ctx.beginPath();
+    ctx.arc(centerX, controlsY + playCircleR, playCircleR, 0, Math.PI * 2);
+    ctx.fillStyle = isDark ? '#ffffff' : '#0f172a';
+    ctx.fill();
+
+    // Tam giác Play bên trong nút tròn
+    ctx.fillStyle = isDark ? '#121212' : '#ffffff';
+    ctx.beginPath();
+    const triSize = playCircleR * 0.7;
+    ctx.moveTo(centerX - triSize * 0.35, controlsY + playCircleR - triSize * 0.6);
+    ctx.lineTo(centerX + triSize * 0.65, controlsY + playCircleR);
+    ctx.lineTo(centerX - triSize * 0.35, controlsY + playCircleR + triSize * 0.6);
+    ctx.closePath();
+    ctx.fill();
+
+    // Nút Prev (⏮)
+    const prevX = centerX - playCircleR * 2.2;
+    ctx.fillStyle = config.textColor || textColor;
+    ctx.beginPath();
+    ctx.moveTo(prevX + 4, controlsY + playCircleR - 5);
+    ctx.lineTo(prevX - 3, controlsY + playCircleR);
+    ctx.lineTo(prevX + 4, controlsY + playCircleR + 5);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillRect(prevX - 6, controlsY + playCircleR - 5, 2, 10);
+
+    // Nút Next (⏭)
+    const nextX = centerX + playCircleR * 2.2;
+    ctx.beginPath();
+    ctx.moveTo(nextX - 4, controlsY + playCircleR - 5);
+    ctx.lineTo(nextX + 3, controlsY + playCircleR);
+    ctx.lineTo(nextX - 4, controlsY + playCircleR + 5);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillRect(nextX + 4, controlsY + playCircleR - 5, 2, 10);
+
+    // Tim xanh hoặc trắng bên phải
+    const heartX = pxPhotoX + pxPhotoW - 4;
+    ctx.font = `${Math.round(8 * (pxPerMm / 2.83465))}px sans-serif`;
+    ctx.fillStyle = accentColor;
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('💚', heartX, controlsY + playCircleR);
+
+    ctx.restore();
+
+    return true;
+  }
+
+  // 8. Boarding Pass / Vé máy bay Vintage
+  if (config.type === 'ticket' && dims.type === 'ticket') {
+    const theme = config.ticket?.theme || 'airline_blue';
+    const isKraft = theme === 'vintage_kraft';
+    const isDark = theme === 'airline_blue';
+
+    const headerBg = isKraft ? '#78350f' : isDark ? '#0284c7' : '#1e293b';
+    const cardBg = isKraft ? '#fef3c7' : '#ffffff';
+    const textColor = isKraft ? '#451a03' : '#0f172a';
+    const subTextColor = isKraft ? '#92400e' : '#64748b';
+
+    // Đổ nền vé
+    ctx.save();
+    ctx.fillStyle = cardBg;
+    ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
+
+    // 1. Dải Header "BOARDING PASS"
+    const headerH = dims.headerH * pxPerMm;
+    ctx.fillStyle = headerBg;
+    ctx.fillRect(rect.x, rect.y, rect.w, headerH);
+
+    ctx.fillStyle = '#ffffff';
+    const headerFontPx = Math.round(7.5 * (pxPerMm / 2.83465));
+    ctx.font = `bold ${headerFontPx}px ${getFontFamilyCss(config.fontFamily)}`;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('✈ BOARDING PASS', rect.x + 3 * pxPerMm, rect.y + headerH / 2);
+
+    ctx.textAlign = 'right';
+    ctx.font = `600 ${headerFontPx * 0.9}px monospace`;
+    ctx.fillText(config.ticket?.flight || 'VN-2026', rect.x + rect.w - 3 * pxPerMm, rect.y + headerH / 2);
+    ctx.restore();
+
+    // 2. Vùng ảnh du lịch / ảnh kỷ niệm
+    const pxPhotoX = rect.x + dims.photoX * pxPerMm;
+    const pxPhotoY = rect.y + dims.photoY * pxPerMm;
+    const pxPhotoW = dims.photoW * pxPerMm;
+    const pxPhotoH = dims.photoH * pxPerMm;
+
+    ctx.save();
+    drawRoundedRectPath(ctx, pxPhotoX, pxPhotoY, pxPhotoW, pxPhotoH, 2.5 * pxPerMm);
+    ctx.clip();
+    const fitCrop = calculateTemplateFitCrop(photo.imgWidth, photo.imgHeight, dims.photoW, dims.photoH, photo);
+    ctx.drawImage(img, fitCrop.cropX, fitCrop.cropY, fitCrop.cropW, fitCrop.cropH, pxPhotoX, pxPhotoY, pxPhotoW, pxPhotoH);
+    ctx.restore();
+
+    // 3. Thông tin chuyến bay & Hành khách
+    let infoY = pxPhotoY + pxPhotoH + 3 * pxPerMm;
+    const passengerName = config.ticket?.passengerName || config.textLine2 || 'NGUYEN VAN A';
+    const fromCode = config.ticket?.from || 'HAN';
+    const toCode = config.ticket?.to || 'SGN';
+    const gate = config.ticket?.gate || '08';
+    const seat = config.ticket?.seat || '12A';
+    const flightDate = config.ticket?.date || new Date().toLocaleDateString('vi-VN');
+
+    ctx.save();
+    // Route FROM ✈ TO
+    const routeFontPx = Math.round(14 * (pxPerMm / 2.83465));
+    ctx.font = `bold ${routeFontPx}px ${getFontFamilyCss(config.fontFamily)}`;
+    ctx.fillStyle = headerBg;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.fillText(fromCode, pxPhotoX, infoY);
+
+    ctx.textAlign = 'center';
+    ctx.font = `600 ${routeFontPx * 0.8}px sans-serif`;
+    ctx.fillStyle = subTextColor;
+    ctx.fillText('✈ ➔', pxPhotoX + pxPhotoW / 2, infoY + 2);
+
+    ctx.textAlign = 'right';
+    ctx.font = `bold ${routeFontPx}px ${getFontFamilyCss(config.fontFamily)}`;
+    ctx.fillStyle = headerBg;
+    ctx.fillText(toCode, pxPhotoX + pxPhotoW, infoY);
+
+    infoY += routeFontPx * 1.3;
+
+    // Chi tiết Passenger Name
+    const labelFontPx = Math.round(6 * (pxPerMm / 2.83465));
+    const valFontPx = Math.round(8.5 * (pxPerMm / 2.83465));
+
+    ctx.font = `600 ${labelFontPx}px sans-serif`;
+    ctx.fillStyle = subTextColor;
+    ctx.textAlign = 'left';
+    ctx.fillText('PASSENGER NAME', pxPhotoX, infoY);
+
+    infoY += labelFontPx * 1.3;
+
+    ctx.font = `bold ${valFontPx}px ${getFontFamilyCss(config.fontFamily)}`;
+    ctx.fillStyle = textColor;
+    ctx.fillText(truncateTextToWidth(ctx, passengerName.toUpperCase(), pxPhotoW), pxPhotoX, infoY);
+
+    infoY += valFontPx * 1.4;
+
+    // Bảng nhỏ: GATE | SEAT | DATE
+    const colW = pxPhotoW / 3;
+    ctx.font = `600 ${labelFontPx}px sans-serif`;
+    ctx.fillStyle = subTextColor;
+    ctx.fillText('GATE', pxPhotoX, infoY);
+    ctx.fillText('SEAT', pxPhotoX + colW, infoY);
+    ctx.fillText('DATE', pxPhotoX + colW * 2, infoY);
+
+    infoY += labelFontPx * 1.3;
+
+    ctx.font = `bold ${valFontPx}px monospace`;
+    ctx.fillStyle = textColor;
+    ctx.fillText(gate, pxPhotoX, infoY);
+    ctx.fillText(seat, pxPhotoX + colW, infoY);
+    ctx.fillText(flightDate, pxPhotoX + colW * 2, infoY);
+
+    ctx.restore();
+
+    // 4. Đường cắt xé cuống vé (Perforated line) & Vết khuyết Notch bán nguyệt
+    const stubY = rect.y + dims.stubDividerY * pxPerMm;
+
+    ctx.save();
+    // Đường nét đứt xé cuống vé
+    ctx.strokeStyle = isKraft ? '#b45309' : '#94a3b8';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4 * (pxPerMm / 3.77), 3 * (pxPerMm / 3.77)]);
+    ctx.beginPath();
+    ctx.moveTo(rect.x + (config.ticket?.notchCut !== false ? 3.5 * pxPerMm : 0), stubY);
+    ctx.lineTo(rect.x + rect.w - (config.ticket?.notchCut !== false ? 3.5 * pxPerMm : 0), stubY);
+    ctx.stroke();
+
+    // Hai vết khuyết bán nguyệt (Notch) ở 2 bên mép
+    if (config.ticket?.notchCut !== false) {
+      const notchR = 2.8 * pxPerMm;
+      ctx.fillStyle = '#ffffff'; // Nền giấy A4
+      // Left notch
+      ctx.beginPath();
+      ctx.arc(rect.x, stubY, notchR, -Math.PI / 2, Math.PI / 2);
+      ctx.fill();
+      ctx.stroke();
+      // Right notch
+      ctx.beginPath();
+      ctx.arc(rect.x + rect.w, stubY, notchR, Math.PI / 2, -Math.PI / 2);
+      ctx.fill();
+      ctx.stroke();
+    }
+    ctx.restore();
+
+    // 5. Phần cuống vé (Stub): Mã vạch Barcode
+    const barcodeY = stubY + 3.5 * pxPerMm;
+    const barcodeH = Math.max(16, rect.y + rect.h - barcodeY - 7 * pxPerMm);
+    const barcodeW = pxPhotoW;
+
+    drawBarcode(
+      ctx,
+      pxPhotoX,
+      barcodeY,
+      barcodeW,
+      barcodeH,
+      textColor,
+      config.ticket?.barcodeText || 'DAU-DAU-PRINT-2026'
+    );
+
     return true;
   }
 

@@ -78,7 +78,7 @@ export interface PhotoItem {
   templateConfig?: TemplateConfig; // Cấu hình mẫu thiết kế đặc thù (Polaroid, Instagram, Photostrip, Viền Film, Bookmark)
 }
 
-export type PrintTemplateType = 'none' | 'polaroid' | 'instagram' | 'photostrip' | 'film' | 'bookmark' | 'badge';
+export type PrintTemplateType = 'none' | 'polaroid' | 'instagram' | 'photostrip' | 'film' | 'bookmark' | 'photocard' | 'spotify' | 'ticket' | 'badge';
 
 export interface PhotostripSlot {
   id: string;
@@ -151,6 +151,40 @@ export interface TemplateConfig {
     hasHolePunchGuide?: boolean; // Dấu vị trí đục lỗ xỏ dây
     fullBleed?: boolean; // Ảnh tràn toàn thẻ
   };
+
+  // 6. Photocard (K-Pop Idol Photocard)
+  photocard?: {
+    borderRadiusMm?: number; // Bán kính bo góc (mặc định 3.5 mm)
+    borderMm?: number; // Độ dày viền trắng (0 mm = tràn viền mép bo tròn)
+    bottomMm?: number; // Khoảng chân dành cho tên idol / fandom (0 = không viền chân)
+    backDesign?: 'blank' | 'symmetry'; // Mặt sau: Để trắng hoặc Lật đối xứng in 2 mặt
+  };
+
+  // 7. Spotify Music Player
+  spotify?: {
+    borderMm?: number; // Viền xung quanh (mặc định 4 mm)
+    songTitle?: string; // Tên bài hát
+    artistName?: string; // Tên ca sĩ / nghệ sĩ
+    duration?: string; // Thời lượng bài hát (vd: "03:45")
+    currentTime?: string; // Thời điểm phát (vd: "01:28")
+    progressPercent?: number; // Tiến trình phát 0-100% (mặc định 38%)
+    showSpotifyCode?: boolean; // Hiển thị mã vạch sóng âm Spotify Soundwave Code
+    theme?: 'dark' | 'light'; // Giao diện nền đen Spotify hoặc trắng tối giản
+  };
+
+  // 8. Boarding Pass / Vé máy bay Vintage
+  ticket?: {
+    passengerName?: string; // Tên hành khách
+    flight?: string; // Mã chuyến bay (vd: "VN-2026")
+    from?: string; // Mã sân bay đi (vd: "HAN")
+    to?: string; // Mã sân bay đến (vd: "SGN")
+    gate?: string; // Cổng lên máy bay (vd: "08")
+    seat?: string; // Vị trí ghế ngồi (vd: "12A")
+    date?: string; // Ngày bay
+    barcodeText?: string; // Ký tự mã vạch
+    theme?: 'airline_blue' | 'vintage_kraft' | 'clean_white'; // Phong cách màu vé
+    notchCut?: boolean; // Vết khuyết bán nguyệt ở đường xé vé
+  };
 }
 
 export interface FreeformTextTag {
@@ -220,7 +254,7 @@ export interface SizePreset {
 }
 
 export const DEFAULT_SIZE_PRESETS: SizePreset[] = [
-  // 📸 Mẫu in & Thiết kế đặc thù (Polaroid, Instagram, Photostrip, Viền Film, Bookmark)
+  // 📸 Mẫu in & Thiết kế đặc thù (Polaroid, Instagram, Photostrip, Viền Film, Bookmark, Photocard, Spotify, Ticket)
   { id: 'polaroid_60x90', label: '📸 Polaroid 6 x 9 cm', category: '📸 Mẫu in & Thiết kế đặc thù', width: 60, height: 90, shape: 'rect', templateType: 'polaroid' },
   { id: 'polaroid_90x120', label: '📸 Polaroid 9 x 12 cm', category: '📸 Mẫu in & Thiết kế đặc thù', width: 90, height: 120, shape: 'rect', templateType: 'polaroid' },
   { id: 'instagram_90x120', label: '📱 Instagram Post 9 x 12 cm', category: '📸 Mẫu in & Thiết kế đặc thù', width: 90, height: 120, shape: 'rect', templateType: 'instagram' },
@@ -228,6 +262,10 @@ export const DEFAULT_SIZE_PRESETS: SizePreset[] = [
   { id: 'film_60x90', label: '🎬 Viền Film 6 x 9 cm', category: '📸 Mẫu in & Thiết kế đặc thù', width: 60, height: 90, shape: 'rect', templateType: 'film' },
   { id: 'film_100x150', label: '🎬 Viền Film 10 x 15 cm', category: '📸 Mẫu in & Thiết kế đặc thù', width: 100, height: 150, shape: 'rect', templateType: 'film' },
   { id: 'bookmark_50x150', label: '🔖 Bookmark 5 x 15 cm', category: '📸 Mẫu in & Thiết kế đặc thù', width: 50, height: 150, shape: 'rect', templateType: 'bookmark' },
+  { id: 'photocard_54x86', label: '🃏 Photocard Idol Kpop 5.4 x 8.6 cm (Bo góc)', category: '📸 Mẫu in & Thiết kế đặc thù', width: 54, height: 86, shape: 'rect', templateType: 'photocard' },
+  { id: 'spotify_60x90', label: '🎵 Khung nhạc Spotify 6 x 9 cm', category: '📸 Mẫu in & Thiết kế đặc thù', width: 60, height: 90, shape: 'rect', templateType: 'spotify' },
+  { id: 'spotify_90x120', label: '🎵 Khung nhạc Spotify 9 x 12 cm', category: '📸 Mẫu in & Thiết kế đặc thù', width: 90, height: 120, shape: 'rect', templateType: 'spotify' },
+  { id: 'ticket_60x140', label: '✈️ Vé máy bay Boarding Pass 6 x 14 cm', category: '📸 Mẫu in & Thiết kế đặc thù', width: 60, height: 140, shape: 'rect', templateType: 'ticket' },
 
   // 🏅 Huy hiệu cài áo chuyên dụng (Badge Pin - Tự động đổ nền viền bọc mép)
   { id: 'badge_44_to_55', label: 'Huy hiệu 4.4 cm (Khuôn 5.4 cm)', category: '🏅 Huy hiệu cài áo (Badge Pin)', width: 54, height: 54, shape: 'circle', isBadgePreset: true, badgeFaceDiameter: 43 },
@@ -254,6 +292,7 @@ export const DEFAULT_SIZE_PRESETS: SizePreset[] = [
   // Ảnh thẻ & Hồ sơ
   { id: '30x40_rect', label: 'Ảnh 3 x 4 cm (CMND / CCCD)', category: 'Ảnh thẻ & Hồ sơ', width: 30, height: 40, shape: 'rect' },
   { id: '40x60_rect', label: 'Ảnh 4 x 6 cm (Hộ chiếu)', category: 'Ảnh thẻ & Hồ sơ', width: 40, height: 60, shape: 'rect' },
+  { id: 'combo_3x4_4x6', label: '🪪 Combo Ảnh thẻ (3x4 & 4x6 cm)', category: 'Ảnh thẻ & Hồ sơ', width: 40, height: 60, shape: 'rect' },
 
   // Hình tròn (Sticker)
   { id: '40x40_circle', label: 'Hình tròn 4.0 cm (4.0 x 4.0 cm)', category: 'Hình tròn (Sticker)', width: 40, height: 40, shape: 'circle' },

@@ -1,6 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
-  Layers,
   ChevronsRight,
   ChevronsLeft,
   FileText,
@@ -25,6 +24,7 @@ export const PageThumbnailsSidebar: React.FC<PageThumbnailsSidebarProps> = ({
   const isLandscape = settings.orientation === 'landscape';
   const pageW_mm = isLandscape ? A4_HEIGHT_MM : A4_WIDTH_MM;
   const pageH_mm = isLandscape ? A4_WIDTH_MM : A4_HEIGHT_MM;
+  const totalPlacedPhotos = pages.reduce((sum, p) => sum + (p.items?.length || 0), 0);
 
   const sidebarScrollRef = useRef<HTMLDivElement>(null);
 
@@ -121,20 +121,17 @@ export const PageThumbnailsSidebar: React.FC<PageThumbnailsSidebarProps> = ({
           </span>
         </div>
       ) : (
-        <div className="p-3 border-b border-slate-200/80 bg-white sticky top-0 flex justify-between items-center z-10 shadow-2xs">
-          <div className="flex items-center gap-1.5 overflow-hidden">
-            <div className="p-1 rounded-md bg-blue-50 text-blue-600 shrink-0">
-              <Layers className="w-3.5 h-3.5" />
-            </div>
-            <span className="text-[12px] font-bold text-slate-800 uppercase tracking-wide truncate">
-              Trang in ({pages.length})
+        <div className="p-2.5 border-b border-slate-200/80 bg-white sticky top-0 flex justify-between items-center z-10 shadow-2xs">
+          <div className="flex items-center min-w-0 flex-1 mr-1.5" title={`${pages.length} trang • ${totalPlacedPhotos} ảnh`}>
+            <span className="text-[12px] font-extrabold text-slate-800 tracking-tight truncate">
+              {pages.length} trang • {totalPlacedPhotos} ảnh
             </span>
           </div>
 
           <button
             type="button"
             onClick={onToggleCollapse}
-            className="p-1 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition cursor-pointer"
+            className="p-1 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition cursor-pointer shrink-0"
             title="Thu gọn cột xem trước trang"
           >
             <ChevronsRight className="w-4 h-4" />

@@ -9,6 +9,7 @@ import {
   exportProjectToDaudauFile,
   importProjectFromDaudauFile,
 } from './utils/projectStorage';
+import { performDeepMemoryCleanup } from './utils/memoryManager';
 import { ImageListSidebar } from './components/ImageListSidebar';
 import { BatchToolsSidebar } from './components/BatchToolsSidebar';
 import { SettingsSidebar } from './components/SettingsSidebar';
@@ -46,6 +47,7 @@ export default function App() {
     set: setPhotos,
     undo: handleUndo,
     redo: handleRedo,
+    clearHistory: clearPhotosHistory,
     canUndo,
     canRedo,
     historyCount,
@@ -365,7 +367,8 @@ export default function App() {
           return;
         }
 
-        setPhotos(projectData.photos);
+        clearPhotosHistory(projectData.photos);
+        await performDeepMemoryCleanup();
         if (projectData.settings) {
           setSettings(projectData.settings);
           if (projectData.settings.orientationMode) {
@@ -458,10 +461,11 @@ export default function App() {
   }, [photos.length, addToast]);
 
   const handleConfirmClearAll = useCallback(async () => {
-    setPhotos([]);
+    clearPhotosHistory([]);
     await clearSavedSession();
-    addToast('info', 'Đã xóa toàn bộ ảnh');
-  }, [setPhotos, addToast]);
+    await performDeepMemoryCleanup();
+    addToast('info', 'Đã xóa toàn bộ ảnh & làm sạch bộ nhớ RAM ✨');
+  }, [clearPhotosHistory, addToast]);
 
   const handleUpdateSettings = useCallback(
     (updates: Partial<LayoutSettings>) => {
@@ -674,6 +678,7 @@ export default function App() {
       } finally {
         setIsExporting(false);
         setExportProgress(null);
+        performDeepMemoryCleanup();
       }
     },
     [photos.length, packedPages, settings, addToast]
@@ -700,6 +705,7 @@ export default function App() {
     } finally {
       setIsExporting(false);
       setExportProgress(null);
+      performDeepMemoryCleanup();
     }
   }, [photos.length, packedPages, settings, addToast]);
 
@@ -730,6 +736,7 @@ export default function App() {
     } finally {
       setIsExporting(false);
       setExportProgress(null);
+      performDeepMemoryCleanup();
     }
   }, [photos.length, packedPages, settings, addToast]);
 
@@ -757,6 +764,7 @@ export default function App() {
     } finally {
       setIsExporting(false);
       setExportProgress(null);
+      performDeepMemoryCleanup();
     }
   }, [photos, addToast]);
 

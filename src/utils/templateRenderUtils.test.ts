@@ -24,6 +24,18 @@ describe('templateRenderUtils tests', () => {
     const bookmark = createDefaultTemplateConfig('bookmark', '');
     expect(bookmark.type).toBe('bookmark');
     expect(bookmark.bookmark?.photoHeightMm).toBe(109.5);
+
+    const photocard = createDefaultTemplateConfig('photocard', 'my_idol.jpg');
+    expect(photocard.type).toBe('photocard');
+    expect(photocard.photocard?.borderRadiusMm).toBe(3.5);
+
+    const spotify = createDefaultTemplateConfig('spotify', 'favorite_song');
+    expect(spotify.type).toBe('spotify');
+    expect(spotify.spotify?.showSpotifyCode).toBe(true);
+
+    const ticket = createDefaultTemplateConfig('ticket', 'Nguyen Van A');
+    expect(ticket.type).toBe('ticket');
+    expect(ticket.ticket?.theme).toBe('airline_blue');
   });
 
   it('should calculate accurate dimensions for Polaroid 60x90 and 90x120 mm', () => {
@@ -77,6 +89,29 @@ describe('templateRenderUtils tests', () => {
     const dims = getTemplateDimensions(50, 150, config);
     expect(dims.photoW).toBe(44); // 50 - 2 * 3
     expect(dims.photoH).toBe(109.5);
+  });
+
+  it('should calculate accurate dimensions for Photocard 54x86 mm', () => {
+    const config = createDefaultTemplateConfig('photocard');
+    const dims = getTemplateDimensions(54, 86, config);
+    expect(dims.photoW).toBe(54); // border = 0
+    expect(dims.photoH).toBe(86);
+    expect(dims.borderRadius).toBe(3.5);
+  });
+
+  it('should calculate accurate dimensions for Spotify 60x90 mm', () => {
+    const config = createDefaultTemplateConfig('spotify');
+    const dims = getTemplateDimensions(60, 90, config);
+    expect(dims.photoW).toBe(52); // 60 - 2 * 4
+    expect(dims.photoH).toBeCloseTo(49.5, 1); // 90 * 0.55
+  });
+
+  it('should calculate accurate dimensions for Ticket 60x140 mm', () => {
+    const config = createDefaultTemplateConfig('ticket');
+    const dims = getTemplateDimensions(60, 140, config);
+    expect(dims.photoW).toBe(54); // 60 - 2 * 3
+    expect(dims.headerH).toBe(11);
+    expect(dims.stubDividerY).toBeCloseTo(103.6, 1);
   });
 
   describe('calculateTemplateFitCrop - Zero Distortion tests', () => {

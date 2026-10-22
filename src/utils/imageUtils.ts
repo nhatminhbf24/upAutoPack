@@ -1116,6 +1116,77 @@ export async function processImageFilesToPhotos(
       // Generate lightweight display proxy (420px) for buttery smooth UI rendering (60fps)
       let previewSrc = await createOptimizedPreview(dataUrl, 420, 0.82);
 
+      // 🪪 Combo Ảnh thẻ kết hợp (4 ảnh 4x6 cm + 8 ảnh 3x4 cm)
+      if (activePreset.id === 'combo_3x4_4x6') {
+        const crop4x6 = calculateCrop(dims.width, dims.height, 40, 60, smartCrop);
+        const crop3x4 = calculateCrop(dims.width, dims.height, 30, 40, smartCrop);
+
+        // 4 ảnh 4x6 cm
+        for (let c = 0; c < 4; c++) {
+          addedPhotos.push({
+            id: 'photo_combo4x6_' + Math.random().toString(36).substring(2, 9) + '_' + Date.now() + '_' + i + '_' + c,
+            name: `${file.name || 'Ảnh thẻ'} (4x6 #${c + 1})`,
+            originalSrc: dataUrl,
+            previewSrc,
+            rawOriginalSrc: dataUrl,
+            rawOriginalWidth: dims.width,
+            rawOriginalHeight: dims.height,
+            rawOriginalCrop: { cropX: crop4x6.cropX, cropY: crop4x6.cropY, cropW: crop4x6.cropW, cropH: crop4x6.cropH },
+            unadjustedSrc: dataUrl,
+            unrotatedOriginalSrc: dataUrl,
+            unrotatedPreviewSrc: previewSrc,
+            unrotatedWidth: dims.width,
+            unrotatedHeight: dims.height,
+            autoRotateAngle: 0,
+            imgWidth: dims.width,
+            imgHeight: dims.height,
+            targetWidth: 40,
+            targetHeight: 60,
+            shape: 'rect',
+            qty: 1,
+            cropX: crop4x6.cropX,
+            cropY: crop4x6.cropY,
+            cropW: crop4x6.cropW,
+            cropH: crop4x6.cropH,
+            scale: 1,
+            rotation: 0,
+          });
+        }
+
+        // 8 ảnh 3x4 cm
+        for (let c = 0; c < 8; c++) {
+          addedPhotos.push({
+            id: 'photo_combo3x4_' + Math.random().toString(36).substring(2, 9) + '_' + Date.now() + '_' + i + '_' + c,
+            name: `${file.name || 'Ảnh thẻ'} (3x4 #${c + 1})`,
+            originalSrc: dataUrl,
+            previewSrc,
+            rawOriginalSrc: dataUrl,
+            rawOriginalWidth: dims.width,
+            rawOriginalHeight: dims.height,
+            rawOriginalCrop: { cropX: crop3x4.cropX, cropY: crop3x4.cropY, cropW: crop3x4.cropW, cropH: crop3x4.cropH },
+            unadjustedSrc: dataUrl,
+            unrotatedOriginalSrc: dataUrl,
+            unrotatedPreviewSrc: previewSrc,
+            unrotatedWidth: dims.width,
+            unrotatedHeight: dims.height,
+            autoRotateAngle: 0,
+            imgWidth: dims.width,
+            imgHeight: dims.height,
+            targetWidth: 30,
+            targetHeight: 40,
+            shape: 'rect',
+            qty: 1,
+            cropX: crop3x4.cropX,
+            cropY: crop3x4.cropY,
+            cropW: crop3x4.cropW,
+            cropH: crop3x4.cropH,
+            scale: 1,
+            rotation: 0,
+          });
+        }
+        continue;
+      }
+
       let targetW = activePreset.width;
       let targetH = activePreset.height;
       const targetShape: ShapeType = activePreset.shape;

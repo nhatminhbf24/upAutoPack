@@ -627,6 +627,27 @@ export const TemplateSettingsPanel: React.FC<TemplateSettingsPanelProps> = ({
         ...templateConfig,
         film: { ...(templateConfig.film || {}), sideText: '' },
       });
+    } else if (type === 'spotify') {
+      onChangeTemplateConfig({
+        ...templateConfig,
+        textLine1: '',
+        textLine2: '',
+        spotify: {
+          ...(templateConfig.spotify || {}),
+          songTitle: '',
+          artistName: '',
+        },
+      });
+    } else if (type === 'ticket') {
+      onChangeTemplateConfig({
+        ...templateConfig,
+        textLine1: '',
+        textLine2: '',
+        ticket: {
+          ...(templateConfig.ticket || {}),
+          passengerName: '',
+        },
+      });
     } else {
       onChangeTemplateConfig({
         ...templateConfig,
@@ -644,6 +665,8 @@ export const TemplateSettingsPanel: React.FC<TemplateSettingsPanelProps> = ({
       textLine1: '',
       textLine2: '',
       ...(templateConfig.film ? { film: { ...templateConfig.film, sideText: '' } } : {}),
+      ...(templateConfig.spotify ? { spotify: { ...templateConfig.spotify, songTitle: '', artistName: '' } } : {}),
+      ...(templateConfig.ticket ? { ticket: { ...templateConfig.ticket, passengerName: '' } } : {}),
     });
 
     if (onBatchUpdatePhotos) {
@@ -655,6 +678,8 @@ export const TemplateSettingsPanel: React.FC<TemplateSettingsPanelProps> = ({
             textLine1: '',
             textLine2: '',
             ...(p.templateConfig.film ? { film: { ...p.templateConfig.film, sideText: '' } } : {}),
+            ...(p.templateConfig.spotify ? { spotify: { ...p.templateConfig.spotify, songTitle: '', artistName: '' } } : {}),
+            ...(p.templateConfig.ticket ? { ticket: { ...p.templateConfig.ticket, passengerName: '' } } : {}),
           },
         };
       });
@@ -684,6 +709,33 @@ export const TemplateSettingsPanel: React.FC<TemplateSettingsPanelProps> = ({
                   instagram: {
                     ...(p.templateConfig.instagram || {}),
                     username: templateConfig.instagram.username,
+                  },
+                }
+              : {}),
+            ...(type === 'spotify' && templateConfig.spotify
+              ? {
+                  spotify: {
+                    ...(p.templateConfig.spotify || {}),
+                    songTitle: templateConfig.spotify.songTitle,
+                    artistName: templateConfig.spotify.artistName,
+                    duration: templateConfig.spotify.duration,
+                    currentTime: templateConfig.spotify.currentTime,
+                    theme: templateConfig.spotify.theme,
+                    showSpotifyCode: templateConfig.spotify.showSpotifyCode,
+                  },
+                }
+              : {}),
+            ...(type === 'ticket' && templateConfig.ticket
+              ? {
+                  ticket: {
+                    ...(p.templateConfig.ticket || {}),
+                    passengerName: templateConfig.ticket.passengerName,
+                    flight: templateConfig.ticket.flight,
+                    from: templateConfig.ticket.from,
+                    to: templateConfig.ticket.to,
+                    gate: templateConfig.ticket.gate,
+                    seat: templateConfig.ticket.seat,
+                    theme: templateConfig.ticket.theme,
                   },
                 }
               : {}),
@@ -751,6 +803,12 @@ export const TemplateSettingsPanel: React.FC<TemplateSettingsPanelProps> = ({
       dims = { w: 60, h: 90, shape: 'rect' };
     } else if (type === 'bookmark') {
       dims = { w: 50, h: 150, shape: 'rect' };
+    } else if (type === 'photocard') {
+      dims = { w: 54, h: 86, shape: 'rect' };
+    } else if (type === 'spotify') {
+      dims = { w: 60, h: 90, shape: 'rect' };
+    } else if (type === 'ticket') {
+      dims = { w: 60, h: 140, shape: 'rect' };
     }
 
     onChangeTemplateConfig(newConfig, dims);
@@ -841,11 +899,17 @@ export const TemplateSettingsPanel: React.FC<TemplateSettingsPanelProps> = ({
               ? 'Viền Film'
               : activeType === 'bookmark'
               ? 'Bookmark'
+              : activeType === 'photocard'
+              ? 'Photocard (Bo góc)'
+              : activeType === 'spotify'
+              ? 'Khung nhạc Spotify'
+              : activeType === 'ticket'
+              ? 'Vé máy bay Boarding Pass'
               : 'Huy hiệu cài áo'}
           </span>
         </div>
 
-        {/* Danh sách 7 mẫu in */}
+        {/* Danh sách 10 mẫu in */}
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
           {/* None */}
           <button
@@ -953,6 +1017,60 @@ export const TemplateSettingsPanel: React.FC<TemplateSettingsPanelProps> = ({
             </div>
             <span className="text-xs font-bold">Bookmark</span>
             <span className="text-[10px] text-slate-500">Thẻ kẹp sách 5x15</span>
+          </button>
+
+          {/* Photocard Idol */}
+          <button
+            type="button"
+            onClick={() => handleSelectTemplate('photocard')}
+            className={`p-2.5 rounded-xl text-left border transition cursor-pointer flex flex-col gap-1 ${
+              activeType === 'photocard'
+                ? 'bg-blue-50 border-blue-500 text-blue-900 ring-1 ring-blue-500/30 shadow-xs'
+                : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-base">🃏</span>
+              {activeType === 'photocard' && <Check className="w-3.5 h-3.5 text-blue-600" />}
+            </div>
+            <span className="text-xs font-bold">Photocard Idol</span>
+            <span className="text-[10px] text-slate-500">Bo góc tròn K-Pop</span>
+          </button>
+
+          {/* Spotify Player */}
+          <button
+            type="button"
+            onClick={() => handleSelectTemplate('spotify')}
+            className={`p-2.5 rounded-xl text-left border transition cursor-pointer flex flex-col gap-1 ${
+              activeType === 'spotify'
+                ? 'bg-blue-50 border-blue-500 text-blue-900 ring-1 ring-blue-500/30 shadow-xs'
+                : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-base">🎵</span>
+              {activeType === 'spotify' && <Check className="w-3.5 h-3.5 text-blue-600" />}
+            </div>
+            <span className="text-xs font-bold">Khung Spotify</span>
+            <span className="text-[10px] text-slate-500">Sóng âm & Play bar</span>
+          </button>
+
+          {/* Boarding Pass */}
+          <button
+            type="button"
+            onClick={() => handleSelectTemplate('ticket')}
+            className={`p-2.5 rounded-xl text-left border transition cursor-pointer flex flex-col gap-1 ${
+              activeType === 'ticket'
+                ? 'bg-blue-50 border-blue-500 text-blue-900 ring-1 ring-blue-500/30 shadow-xs'
+                : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-base">✈️</span>
+              {activeType === 'ticket' && <Check className="w-3.5 h-3.5 text-blue-600" />}
+            </div>
+            <span className="text-xs font-bold">Boarding Pass</span>
+            <span className="text-[10px] text-slate-500">Vé máy bay & Barcode</span>
           </button>
 
           {/* Huy hiệu cài áo */}
@@ -2294,6 +2412,664 @@ export const TemplateSettingsPanel: React.FC<TemplateSettingsPanelProps> = ({
                 className="rounded text-blue-600"
               />
               <span>Hiển thị vạch dấu đục lỗ xỏ dây (Ø 3.6 mm)</span>
+            </label>
+          </div>
+        </div>
+      )}
+
+      {/* F. PHOTOCARD IDOL (BO GÓC) */}
+      {activeType === 'photocard' && (
+        <div className="bg-white p-4 rounded-2xl border border-slate-200 space-y-3.5 shadow-2xs">
+          <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+            <span className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+              <span>🃏 Tùy chỉnh Photocard Idol (Bo góc tròn)</span>
+            </span>
+          </div>
+
+          {/* Kích thước thành phẩm Photocard */}
+          <TemplateSizeSelector
+            curW={curTargetWidth}
+            curH={curTargetHeight}
+            onSelectSize={(w, h) => onChangeTemplateConfig(templateConfig, { w, h, shape: 'rect' })}
+            presets={[
+              { label: '5.4 × 8.6 cm (Chuẩn K-Pop)', w: 54, h: 86 },
+              { label: '5.5 × 8.5 cm (Chuẩn ATM/CCCD)', w: 55, h: 85 },
+              { label: '6 × 9 cm (Cỡ lớn)', w: 60, h: 90 },
+            ]}
+          />
+
+          {/* Thanh công cụ text hàng loạt */}
+          <div className="space-y-2">
+            <TemplateTextToolbar
+              label="Tên Idol / Fandom / Lời nhắn:"
+              hasText={Boolean(templateConfig.textLine1 || templateConfig.textLine2)}
+              onClearCurrent={() => handleClearCurrentPhotoText('photocard')}
+              onClearAll={handleClearAllPhotosText}
+              onApplyToSame={() => handleApplyTextToSameTemplate('photocard')}
+              onApplyToAll={() => handleApplyTemplateAndTextToAll('photocard')}
+              totalPhotosCount={allPhotos?.length || 1}
+              sameTemplateCount={allPhotos?.filter((p) => p.templateConfig?.type === 'photocard').length || 1}
+              templateName="Photocard"
+            />
+            <div>
+              <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                Tên Idol / Dòng 1:
+              </label>
+              <input
+                type="text"
+                value={templateConfig.textLine1 ?? ''}
+                onChange={(e) => onChangeTemplateConfig({ ...templateConfig, textLine1: e.target.value })}
+                placeholder="Idol Name / Nhóm nhạc..."
+                className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
+              />
+            </div>
+            <div>
+              <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                Fandom / Dòng 2 (phụ):
+              </label>
+              <input
+                type="text"
+                value={templateConfig.textLine2 ?? ''}
+                onChange={(e) => onChangeTemplateConfig({ ...templateConfig, textLine2: e.target.value })}
+                placeholder="Special Edition / 2026..."
+                className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
+              />
+            </div>
+          </div>
+
+          {/* Phông chữ & Cỡ chữ */}
+          <div className="space-y-2 pt-1">
+            <FontSelector
+              value={templateConfig.fontFamily || 'be_vietnam_pro'}
+              onChange={(fontId) => onChangeTemplateConfig({ ...templateConfig, fontFamily: fontId })}
+              label="Kiểu phông chữ lời nhắn:"
+            />
+            <div>
+              <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                Cỡ chữ: {templateConfig.fontSizePt || 10} pt
+              </label>
+              <input
+                type="range"
+                min="8"
+                max="18"
+                step="1"
+                value={templateConfig.fontSizePt || 10}
+                onChange={(e) =>
+                  onChangeTemplateConfig({
+                    ...templateConfig,
+                    fontSizePt: Number(e.target.value),
+                  })
+                }
+                className="w-full accent-blue-600"
+              />
+            </div>
+          </div>
+
+          {/* Màu nền / khung card */}
+          <div>
+            <label className="text-[11px] font-bold text-slate-700 block mb-1">Màu nền khung thẻ:</label>
+            <div className="flex items-center gap-1.5">
+              {['#ffffff', '#0f172a', '#fce7f3', '#fef9c3', '#e0e7ff', '#f1f5f9'].map((col) => (
+                <button
+                  key={col}
+                  type="button"
+                  onClick={() => onChangeTemplateConfig({ ...templateConfig, frameColor: col })}
+                  className={`w-6 h-6 rounded-full border-2 transition cursor-pointer ${
+                    (templateConfig.frameColor || '#ffffff').toLowerCase() === col
+                      ? 'border-blue-600 scale-110 shadow-xs'
+                      : 'border-slate-300'
+                  }`}
+                  style={{ backgroundColor: col }}
+                />
+              ))}
+              <input
+                type="color"
+                value={templateConfig.frameColor || '#ffffff'}
+                onChange={(e) => onChangeTemplateConfig({ ...templateConfig, frameColor: e.target.value })}
+                className="w-6 h-6 p-0 rounded-full cursor-pointer border border-slate-300 hover:border-blue-500"
+                title="Chọn màu khác"
+              />
+            </div>
+          </div>
+
+          {/* Tùy chỉnh Độ bo góc & Viền trắng */}
+          <div className="space-y-2.5 pt-2 border-t border-slate-100">
+            <div>
+              <div className="flex items-center justify-between text-[11px] font-bold text-slate-700 mb-1">
+                <span className="flex items-center gap-1">
+                  <Sliders className="w-3.5 h-3.5 text-blue-600" />
+                  <span>Bán kính bo góc (Corner Radius):</span>
+                </span>
+                <span className="text-blue-600 font-mono font-bold">R{templateConfig.photocard?.borderRadiusMm ?? 3.5} mm</span>
+              </div>
+              <input
+                type="range"
+                min="1"
+                max="8"
+                step="0.5"
+                value={templateConfig.photocard?.borderRadiusMm ?? 3.5}
+                onChange={(e) =>
+                  onChangeTemplateConfig({
+                    ...templateConfig,
+                    photocard: {
+                      ...(templateConfig.photocard || {}),
+                      borderRadiusMm: Number(e.target.value),
+                    },
+                  })
+                }
+                className="w-full accent-blue-600"
+              />
+              <div className="flex justify-between text-[9.5px] text-slate-400">
+                <span>R1 mm (Bo nhẹ)</span>
+                <span>R3.5 mm (Chuẩn K-Pop)</span>
+                <span>R8 mm (Bo sâu)</span>
+              </div>
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between text-[11px] font-bold text-slate-700 mb-1">
+                <span>Độ dày viền quanh ảnh:</span>
+                <span className="text-blue-600 font-mono font-bold">{templateConfig.photocard?.borderMm ?? 0} mm</span>
+              </div>
+              <input
+                type="range"
+                min="0"
+                max="6"
+                step="0.5"
+                value={templateConfig.photocard?.borderMm ?? 0}
+                onChange={(e) =>
+                  onChangeTemplateConfig({
+                    ...templateConfig,
+                    photocard: {
+                      ...(templateConfig.photocard || {}),
+                      borderMm: Number(e.target.value),
+                    },
+                  })
+                }
+                className="w-full accent-blue-600"
+              />
+              <div className="flex justify-between text-[9.5px] text-slate-400">
+                <span>0 mm (Tràn viền góc bo)</span>
+                <span>2 mm (Viền mảnh)</span>
+                <span>6 mm (Viền rộng)</span>
+              </div>
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between text-[11px] font-bold text-slate-700 mb-1">
+                <span>Độ cao chân card ghi chữ:</span>
+                <span className="text-blue-600 font-mono font-bold">{templateConfig.photocard?.bottomMm ?? 0} mm</span>
+              </div>
+              <input
+                type="range"
+                min="0"
+                max="18"
+                step="1"
+                value={templateConfig.photocard?.bottomMm ?? 0}
+                onChange={(e) =>
+                  onChangeTemplateConfig({
+                    ...templateConfig,
+                    photocard: {
+                      ...(templateConfig.photocard || {}),
+                      bottomMm: Number(e.target.value),
+                    },
+                  })
+                }
+                className="w-full accent-blue-600"
+              />
+              <div className="flex justify-between text-[9.5px] text-slate-400">
+                <span>0 mm (Không có chân chữ)</span>
+                <span>8 mm (Nhỏ gọn)</span>
+                <span>18 mm (Rộng rãi)</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* G. SPOTIFY MUSIC PLAYER */}
+      {activeType === 'spotify' && (
+        <div className="bg-white p-4 rounded-2xl border border-slate-200 space-y-3.5 shadow-2xs">
+          <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+            <span className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+              <span>🎵 Tùy chỉnh Khung Nhạc Spotify Player</span>
+            </span>
+          </div>
+
+          {/* Kích thước thành phẩm Spotify */}
+          <TemplateSizeSelector
+            curW={curTargetWidth}
+            curH={curTargetHeight}
+            onSelectSize={(w, h) => onChangeTemplateConfig(templateConfig, { w, h, shape: 'rect' })}
+            presets={[
+              { label: '6 × 9 cm (Mini Player)', w: 60, h: 90 },
+              { label: '9 × 12 cm (Chuẩn để bàn)', w: 90, h: 120 },
+              { label: '10 × 15 cm (Cỡ lớn 4R)', w: 100, h: 150 },
+            ]}
+          />
+
+          {/* Chọn phong cách giao diện Sáng / Tối */}
+          <div>
+            <label className="text-[11px] font-bold text-slate-700 block mb-1.5">Giao diện màu sắc:</label>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() =>
+                  onChangeTemplateConfig({
+                    ...templateConfig,
+                    frameColor: '#121212',
+                    textColor: '#ffffff',
+                    spotify: { ...(templateConfig.spotify || {}), theme: 'dark' },
+                  })
+                }
+                className={`p-2 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 cursor-pointer transition ${
+                  templateConfig.spotify?.theme !== 'light'
+                    ? 'bg-slate-900 text-white border-blue-500 ring-2 ring-blue-500/30'
+                    : 'bg-slate-800 text-slate-300 border-slate-700'
+                }`}
+              >
+                <span>🌙 Dark Mode (Nền đen Spotify)</span>
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  onChangeTemplateConfig({
+                    ...templateConfig,
+                    frameColor: '#ffffff',
+                    textColor: '#0f172a',
+                    spotify: { ...(templateConfig.spotify || {}), theme: 'light' },
+                  })
+                }
+                className={`p-2 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 cursor-pointer transition ${
+                  templateConfig.spotify?.theme === 'light'
+                    ? 'bg-blue-50 text-blue-900 border-blue-500 ring-2 ring-blue-500/30'
+                    : 'bg-white text-slate-700 border-slate-200'
+                }`}
+              >
+                <span>☀️ Light Mode (Nền trắng hiện đại)</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Thông tin bài hát & Toolbar text */}
+          <div className="space-y-2">
+            <TemplateTextToolbar
+              label="Thông tin bài hát & Nghệ sĩ:"
+              hasText={Boolean(templateConfig.spotify?.songTitle || templateConfig.textLine1)}
+              onClearCurrent={() => handleClearCurrentPhotoText('spotify')}
+              onClearAll={handleClearAllPhotosText}
+              onApplyToSame={() => handleApplyTextToSameTemplate('spotify')}
+              onApplyToAll={() => handleApplyTemplateAndTextToAll('spotify')}
+              totalPhotosCount={allPhotos?.length || 1}
+              sameTemplateCount={allPhotos?.filter((p) => p.templateConfig?.type === 'spotify').length || 1}
+              templateName="Spotify"
+            />
+            <div>
+              <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                Tên bài hát:
+              </label>
+              <input
+                type="text"
+                value={templateConfig.spotify?.songTitle ?? templateConfig.textLine1 ?? ''}
+                onChange={(e) =>
+                  onChangeTemplateConfig({
+                    ...templateConfig,
+                    textLine1: e.target.value,
+                    spotify: { ...(templateConfig.spotify || {}), songTitle: e.target.value },
+                  })
+                }
+                placeholder="Tên bài hát..."
+                className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
+              />
+            </div>
+            <div>
+              <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                Tên ca sĩ / nghệ sĩ:
+              </label>
+              <input
+                type="text"
+                value={templateConfig.spotify?.artistName ?? templateConfig.textLine2 ?? ''}
+                onChange={(e) =>
+                  onChangeTemplateConfig({
+                    ...templateConfig,
+                    textLine2: e.target.value,
+                    spotify: { ...(templateConfig.spotify || {}), artistName: e.target.value },
+                  })
+                }
+                placeholder="Tên nghệ sĩ thể hiện..."
+                className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
+              />
+            </div>
+          </div>
+
+          {/* Thời lượng & Tiến trình nghe */}
+          <div className="grid grid-cols-2 gap-2 pt-1">
+            <div>
+              <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                Thời điểm phát:
+              </label>
+              <input
+                type="text"
+                value={templateConfig.spotify?.currentTime ?? '01:28'}
+                onChange={(e) =>
+                  onChangeTemplateConfig({
+                    ...templateConfig,
+                    spotify: { ...(templateConfig.spotify || {}), currentTime: e.target.value },
+                  })
+                }
+                placeholder="01:28"
+                className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 font-mono"
+              />
+            </div>
+            <div>
+              <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                Tổng thời lượng:
+              </label>
+              <input
+                type="text"
+                value={templateConfig.spotify?.duration ?? '03:45'}
+                onChange={(e) =>
+                  onChangeTemplateConfig({
+                    ...templateConfig,
+                    spotify: { ...(templateConfig.spotify || {}), duration: e.target.value },
+                  })
+                }
+                placeholder="03:45"
+                className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 font-mono"
+              />
+            </div>
+          </div>
+
+          {/* Slider tiến trình phát nhạc */}
+          <div>
+            <div className="flex items-center justify-between text-[11px] font-bold text-slate-700 mb-1">
+              <span>Tiến trình thanh nhạc (Progress):</span>
+              <span className="text-blue-600 font-mono font-bold">{templateConfig.spotify?.progressPercent ?? 38}%</span>
+            </div>
+            <input
+              type="range"
+              min="0"
+              max="100"
+              step="1"
+              value={templateConfig.spotify?.progressPercent ?? 38}
+              onChange={(e) =>
+                onChangeTemplateConfig({
+                  ...templateConfig,
+                  spotify: {
+                    ...(templateConfig.spotify || {}),
+                    progressPercent: Number(e.target.value),
+                  },
+                })
+              }
+              className="w-full accent-green-600"
+            />
+          </div>
+
+          {/* Toggle Mã vạch sóng âm Spotify Code */}
+          <div className="pt-1 border-t border-slate-100">
+            <label className="flex items-center gap-2 text-xs font-bold text-slate-700 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={templateConfig.spotify?.showSpotifyCode ?? true}
+                onChange={(e) =>
+                  onChangeTemplateConfig({
+                    ...templateConfig,
+                    spotify: {
+                      ...(templateConfig.spotify || {}),
+                      showSpotifyCode: e.target.checked,
+                    },
+                  })
+                }
+                className="rounded text-green-600 focus:ring-green-500"
+              />
+              <span>Hiển thị mã vạch sóng âm Spotify Soundwave Code</span>
+            </label>
+          </div>
+        </div>
+      )}
+
+      {/* H. BOARDING PASS / VÉ MÁY BAY */}
+      {activeType === 'ticket' && (
+        <div className="bg-white p-4 rounded-2xl border border-slate-200 space-y-3.5 shadow-2xs">
+          <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+            <span className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+              <span>✈️ Tùy chỉnh Vé Máy Bay Boarding Pass</span>
+            </span>
+          </div>
+
+          {/* Kích thước thành phẩm Ticket */}
+          <TemplateSizeSelector
+            curW={curTargetWidth}
+            curH={curTargetHeight}
+            onSelectSize={(w, h) => onChangeTemplateConfig(templateConfig, { w, h, shape: 'rect' })}
+            presets={[
+              { label: '6 × 14 cm (Chuẩn Boarding Pass)', w: 60, h: 140 },
+              { label: '7 × 15 cm (Khổ rộng)', w: 70, h: 150 },
+              { label: '5 × 12 cm (Mini Ticket)', w: 50, h: 120 },
+            ]}
+          />
+
+          {/* Chọn phong cách màu vé */}
+          <div>
+            <label className="text-[11px] font-bold text-slate-700 block mb-1.5">Phong cách màu vé:</label>
+            <div className="grid grid-cols-3 gap-1.5">
+              <button
+                type="button"
+                onClick={() =>
+                  onChangeTemplateConfig({
+                    ...templateConfig,
+                    ticket: { ...(templateConfig.ticket || {}), theme: 'airline_blue' },
+                  })
+                }
+                className={`p-2 rounded-xl border text-[11px] font-bold flex flex-col items-center gap-1 cursor-pointer transition ${
+                  templateConfig.ticket?.theme === 'airline_blue' || !templateConfig.ticket?.theme
+                    ? 'bg-sky-50 text-sky-900 border-sky-500 ring-2 ring-sky-500/30'
+                    : 'bg-white text-slate-700 border-slate-200'
+                }`}
+              >
+                <span>✈️ Xanh Bay</span>
+                <span className="text-[9px] text-slate-400 font-normal">Hàng không</span>
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  onChangeTemplateConfig({
+                    ...templateConfig,
+                    ticket: { ...(templateConfig.ticket || {}), theme: 'vintage_kraft' },
+                  })
+                }
+                className={`p-2 rounded-xl border text-[11px] font-bold flex flex-col items-center gap-1 cursor-pointer transition ${
+                  templateConfig.ticket?.theme === 'vintage_kraft'
+                    ? 'bg-amber-50 text-amber-900 border-amber-600 ring-2 ring-amber-600/30'
+                    : 'bg-white text-slate-700 border-slate-200'
+                }`}
+              >
+                <span>📜 Vintage</span>
+                <span className="text-[9px] text-slate-400 font-normal">Giấy Kraft</span>
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  onChangeTemplateConfig({
+                    ...templateConfig,
+                    ticket: { ...(templateConfig.ticket || {}), theme: 'clean_white' },
+                  })
+                }
+                className={`p-2 rounded-xl border text-[11px] font-bold flex flex-col items-center gap-1 cursor-pointer transition ${
+                  templateConfig.ticket?.theme === 'clean_white'
+                    ? 'bg-slate-100 text-slate-900 border-slate-600 ring-2 ring-slate-600/30'
+                    : 'bg-white text-slate-700 border-slate-200'
+                }`}
+              >
+                <span>⚪ Tối giản</span>
+                <span className="text-[9px] text-slate-400 font-normal">Đen & Trắng</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Thông tin chuyến bay & Toolbar text */}
+          <div className="space-y-2">
+            <TemplateTextToolbar
+              label="Thông tin hành khách & Chuyến bay:"
+              hasText={Boolean(templateConfig.ticket?.passengerName || templateConfig.textLine2)}
+              onClearCurrent={() => handleClearCurrentPhotoText('ticket')}
+              onClearAll={handleClearAllPhotosText}
+              onApplyToSame={() => handleApplyTextToSameTemplate('ticket')}
+              onApplyToAll={() => handleApplyTemplateAndTextToAll('ticket')}
+              totalPhotosCount={allPhotos?.length || 1}
+              sameTemplateCount={allPhotos?.filter((p) => p.templateConfig?.type === 'ticket').length || 1}
+              templateName="Vé máy bay"
+            />
+            <div>
+              <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                Tên hành khách (Passenger):
+              </label>
+              <input
+                type="text"
+                value={templateConfig.ticket?.passengerName ?? templateConfig.textLine2 ?? ''}
+                onChange={(e) =>
+                  onChangeTemplateConfig({
+                    ...templateConfig,
+                    textLine2: e.target.value,
+                    ticket: { ...(templateConfig.ticket || {}), passengerName: e.target.value },
+                  })
+                }
+                placeholder="NGUYEN VAN A"
+                className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 uppercase font-semibold"
+              />
+            </div>
+
+            {/* Chặng bay: FROM -> TO */}
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                  Nơi đi (FROM):
+                </label>
+                <input
+                  type="text"
+                  value={templateConfig.ticket?.from ?? 'HAN'}
+                  onChange={(e) =>
+                    onChangeTemplateConfig({
+                      ...templateConfig,
+                      ticket: { ...(templateConfig.ticket || {}), from: e.target.value.toUpperCase() },
+                    })
+                  }
+                  placeholder="HAN"
+                  className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 uppercase font-bold text-sky-700"
+                />
+              </div>
+              <div>
+                <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                  Nơi đến (TO):
+                </label>
+                <input
+                  type="text"
+                  value={templateConfig.ticket?.to ?? 'SGN'}
+                  onChange={(e) =>
+                    onChangeTemplateConfig({
+                      ...templateConfig,
+                      ticket: { ...(templateConfig.ticket || {}), to: e.target.value.toUpperCase() },
+                    })
+                  }
+                  placeholder="SGN"
+                  className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 uppercase font-bold text-sky-700"
+                />
+              </div>
+            </div>
+
+            {/* Mã chuyến bay & Cổng & Ghế */}
+            <div className="grid grid-cols-3 gap-2">
+              <div>
+                <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                  Chuyến bay:
+                </label>
+                <input
+                  type="text"
+                  value={templateConfig.ticket?.flight ?? 'VN-2026'}
+                  onChange={(e) =>
+                    onChangeTemplateConfig({
+                      ...templateConfig,
+                      ticket: { ...(templateConfig.ticket || {}), flight: e.target.value.toUpperCase() },
+                    })
+                  }
+                  placeholder="VN-2026"
+                  className="w-full text-xs px-2 py-1.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 font-mono text-center"
+                />
+              </div>
+              <div>
+                <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                  Cổng (Gate):
+                </label>
+                <input
+                  type="text"
+                  value={templateConfig.ticket?.gate ?? '08'}
+                  onChange={(e) =>
+                    onChangeTemplateConfig({
+                      ...templateConfig,
+                      ticket: { ...(templateConfig.ticket || {}), gate: e.target.value },
+                    })
+                  }
+                  placeholder="08"
+                  className="w-full text-xs px-2 py-1.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 font-mono text-center"
+                />
+              </div>
+              <div>
+                <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                  Ghế (Seat):
+                </label>
+                <input
+                  type="text"
+                  value={templateConfig.ticket?.seat ?? '12A'}
+                  onChange={(e) =>
+                    onChangeTemplateConfig({
+                      ...templateConfig,
+                      ticket: { ...(templateConfig.ticket || {}), seat: e.target.value.toUpperCase() },
+                    })
+                  }
+                  placeholder="12A"
+                  className="w-full text-xs px-2 py-1.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 font-mono text-center"
+                />
+              </div>
+            </div>
+
+            {/* Mã vạch Barcode Text */}
+            <div>
+              <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                Ký tự in dưới mã vạch Barcode:
+              </label>
+              <input
+                type="text"
+                value={templateConfig.ticket?.barcodeText ?? 'DAU-DAU-PRINT-2026'}
+                onChange={(e) =>
+                  onChangeTemplateConfig({
+                    ...templateConfig,
+                    ticket: { ...(templateConfig.ticket || {}), barcodeText: e.target.value.toUpperCase() },
+                  })
+                }
+                placeholder="DAU-DAU-PRINT-2026"
+                className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 font-mono uppercase"
+              />
+            </div>
+          </div>
+
+          {/* Toggle Vết khuyết bán nguyệt (Notch) & đường xé vé */}
+          <div className="pt-1 border-t border-slate-100">
+            <label className="flex items-center gap-2 text-xs font-bold text-slate-700 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={templateConfig.ticket?.notchCut ?? true}
+                onChange={(e) =>
+                  onChangeTemplateConfig({
+                    ...templateConfig,
+                    ticket: {
+                      ...(templateConfig.ticket || {}),
+                      notchCut: e.target.checked,
+                    },
+                  })
+                }
+                className="rounded text-blue-600 focus:ring-blue-500"
+              />
+              <span>Đường nét đứt xé vé & vết khuyết bán nguyệt ở 2 mép</span>
             </label>
           </div>
         </div>
