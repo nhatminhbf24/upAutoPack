@@ -123,6 +123,17 @@ autopack-print/
 
 ## 🌐 Triển khai lên Hosting (Deployment)
 
+### Cloudflare Pages: autopackdaudau.pages.dev
+
+Chạy `npm run deploy:cf` để build giao diện và triển khai lên Pages, nhánh production `main`.
+Cấu hình Pages và API nằm trong `cloudflare/pages/`; cấu hình Worker hiện có vẫn nằm ở `wrangler.jsonc`.
+
+API `/api/verify-code` trên Pages gọi nội bộ Worker `daudau-autopack-print` qua service binding `ACTIVATION_WORKER`.
+Mã kích hoạt tiếp tục dùng secret `ACTIVATION_CODE` của Worker này, không cần sao chép hay đưa secret vào giao diện.
+Giữ Worker hoạt động và cập nhật secret tại đó khi cần đổi mã. Các xử lý ảnh và dữ liệu dự án vẫn nằm hoàn toàn trong trình duyệt.
+
+### Node.js Hosting
+
 Dự án được cấu hình để tự động build và chạy trên mọi môi trường **Node.js Hosting** (v18+) hỗ trợ deploy từ Git:
 
 - Sau khi clone và chạy `npm install`, script `postinstall` sẽ tự động build ra thư mục `dist/`.
