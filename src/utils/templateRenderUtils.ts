@@ -148,17 +148,25 @@ export function getTemplateDimensions(
 
     case 'instagram': {
       const headerH = 14; // mm
-      const marginX = 4; // mm
-      const photoW = 82; // mm
-      const photoH = config.instagram?.layoutMode === 'square' ? 82 : 72; // mm
+      const borderMm = config.instagram?.borderMm !== undefined
+        ? config.instagram.borderMm
+        : (targetWidthMm === 90 ? 4 : Math.max(2, (targetWidthMm * 4) / 90)); // mm
+      const marginX = borderMm;
+      const photoW = Math.max(10, targetWidthMm - marginX * 2); // mm
+      const photoH = config.instagram?.layoutMode === 'square'
+        ? photoW
+        : targetHeightMm === 120
+        ? 72
+        : Math.min(photoW * (72 / 82), Math.max(20, targetHeightMm - headerH - 24)); // mm
       const photoX = (targetWidthMm - photoW) / 2;
       const photoY = headerH;
       const footerY = photoY + photoH;
       const footerH = Math.max(10, targetHeightMm - footerY);
-      const avatarDiameter = 9.5; // mm (nổi bật, chân thực chuẩn Instagram)
+      const avatarDiameter = Math.min(9.5, headerH - 3); // mm (nổi bật, chân thực chuẩn Instagram)
       return {
         type: 'instagram',
         headerH,
+        borderMm,
         avatarDiameter,
         avatarX: marginX,
         avatarY: (headerH - avatarDiameter) / 2,
@@ -208,8 +216,8 @@ export function getTemplateDimensions(
     }
 
     case 'film': {
-      const borderX = 4; // mm viền trái/phải
-      const borderY = 3; // mm viền trên/dưới
+      const borderX = config.film?.borderMm ?? 4; // mm viền đục lỗ trái/phải
+      const borderY = Math.max(2, Math.min(8, Math.round((borderX * 3) / 4))); // mm viền trên/dưới cân xứng
       const photoX = borderX;
       const photoY = borderY;
       const photoW = Math.max(10, targetWidthMm - borderX * 2);
@@ -227,7 +235,8 @@ export function getTemplateDimensions(
 
     case 'bookmark': {
       const border = config.bookmark?.borderMm ?? 3;
-      const photoH = config.bookmark?.photoHeightMm ?? 109.5;
+      const bottom = config.bookmark?.bottomMm ?? (targetHeightMm === 150 ? 37.5 : Math.max(15, targetHeightMm * 0.25));
+      const photoH = config.bookmark?.photoHeightMm ?? Math.max(15, targetHeightMm - border - bottom);
       const photoW = Math.max(10, targetWidthMm - border * 2);
       const photoX = border;
       const photoY = border;
@@ -236,6 +245,7 @@ export function getTemplateDimensions(
       return {
         type: 'bookmark',
         border,
+        bottom,
         photoX,
         photoY,
         photoW,
@@ -359,6 +369,18 @@ export function isDarkColor(color?: string): boolean {
 }
 
 /**
+ * Cắt ngắn chuỗi văn bản kèm dấu ba chấm (...) nếu vượt quá chiều rộng cho phép trên Canvas
+ */
+export function truncateTextToWidth(ctx: CanvasRenderingContext2D, text: string, maxW: number): string {
+  if (ctx.measureText(text).width <= maxW) return text;
+  let str = text;
+  while (str.length > 0 && ctx.measureText(str + '...').width > maxW) {
+    str = str.slice(0, -1);
+  }
+  return str.length > 0 ? str + '...' : '';
+}
+
+/**
  * Vẽ mẫu in lên Canvas 2D độ phân giải cao (dùng cho xuất PDF 300 DPI hoặc xuất ảnh đơn lẻ)
  */
 export function renderTemplateOnCanvas(
@@ -441,7 +463,8 @@ export function renderTemplateOnCanvas(
 
     // Header: Avatar, Username, Follow button, Dots
     const avatarR = (dims.avatarDiameter * pxPerMm) / 2;
-    const avatarCenterX = rect.x + (dims.avatarX + dims.avatarDiameter / 2) * pxPerMm;
+    const insetPx = 1.2 * pxPerMm; // Căn thụt lề 1.2mm chuẩn Instagram card để avatar, icons và text luôn nằm gọn gàng bên trong
+    const avatarCenterX = pxPhotoX + insetPx + avatarR;
     const avatarCenterY = rect.y + (dims.avatarY + dims.avatarDiameter / 2) * pxPerMm;
 
     // Vòng Story gradient Instagram (nếu bật)
@@ -540,7 +563,7 @@ export function renderTemplateOnCanvas(
     }
 
     // Dấu 3 chấm ở góc phải
-    const dotsRightX = rect.x + rect.w - 5 * pxPerMm;
+    const dotsRightX = pxPhotoX + pxPhotoW - insetPx - 2 * (pxPerMm / 3.77);
     ctx.fillStyle = isDark ? '#94a3b8' : '#64748b';
     for (let d = -1; d <= 1; d++) {
       ctx.beginPath();
@@ -563,10 +586,12 @@ export function renderTemplateOnCanvas(
     const iconSizePx = Math.round(6.8 * pxPerMm); // Kích thước icon lớn chuẩn Instagram
     const iconBaseY = footerStartY + 2.5 * pxPerMm;
     const hScale = iconSizePx / 24;
+    const footerStartX = pxPhotoX + insetPx;
+    const footerEndX = pxPhotoX + pxPhotoW - insetPx;
 
     if (config.instagram?.showActions !== false) {
       // 1. Vẽ Heart
-      const heartX = pxPhotoX;
+      const heartX = footerStartX;
       ctx.save();
       ctx.translate(heartX, iconBaseY);
       ctx.scale(hScale, hScale);
@@ -584,7 +609,7 @@ export function renderTemplateOnCanvas(
       ctx.restore();
 
       // 2. Vẽ Comment bubble
-      const commentX = pxPhotoX + iconSizePx + 3.8 * pxPerMm;
+      const commentX = footerStartX + iconSizePx + 3.8 * pxPerMm;
       ctx.save();
       ctx.translate(commentX, iconBaseY);
       ctx.scale(hScale, hScale);
@@ -622,7 +647,7 @@ export function renderTemplateOnCanvas(
       ctx.restore();
 
       // 5. Vẽ Bookmark ribbon ở góc phải
-      const bookmarkX = pxPhotoX + pxPhotoW - iconSizePx;
+      const bookmarkX = footerEndX - iconSizePx;
       ctx.save();
       ctx.translate(bookmarkX, iconBaseY);
       ctx.scale(hScale, hScale);
@@ -644,7 +669,7 @@ export function renderTemplateOnCanvas(
     ctx.fillStyle = config.textColor || defaultTextColor;
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
-    ctx.fillText(likesText, pxPhotoX, likesY);
+    ctx.fillText(likesText, footerStartX, likesY);
     ctx.restore();
 
     // Lời nhắn / Caption tối đa 2 dòng
@@ -658,23 +683,26 @@ export function renderTemplateOnCanvas(
 
       const textStartY = likesY + likesFontPx + 2.0 * pxPerMm;
       const lineHeightPx = captionFontPx * 1.35;
+      const footerAvailableW = footerEndX - footerStartX;
 
       // Dòng 1: Username in đậm + nội dung
       if (textLines[0]) {
         ctx.font = `bold ${captionFontPx}px ${getFontFamilyCss(config.fontFamily)}`;
         const uPrefix = `${config.instagram?.username || 'daudau_print'} `;
-        ctx.fillText(uPrefix, pxPhotoX, textStartY);
+        ctx.fillText(uPrefix, footerStartX, textStartY);
         const uW = ctx.measureText(uPrefix).width;
 
         ctx.font = `500 ${captionFontPx}px ${getFontFamilyCss(config.fontFamily)}`;
-        ctx.fillText(textLines[0], pxPhotoX + uW, textStartY);
+        const truncatedLine1 = truncateTextToWidth(ctx, textLines[0], Math.max(10, footerAvailableW - uW));
+        ctx.fillText(truncatedLine1, footerStartX + uW, textStartY);
       }
 
       // Dòng 2: hashtag / ngày tháng
       if (textLines[1]) {
         ctx.font = `500 ${captionFontPx * 0.9}px ${getFontFamilyCss(config.fontFamily)}`;
         ctx.fillStyle = isDark ? '#60a5fa' : '#1e40af'; // Màu xanh hashtag Instagram
-        ctx.fillText(textLines[1], pxPhotoX, textStartY + lineHeightPx);
+        const truncatedLine2 = truncateTextToWidth(ctx, textLines[1], footerAvailableW);
+        ctx.fillText(truncatedLine2, footerStartX, textStartY + lineHeightPx);
       }
       ctx.restore();
     }
@@ -746,18 +774,20 @@ export function renderTemplateOnCanvas(
     ctx.drawImage(img, fitCrop.cropX, fitCrop.cropY, fitCrop.cropW, fitCrop.cropH, pxPhotoX, pxPhotoY, pxPhotoW, pxPhotoH);
     ctx.restore();
 
-    // Chữ kỷ niệm chạy dọc mép trái
-    const sideText = config.film?.sideText || 'FUJIFILM SUPERIA 400 • MEMORIES';
-    ctx.save();
-    ctx.translate(rect.x + (dims.borderX / 2) * pxPerMm, rect.y + rect.h / 2);
-    ctx.rotate(-Math.PI / 2);
-    const sideFontPx = Math.round(7.5 * (pxPerMm / 2.83465));
-    ctx.font = `600 ${sideFontPx}px ${getFontFamilyCss(config.fontFamily || 'mono')}`;
-    ctx.fillStyle = '#f59e0b'; // Màu vàng ấm chuẩn film cổ điển
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(sideText, 0, 0);
-    ctx.restore();
+    // Chữ kỷ niệm chạy dọc mép trái (nếu có nội dung)
+    const sideText = config.film?.sideText !== undefined ? config.film.sideText : 'FUJIFILM SUPERIA 400 • MEMORIES';
+    if (sideText && sideText.trim()) {
+      ctx.save();
+      ctx.translate(rect.x + (dims.borderX / 2) * pxPerMm, rect.y + rect.h / 2);
+      ctx.rotate(-Math.PI / 2);
+      const sideFontPx = Math.round(7.5 * (pxPerMm / 2.83465));
+      ctx.font = `600 ${sideFontPx}px ${getFontFamilyCss(config.fontFamily || 'mono')}`;
+      ctx.fillStyle = '#f59e0b'; // Màu vàng ấm chuẩn film cổ điển
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(sideText, 0, 0);
+      ctx.restore();
+    }
 
     // Số khung "01", "02" ở góc dưới bên phải
     let frameNumStr = config.film?.frameNumber || '01';

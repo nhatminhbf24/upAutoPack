@@ -116,6 +116,7 @@ export interface TemplateConfig {
     username: string; // Tên hiển thị (tối đa 30 ký tự)
     avatarType: 'main' | 'custom' | 'initial' | 'logo';
     avatarSrc?: string; // Ảnh avatar tải riêng hoặc logo tiệm
+    borderMm?: number; // Viền trắng quanh bài viết (mặc định 4 mm, 0 mm là tràn viền)
     layoutMode?: 'rect' | 'square'; // Vùng ảnh 82x72 mm hoặc vuông 82x82 mm
     showFollowBtn?: boolean; // Nút Follow
     showActions?: boolean; // Cụm biểu tượng tương tác (Tim, Comment, Share, Bookmark)
@@ -135,6 +136,7 @@ export interface TemplateConfig {
 
   // 4. Viền Film
   film?: {
+    borderMm?: number; // Độ dày viền đục lỗ 2 bên (mặc định 4 mm)
     frameNumber?: string; // Số khung (mặc định "01")
     autoIncrement?: boolean; // Tự tăng dần theo bộ ảnh
     sideText?: string; // Dòng chữ kỷ niệm chạy dọc mép trái
@@ -145,6 +147,7 @@ export interface TemplateConfig {
   bookmark?: {
     borderMm?: number; // Viền trái, phải, trên (mặc định 3 mm)
     photoHeightMm?: number; // Vùng ảnh phía trên (mặc định 109.5 mm)
+    bottomMm?: number; // Chân dưới dành cho lời nhắn (mặc định ~38 mm)
     hasHolePunchGuide?: boolean; // Dấu vị trí đục lỗ xỏ dây
     fullBleed?: boolean; // Ảnh tràn toàn thẻ
   };

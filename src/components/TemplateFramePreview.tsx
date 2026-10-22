@@ -141,6 +141,11 @@ export const TemplateFramePreview: React.FC<TemplateFramePreviewProps> = ({
     const widthPercent = (dims.photoW / targetW) * 100;
     const heightPercent = (dims.photoH / targetH) * 100;
     const headerHeightPercent = (dims.headerH / targetH) * 100;
+    // Căn thụt lề chuẩn Instagram card, đảm bảo icon, avatar và text luôn nằm gọn gàng bên trong khung ảnh (hoặc cách mép 2.5% nếu chọn 0mm tràn viền)
+    const insetPercent = dims.photoX > 0 ? Math.max(1, (1.2 / targetW) * 100) : 2.5;
+    const contentPadLeft = leftPercent + insetPercent;
+    const contentPadRight = leftPercent + insetPercent;
+
     const isDark = isDarkColor(config.frameColor);
     const textClass = isDark ? 'text-white' : 'text-slate-900';
     const borderClass = isDark ? 'border-white/10' : 'border-slate-100';
@@ -156,8 +161,12 @@ export const TemplateFramePreview: React.FC<TemplateFramePreviewProps> = ({
       >
         {/* Instagram Header */}
         <div
-          className={`w-full flex items-center justify-between px-3 pointer-events-none shrink-0 border-b ${borderClass}`}
-          style={{ height: `${headerHeightPercent}%` }}
+          className={`w-full flex items-center justify-between pointer-events-none shrink-0 border-b ${borderClass}`}
+          style={{
+            height: `${headerHeightPercent}%`,
+            paddingLeft: `${contentPadLeft}%`,
+            paddingRight: `${contentPadRight}%`,
+          }}
         >
           <div className="flex items-center gap-2 min-w-0">
             {/* Circular Avatar with Instagram story gradient ring */}
@@ -235,7 +244,13 @@ export const TemplateFramePreview: React.FC<TemplateFramePreviewProps> = ({
         })()}
 
         {/* Instagram Footer */}
-        <div className="flex-1 px-3 py-1.5 flex flex-col justify-start pointer-events-none min-h-0">
+        <div
+          className="flex-1 py-1.5 flex flex-col justify-start pointer-events-none min-h-0"
+          style={{
+            paddingLeft: `${contentPadLeft}%`,
+            paddingRight: `${contentPadRight}%`,
+          }}
+        >
           {config.instagram?.showActions !== false && (
             <div className={`flex items-center justify-between ${textClass} pt-1 pb-1`}>
               {/* Left group: Heart, Comment, Share */}
@@ -294,63 +309,69 @@ export const TemplateFramePreview: React.FC<TemplateFramePreviewProps> = ({
   if (config.type === 'photostrip' && dims.type === 'photostrip') {
     return (
       <div
-        className="w-full h-full relative overflow-hidden select-none flex flex-col p-1"
+        className="w-full h-full relative overflow-hidden select-none"
         style={{
           backgroundColor: config.frameColor || '#ffffff',
-          padding: `${(dims.border / targetW) * 100}%`,
         }}
       >
         {/* Photostrip Slots */}
-        <div className="flex-1 flex flex-col gap-1 overflow-hidden min-h-0">
-          {dims.slots.map((slot, idx) => {
-            const slotConfig = config.photostrip?.slots?.[idx];
-            const slotSrc = slotConfig?.photoSrc || imgSrc;
-            const slotImgW = slotConfig?.imgWidth || imgW;
-            const slotImgH = slotConfig?.imgHeight || imgH;
-            const slotFitCrop = calculateTemplateFitCrop(
-              slotImgW,
-              slotImgH,
-              slot.w,
-              slot.h,
-              slotConfig || photo
-            );
-            const slotPercentW = (slotImgW / slotFitCrop.cropW) * 100;
-            const slotPercentH = (slotImgH / slotFitCrop.cropH) * 100;
-            const slotPercentX = (-slotFitCrop.cropX / slotFitCrop.cropW) * 100;
-            const slotPercentY = (-slotFitCrop.cropY / slotFitCrop.cropH) * 100;
+        {dims.slots.map((slot, idx) => {
+          const slotConfig = config.photostrip?.slots?.[idx];
+          const slotSrc = slotConfig?.photoSrc || imgSrc;
+          const slotImgW = slotConfig?.imgWidth || imgW;
+          const slotImgH = slotConfig?.imgHeight || imgH;
+          const slotFitCrop = calculateTemplateFitCrop(
+            slotImgW,
+            slotImgH,
+            slot.w,
+            slot.h,
+            slotConfig || photo
+          );
+          const slotPercentW = (slotImgW / slotFitCrop.cropW) * 100;
+          const slotPercentH = (slotImgH / slotFitCrop.cropH) * 100;
+          const slotPercentX = (-slotFitCrop.cropX / slotFitCrop.cropW) * 100;
+          const slotPercentY = (-slotFitCrop.cropY / slotFitCrop.cropH) * 100;
 
-            return (
-              <div
-                key={idx}
-                data-photostrip-slot={idx}
-                className="flex-1 relative overflow-hidden bg-slate-100 rounded-2xs group/slot transition-all"
-              >
-                <img
-                  src={slotSrc}
-                  alt={slotConfig?.photoName || photo.name}
-                  draggable={false}
-                  className="absolute max-w-none pointer-events-none transition-none"
-                  style={{
-                    width: `${slotPercentW}%`,
-                    height: `${slotPercentH}%`,
-                    left: `${slotPercentX}%`,
-                    top: `${slotPercentY}%`,
-                  }}
-                />
-                {/* Số thứ tự ô 1, 2, 3, 4 tinh tế */}
-                <span className="absolute top-1 left-1 bg-black/60 backdrop-blur-xs text-white text-[8px] font-mono font-bold px-1 rounded-sm opacity-0 group-hover/slot:opacity-100 transition-opacity pointer-events-none z-10">
-                  {idx + 1}
-                </span>
-              </div>
-            );
-          })}
-        </div>
+          return (
+            <div
+              key={idx}
+              data-photostrip-slot={idx}
+              className="absolute overflow-hidden bg-slate-100 rounded-2xs group/slot transition-all shadow-2xs"
+              style={{
+                left: `${(slot.x / targetW) * 100}%`,
+                top: `${(slot.y / targetH) * 100}%`,
+                width: `${(slot.w / targetW) * 100}%`,
+                height: `${(slot.h / targetH) * 100}%`,
+              }}
+            >
+              <img
+                src={slotSrc}
+                alt={slotConfig?.photoName || photo.name}
+                draggable={false}
+                className="absolute max-w-none pointer-events-none transition-none"
+                style={{
+                  width: `${slotPercentW}%`,
+                  height: `${slotPercentH}%`,
+                  left: `${slotPercentX}%`,
+                  top: `${slotPercentY}%`,
+                }}
+              />
+              {/* Số thứ tự ô 1, 2, 3, 4 tinh tế */}
+              <span className="absolute top-1 left-1 bg-black/60 backdrop-blur-xs text-white text-[8px] font-mono font-bold px-1 rounded-sm opacity-0 group-hover/slot:opacity-100 transition-opacity pointer-events-none z-10">
+                {idx + 1}
+              </span>
+            </div>
+          );
+        })}
 
         {/* Footer Text */}
         <div
-          className="flex flex-col justify-center items-center text-center shrink-0 pt-1 pointer-events-none"
+          className="absolute flex flex-col justify-center items-center text-center px-1 pointer-events-none"
           style={{
-            height: `${(dims.bottom / targetH) * 100}%`,
+            left: `${(dims.textX / targetW) * 100}%`,
+            top: `${(dims.textY / targetH) * 100}%`,
+            width: `${(dims.textW / targetW) * 100}%`,
+            height: `${(dims.textH / targetH) * 100}%`,
             color: config.textColor || '#334155',
             fontFamily: getFontFamilyCss(config.fontFamily),
           }}
@@ -394,17 +415,19 @@ export const TemplateFramePreview: React.FC<TemplateFramePreviewProps> = ({
         style={{ backgroundColor: config.frameColor || '#0a0a0a' }}
       >
         {/* Left Vertical Film Text */}
-        <div
-          className="absolute left-0 top-0 bottom-0 flex items-center justify-center pointer-events-none"
-          style={{ width: `${leftPercent}%` }}
-        >
-          <span
-            className="text-[7.5px] font-mono tracking-widest text-amber-500/90 uppercase font-bold whitespace-nowrap rotate-270 origin-center select-none"
-            style={{ fontFamily: getFontFamilyCss(config.fontFamily || 'mono') }}
+        {config.film?.sideText !== '' && (
+          <div
+            className="absolute left-0 top-0 bottom-0 flex items-center justify-center pointer-events-none"
+            style={{ width: `${leftPercent}%` }}
           >
-            {config.film?.sideText || 'FUJIFILM SUPERIA 400'}
-          </span>
-        </div>
+            <span
+              className="text-[7.5px] font-mono tracking-widest text-amber-500/90 uppercase font-bold whitespace-nowrap rotate-270 origin-center select-none"
+              style={{ fontFamily: getFontFamilyCss(config.fontFamily || 'mono') }}
+            >
+              {config.film?.sideText ?? 'FUJIFILM SUPERIA 400'}
+            </span>
+          </div>
+        )}
 
         {/* Film Photo Area */}
         <div

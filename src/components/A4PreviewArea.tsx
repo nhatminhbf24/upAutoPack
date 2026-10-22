@@ -1359,7 +1359,7 @@ export const A4PreviewArea: React.FC<A4PreviewAreaProps> = ({
                         ? settings.cutStyles
                         : settings.cutStyle
                         ? [settings.cutStyle]
-                        : ['dashed'];
+                        : ['full_trim_guides', 'dashed'];
                     const isFullTrimGuides = settings.cutLines && activeCutStyles.includes('full_trim_guides');
                     if (!isFullTrimGuides || page.items.length === 0) return null;
 
@@ -1503,7 +1503,7 @@ export const A4PreviewArea: React.FC<A4PreviewAreaProps> = ({
                         ? settings.cutStyles
                         : settings.cutStyle
                         ? [settings.cutStyle]
-                        : ['dashed'];
+                        : ['full_trim_guides', 'dashed'];
                     const isCornerMarks = settings.cutLines && activeCutStyles.includes('corner_marks');
                     const isSolidCut = settings.cutLines && activeCutStyles.includes('solid');
                     const isDashedCut = settings.cutLines && activeCutStyles.includes('dashed');

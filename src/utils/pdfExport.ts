@@ -73,7 +73,7 @@ export async function exportPagesToPdf(
         ? settings.cutStyles
         : settings.cutStyle
         ? [settings.cutStyle]
-        : ['dashed'];
+        : ['full_trim_guides', 'dashed'];
     const hasFullTrim = settings.cutLines && activeCutStyles.includes('full_trim_guides');
 
     if (hasFullTrim && page.items.length > 0) {
@@ -363,7 +363,7 @@ export async function exportPagesToPdf(
               ? settings.cutStyles
               : settings.cutStyle
               ? [settings.cutStyle]
-              : ['dashed'];
+              : ['full_trim_guides', 'dashed'];
 
           const hasCornerMarks = activeCutStyles.includes('corner_marks');
           const hasSolid = activeCutStyles.includes('solid');

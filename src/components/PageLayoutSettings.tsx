@@ -355,7 +355,18 @@ export const PageLayoutSettings: React.FC<PageLayoutSettingsProps> = ({
           <input
             type="checkbox"
             checked={settings.cutLines}
-            onChange={(e) => onUpdateSettings({ cutLines: e.target.checked })}
+            onChange={(e) => {
+              const isChecked = e.target.checked;
+              onUpdateSettings({
+                cutLines: isChecked,
+                cutStyles: isChecked
+                  ? settings.cutStyles && settings.cutStyles.length > 0
+                    ? settings.cutStyles
+                    : ['full_trim_guides', 'dashed']
+                  : settings.cutStyles,
+                cutStyle: isChecked ? settings.cutStyle || 'dashed' : settings.cutStyle,
+              });
+            }}
             className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500 cursor-pointer"
           />
         </label>
@@ -366,7 +377,7 @@ export const PageLayoutSettings: React.FC<PageLayoutSettingsProps> = ({
               ? settings.cutStyles
               : settings.cutStyle
               ? [settings.cutStyle]
-              : ['dashed'];
+              : ['full_trim_guides', 'dashed'];
 
           const toggleFeature = (feat: CutMarkFeature) => {
             let next = [...activeCutStyles];

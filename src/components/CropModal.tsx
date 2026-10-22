@@ -51,6 +51,7 @@ interface CropModalProps {
   allPhotos?: PhotoItem[];
   onClose: () => void;
   onSave: (photoId: string, updates: Partial<PhotoItem>) => void;
+  onBatchUpdatePhotos?: (updater: (photo: PhotoItem) => Partial<PhotoItem> | null) => void;
   smartCrop: boolean;
   initialTab?: 'crop' | 'adjust' | 'size' | 'enhance' | 'template';
 }
@@ -70,6 +71,7 @@ export const CropModal: React.FC<CropModalProps> = ({
   allPhotos = [],
   onClose,
   onSave,
+  onBatchUpdatePhotos,
   smartCrop,
   initialTab = 'size',
 }) => {
@@ -2437,6 +2439,7 @@ export const CropModal: React.FC<CropModalProps> = ({
                   curTargetHeight={effectiveTargetH}
                   shape={shape}
                   templateConfig={templateConfig}
+                  onBatchUpdatePhotos={onBatchUpdatePhotos}
                   onChangeTemplateConfig={(newConfig, newDims) => {
                     setTemplateConfig(newConfig);
                     if (newDims) {

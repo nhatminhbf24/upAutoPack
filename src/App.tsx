@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useCallback, useEffect, useRef, Suspense } from 'react';
 import { Loader2, UploadCloud } from 'lucide-react';
-import { PhotoItem, LayoutSettings, ShapeType, SizePreset, DEFAULT_SIZE_PRESETS, OrientationMode } from './types';
+import { PhotoItem, LayoutSettings, ShapeType, SizePreset, DEFAULT_SIZE_PRESETS, OrientationMode, CutMarkFeature } from './types';
 import { packImagesToPages } from './utils/packing';
 import { exportPagesToImage, calculateCrop, formatPhotoToPreset, getShortPresetLabel, exportAllPhotosAsZip, processImageFilesToPhotos } from './utils/imageUtils';
 import { exportPagesToPdf } from './utils/pdfExport';
@@ -72,15 +72,37 @@ export default function App() {
 
   const [orientationMode, setOrientationMode] = useState<OrientationMode>(initialOrientationMode);
 
-  const [settings, setSettings] = useState<LayoutSettings>(() => ({
-    margin: 5,
-    gap: 2,
-    cutLines: false,
-    smartCrop: false,
-    autoNesting: false,
-    paperOrientation: 'portrait',
-    orientationMode: initialOrientationMode,
-  }));
+  const [settings, setSettings] = useState<LayoutSettings>(() => {
+    let savedCutLines = true;
+    let savedCutStyles: CutMarkFeature[] = ['full_trim_guides', 'dashed'];
+    let savedCutStyle: CutMarkFeature = 'dashed';
+    try {
+      const rawCutLines = localStorage.getItem('daudau_cut_lines');
+      if (rawCutLines !== null) {
+        savedCutLines = rawCutLines === 'true';
+      }
+      const rawCutStyles = localStorage.getItem('daudau_cut_styles');
+      if (rawCutStyles) {
+        savedCutStyles = JSON.parse(rawCutStyles);
+      }
+      const rawCutStyle = localStorage.getItem('daudau_cut_style') as CutMarkFeature | null;
+      if (rawCutStyle) {
+        savedCutStyle = rawCutStyle;
+      }
+    } catch {}
+
+    return {
+      margin: 5,
+      gap: 2,
+      cutLines: savedCutLines,
+      cutStyle: savedCutStyle,
+      cutStyles: savedCutStyles,
+      smartCrop: false,
+      autoNesting: false,
+      paperOrientation: 'portrait',
+      orientationMode: initialOrientationMode,
+    };
+  });
 
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [cropModalConfig, setCropModalConfig] = useState<{
@@ -203,6 +225,18 @@ export default function App() {
   const handleBatchUpdatePhotos = useCallback(
     (updatedPhotos: PhotoItem[]) => {
       setPhotos(updatedPhotos);
+    },
+    [setPhotos]
+  );
+
+  const handleBatchUpdatePhotosWithUpdater = useCallback(
+    (updater: (photo: PhotoItem) => Partial<PhotoItem> | null) => {
+      setPhotos((prev) =>
+        prev.map((photo) => {
+          const updates = updater(photo);
+          return updates ? { ...photo, ...updates } : photo;
+        })
+      );
     },
     [setPhotos]
   );
@@ -439,6 +473,18 @@ export default function App() {
         const isSwitchingToAuto = updates.layoutMode === 'auto';
         const isEnablingAutoNesting = updates.autoNesting === true && prev.layoutMode === 'freeform';
         const isEnablingAllowRotation = updates.allowRotation === true && prev.layoutMode === 'freeform';
+
+        try {
+          if (updates.cutLines !== undefined) {
+            localStorage.setItem('daudau_cut_lines', String(updates.cutLines));
+          }
+          if (updates.cutStyles !== undefined) {
+            localStorage.setItem('daudau_cut_styles', JSON.stringify(updates.cutStyles));
+          }
+          if (updates.cutStyle !== undefined) {
+            localStorage.setItem('daudau_cut_style', updates.cutStyle);
+          }
+        } catch {}
 
         if (isSwitchingToAuto || isEnablingAutoNesting || isEnablingAllowRotation) {
           nextSettings.layoutMode = 'auto';
@@ -1306,6 +1352,7 @@ export default function App() {
               initialTab={cropModalConfig.initialTab || 'size'}
               onClose={() => setCropModalConfig(null)}
               onSave={handleUpdatePhoto}
+              onBatchUpdatePhotos={handleBatchUpdatePhotosWithUpdater}
               smartCrop={settings.smartCrop}
             />
           )}

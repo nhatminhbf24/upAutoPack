@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import {
   Camera,
   Instagram,
@@ -25,6 +25,12 @@ import {
   Plus,
   FolderOpen,
   ArrowUpDown,
+  Maximize2,
+  Sliders,
+  Edit3,
+  PenLine,
+  Eraser,
+  CopyCheck,
 } from 'lucide-react';
 import { PhotoItem, TemplateConfig, PrintTemplateType, ShapeType, PhotostripSlot } from '../types';
 import { createDefaultTemplateConfig } from '../utils/templateRenderUtils';
@@ -38,6 +44,7 @@ interface TemplateSettingsPanelProps {
   curTargetHeight: number;
   shape: ShapeType;
   templateConfig: TemplateConfig;
+  onBatchUpdatePhotos?: (updater: (photo: PhotoItem) => Partial<PhotoItem> | null) => void;
   onChangeTemplateConfig: (
     newConfig: TemplateConfig,
     dimensions?: { w: number; h: number; shape?: ShapeType }
@@ -62,6 +69,308 @@ interface TemplateSettingsPanelProps {
   onToast: (type: 'success' | 'error' | 'info', text: string) => void;
 }
 
+interface TemplateSizeSelectorProps {
+  presets: { label: string; w: number; h: number }[];
+  curW: number;
+  curH: number;
+  onSelectSize: (w: number, h: number) => void;
+  title?: string;
+}
+
+const TemplateSizeSelector: React.FC<TemplateSizeSelectorProps> = ({
+  presets,
+  curW,
+  curH,
+  onSelectSize,
+  title = 'Kích thước thành phẩm (Rộng × Cao):',
+}) => {
+  const isMatch = presets.some((p) => p.w === curW && p.h === curH);
+  const [showCustom, setShowCustom] = useState(!isMatch);
+  const [localW, setLocalW] = useState(String(curW));
+  const [localH, setLocalH] = useState(String(curH));
+
+  useEffect(() => {
+    setLocalW(String(curW));
+    setLocalH(String(curH));
+    if (!presets.some((p) => p.w === curW && p.h === curH)) {
+      setShowCustom(true);
+    }
+  }, [curW, curH, presets]);
+
+  const handleApplyCustom = (wStr: string, hStr: string) => {
+    const wNum = Math.max(15, Math.min(297, Number(wStr) || curW));
+    const hNum = Math.max(15, Math.min(297, Number(hStr) || curH));
+    onSelectSize(wNum, hNum);
+  };
+
+  return (
+    <div className="space-y-1.5 p-2.5 bg-slate-50/90 rounded-xl border border-slate-200/80">
+      <div className="flex items-center justify-between">
+        <label className="text-[11px] font-bold text-slate-800 flex items-center gap-1.5">
+          <Maximize2 className="w-3.5 h-3.5 text-blue-600" />
+          <span>{title}</span>
+        </label>
+        <span className="text-[11px] font-mono font-bold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200">
+          {curW} × {curH} mm ({curW / 10} × {curH / 10} cm)
+        </span>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-1">
+        {presets.map((p) => {
+          const isSelected = curW === p.w && curH === p.h;
+          return (
+            <button
+              key={p.label}
+              type="button"
+              onClick={() => {
+                setShowCustom(false);
+                onSelectSize(p.w, p.h);
+              }}
+              className={`px-2 py-1 rounded-md text-[11px] font-bold transition cursor-pointer ${
+                isSelected
+                  ? 'bg-blue-600 text-white shadow-2xs'
+                  : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'
+              }`}
+            >
+              {p.label}
+            </button>
+          );
+        })}
+
+        <button
+          type="button"
+          onClick={() => setShowCustom(!showCustom)}
+          className={`px-2 py-1 rounded-md text-[11px] font-bold transition cursor-pointer flex items-center gap-1 ${
+            showCustom && !isMatch
+              ? 'bg-indigo-600 text-white shadow-2xs'
+              : showCustom
+              ? 'bg-slate-200 text-slate-800'
+              : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'
+          }`}
+          title="Tự nhập kích thước Rộng x Cao bất kỳ theo milimet"
+        >
+          <Edit3 className="w-3 h-3" />
+          <span>Tùy chỉnh mm</span>
+        </button>
+      </div>
+
+      {showCustom && (
+        <div className="flex items-center gap-2 pt-1">
+          <div className="flex-1 flex items-center gap-1 bg-white px-2 py-1 rounded-lg border border-slate-300 focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500">
+            <span className="text-[10px] text-slate-400 font-medium">Rộng:</span>
+            <input
+              type="number"
+              min="15"
+              max="297"
+              step="1"
+              value={localW}
+              onChange={(e) => {
+                setLocalW(e.target.value);
+                handleApplyCustom(e.target.value, localH);
+              }}
+              className="w-full text-xs font-mono font-bold text-slate-800 outline-none"
+            />
+            <span className="text-[10px] text-slate-400">mm</span>
+          </div>
+          <span className="text-slate-400 font-bold">×</span>
+          <div className="flex-1 flex items-center gap-1 bg-white px-2 py-1 rounded-lg border border-slate-300 focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500">
+            <span className="text-[10px] text-slate-400 font-medium">Cao:</span>
+            <input
+              type="number"
+              min="15"
+              max="297"
+              step="1"
+              value={localH}
+              onChange={(e) => {
+                setLocalH(e.target.value);
+                handleApplyCustom(localW, e.target.value);
+              }}
+              className="w-full text-xs font-mono font-bold text-slate-800 outline-none"
+            />
+            <span className="text-[10px] text-slate-400">mm</span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+interface TemplateTextToolbarProps {
+  label: string;
+  hasText: boolean;
+  onClearCurrent: () => void;
+  onApplyToSame?: () => void;
+  onApplyToAll?: () => void;
+  onClearAll?: () => void;
+  totalPhotosCount: number;
+  sameTemplateCount: number;
+  templateName: string;
+}
+
+const TemplateTextToolbar: React.FC<TemplateTextToolbarProps> = ({
+  label,
+  hasText,
+  onClearCurrent,
+  onApplyToSame,
+  onApplyToAll,
+  onClearAll,
+  totalPhotosCount,
+  sameTemplateCount,
+  templateName,
+}) => {
+  const [showApplyMenu, setShowApplyMenu] = useState(false);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
+
+  return (
+    <div className="space-y-1.5 pb-1">
+      <div className="flex items-center justify-between">
+        <label className="text-[11px] font-bold text-slate-800 flex items-center gap-1.5">
+          <Type className="w-3.5 h-3.5 text-blue-600" />
+          <span>{label}</span>
+        </label>
+
+        {/* Nút xóa nhanh chữ ảnh này (để viết tay) */}
+        {hasText && (
+          <button
+            type="button"
+            onClick={onClearCurrent}
+            title="Xóa chữ trên ảnh này để khách tự viết tay"
+            className="px-2 py-0.5 rounded text-[10px] font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 transition flex items-center gap-1 cursor-pointer"
+          >
+            <PenLine className="w-3 h-3 text-amber-600" />
+            <span>Để trống viết tay</span>
+          </button>
+        )}
+      </div>
+
+      {/* Thanh công cụ thao tác hàng loạt (khi có từ 2 ảnh trở lên) */}
+      {totalPhotosCount > 1 && (
+        <div className="flex flex-wrap items-center justify-between gap-1 p-1.5 bg-slate-50 rounded-xl border border-slate-200/80">
+          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider pl-1">
+            Hàng loạt ({totalPhotosCount} ảnh):
+          </span>
+
+          <div className="flex items-center gap-1">
+            {/* Nút Áp dụng chữ */}
+            <button
+              type="button"
+              onClick={() => {
+                setShowClearConfirm(false);
+                setShowApplyMenu(!showApplyMenu);
+              }}
+              className={`px-2 py-1 rounded-lg text-[10.5px] font-bold transition flex items-center gap-1 cursor-pointer ${
+                showApplyMenu
+                  ? 'bg-blue-600 text-white shadow-2xs'
+                  : 'bg-white hover:bg-blue-50 text-blue-700 border border-blue-200'
+              }`}
+              title="Áp dụng nội dung chữ này cho các ảnh khác"
+            >
+              <CopyCheck className="w-3 h-3" />
+              <span>Áp dụng chữ...</span>
+            </button>
+
+            {/* Nút Bỏ hàng loạt chữ để viết tay */}
+            <button
+              type="button"
+              onClick={() => {
+                setShowApplyMenu(false);
+                setShowClearConfirm(!showClearConfirm);
+              }}
+              className={`px-2 py-1 rounded-lg text-[10.5px] font-bold transition flex items-center gap-1 cursor-pointer ${
+                showClearConfirm
+                  ? 'bg-amber-600 text-white shadow-2xs'
+                  : 'bg-white hover:bg-amber-50 text-amber-700 border border-amber-200'
+              }`}
+              title="Xóa toàn bộ chữ trên tất cả ảnh để khách tự viết tay"
+            >
+              <Eraser className="w-3 h-3" />
+              <span>Bỏ chữ hàng loạt</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Menu lựa chọn phạm vi áp dụng chữ */}
+      {showApplyMenu && (
+        <div className="p-2 bg-blue-50/80 rounded-xl border border-blue-200 space-y-1.5 shadow-xs">
+          <div className="text-[10.5px] font-bold text-blue-950 flex items-center justify-between">
+            <span>Chọn phạm vi áp dụng nội dung chữ:</span>
+            <button
+              type="button"
+              onClick={() => setShowApplyMenu(false)}
+              className="text-slate-400 hover:text-slate-600 text-xs px-1 cursor-pointer"
+            >
+              ✕
+            </button>
+          </div>
+          <div className="flex flex-col gap-1">
+            {sameTemplateCount > 1 && onApplyToSame && (
+              <button
+                type="button"
+                onClick={() => {
+                  setShowApplyMenu(false);
+                  onApplyToSame();
+                }}
+                className="w-full text-left px-2 py-1.5 rounded-lg bg-white hover:bg-blue-100 text-blue-800 text-[10.5px] font-bold border border-blue-200 transition flex items-center justify-between cursor-pointer"
+              >
+                <span>📌 Áp dụng chữ cho các ảnh mẫu {templateName}</span>
+                <span className="text-[9.5px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-mono font-bold">
+                  {sameTemplateCount} ảnh
+                </span>
+              </button>
+            )}
+
+            {onApplyToAll && (
+              <button
+                type="button"
+                onClick={() => {
+                  setShowApplyMenu(false);
+                  onApplyToAll();
+                }}
+                className="w-full text-left px-2 py-1.5 rounded-lg bg-white hover:bg-indigo-50 text-indigo-800 text-[10.5px] font-bold border border-indigo-200 transition flex items-center justify-between cursor-pointer"
+              >
+                <span>🌐 Áp dụng mẫu {templateName} & chữ cho TẤT CẢ</span>
+                <span className="text-[9.5px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded font-mono font-bold">
+                  {totalPhotosCount} ảnh
+                </span>
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Xác nhận xóa sạch chữ hàng loạt */}
+      {showClearConfirm && onClearAll && (
+        <div className="p-2 bg-amber-50 rounded-xl border border-amber-300 space-y-1.5 shadow-xs">
+          <div className="text-[11px] font-bold text-amber-900 leading-tight">
+            Xác nhận xóa sạch toàn bộ chữ trên tất cả ({totalPhotosCount} ảnh) để khách tự viết tay?
+          </div>
+          <div className="flex items-center justify-end gap-1.5 pt-0.5">
+            <button
+              type="button"
+              onClick={() => setShowClearConfirm(false)}
+              className="px-2 py-1 rounded-md text-[10px] font-medium text-slate-600 bg-white border border-slate-200 hover:bg-slate-100 cursor-pointer"
+            >
+              Hủy
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setShowClearConfirm(false);
+                onClearAll();
+              }}
+              className="px-2.5 py-1 rounded-md text-[10px] font-bold text-white bg-amber-600 hover:bg-amber-700 shadow-2xs cursor-pointer flex items-center gap-1"
+            >
+              <Eraser className="w-3 h-3" />
+              <span>Đồng ý xóa hết</span>
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 export const TemplateSettingsPanel: React.FC<TemplateSettingsPanelProps> = ({
   photo,
   allPhotos,
@@ -69,6 +378,7 @@ export const TemplateSettingsPanel: React.FC<TemplateSettingsPanelProps> = ({
   curTargetHeight,
   shape,
   templateConfig,
+  onBatchUpdatePhotos,
   onChangeTemplateConfig,
   badgeMode,
   badgeFaceDiameter,
@@ -308,6 +618,99 @@ export const TemplateSettingsPanel: React.FC<TemplateSettingsPanelProps> = ({
         slots: nextSlots,
       },
     });
+  };
+
+  // Xóa chữ ảnh này (để khách tự viết tay)
+  const handleClearCurrentPhotoText = (type: PrintTemplateType) => {
+    if (type === 'film') {
+      onChangeTemplateConfig({
+        ...templateConfig,
+        film: { ...(templateConfig.film || {}), sideText: '' },
+      });
+    } else {
+      onChangeTemplateConfig({
+        ...templateConfig,
+        textLine1: '',
+        textLine2: '',
+      });
+    }
+    onToast('info', 'Đã để trống khung để khách tự viết tay ✍️');
+  };
+
+  // Xóa chữ hàng loạt trên tất cả ảnh
+  const handleClearAllPhotosText = () => {
+    onChangeTemplateConfig({
+      ...templateConfig,
+      textLine1: '',
+      textLine2: '',
+      ...(templateConfig.film ? { film: { ...templateConfig.film, sideText: '' } } : {}),
+    });
+
+    if (onBatchUpdatePhotos) {
+      onBatchUpdatePhotos((p) => {
+        if (!p.templateConfig || p.templateConfig.type === 'none') return null;
+        return {
+          templateConfig: {
+            ...p.templateConfig,
+            textLine1: '',
+            textLine2: '',
+            ...(p.templateConfig.film ? { film: { ...p.templateConfig.film, sideText: '' } } : {}),
+          },
+        };
+      });
+    }
+    onToast('success', `Đã xóa toàn bộ chữ trên tất cả (${allPhotos?.length || 1} ảnh) để viết tay ✍️`);
+  };
+
+  // Áp dụng chữ cho các ảnh cùng mẫu
+  const handleApplyTextToSameTemplate = (type: PrintTemplateType) => {
+    if (onBatchUpdatePhotos) {
+      onBatchUpdatePhotos((p) => {
+        if (!p.templateConfig || p.templateConfig.type !== type) return null;
+        return {
+          templateConfig: {
+            ...p.templateConfig,
+            textLine1: templateConfig.textLine1,
+            textLine2: templateConfig.textLine2,
+            fontFamily: templateConfig.fontFamily,
+            fontSizePt: templateConfig.fontSizePt,
+            textColor: templateConfig.textColor,
+            textAlign: templateConfig.textAlign,
+            ...(type === 'film' && templateConfig.film
+              ? { film: { ...p.templateConfig.film, sideText: templateConfig.film.sideText } }
+              : {}),
+            ...(type === 'instagram' && templateConfig.instagram
+              ? {
+                  instagram: {
+                    ...(p.templateConfig.instagram || {}),
+                    username: templateConfig.instagram.username,
+                  },
+                }
+              : {}),
+          },
+        };
+      });
+    }
+    const count = allPhotos?.filter((p) => p.templateConfig?.type === type).length || 1;
+    onToast('success', `Đã áp dụng chữ cho ${count} ảnh cùng mẫu! ✨`);
+  };
+
+  // Áp dụng cả mẫu & chữ cho TOÀN BỘ ảnh trong dự án
+  const handleApplyTemplateAndTextToAll = (type: PrintTemplateType) => {
+    if (onBatchUpdatePhotos) {
+      onBatchUpdatePhotos((p) => {
+        return {
+          targetWidth: curTargetWidth,
+          targetHeight: curTargetHeight,
+          shape: shape,
+          templateConfig: {
+            ...templateConfig,
+            type,
+          },
+        };
+      });
+    }
+    onToast('success', `Đã áp dụng mẫu & chữ này cho TOÀN BỘ (${allPhotos?.length || 1} ảnh)! 🎉`);
   };
 
   const activeType: PrintTemplateType = badgeMode ? 'badge' : templateConfig.type || 'none';
@@ -585,34 +988,34 @@ export const TemplateSettingsPanel: React.FC<TemplateSettingsPanelProps> = ({
             <span className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
               <span>📸 Tùy chỉnh mẫu Polaroid</span>
             </span>
-            <div className="flex items-center gap-1 text-[11px]">
-              <button
-                type="button"
-                onClick={() => onChangeTemplateConfig(templateConfig, { w: 60, h: 90, shape: 'rect' })}
-                className={`px-2 py-0.5 rounded-md font-bold transition ${
-                  curTargetWidth === 60 && curTargetHeight === 90
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                }`}
-              >
-                6 × 9 cm
-              </button>
-              <button
-                type="button"
-                onClick={() => onChangeTemplateConfig(templateConfig, { w: 90, h: 120, shape: 'rect' })}
-                className={`px-2 py-0.5 rounded-md font-bold transition ${
-                  curTargetWidth === 90 && curTargetHeight === 120
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                }`}
-              >
-                9 × 12 cm
-              </button>
-            </div>
           </div>
+
+          {/* Kích thước thành phẩm */}
+          <TemplateSizeSelector
+            curW={curTargetWidth}
+            curH={curTargetHeight}
+            onSelectSize={(w, h) => onChangeTemplateConfig(templateConfig, { w, h, shape: 'rect' })}
+            presets={[
+              { label: '6 × 9 cm', w: 60, h: 90 },
+              { label: '9 × 12 cm', w: 90, h: 120 },
+              { label: '10 × 15 cm', w: 100, h: 150 },
+              { label: '8 × 8 cm (Vuông)', w: 80, h: 80 },
+            ]}
+          />
 
           {/* Lời nhắn dòng 1 & dòng 2 */}
           <div className="space-y-2">
+            <TemplateTextToolbar
+              label="Lời nhắn chân ảnh Polaroid:"
+              hasText={Boolean(templateConfig.textLine1 || templateConfig.textLine2)}
+              onClearCurrent={() => handleClearCurrentPhotoText('polaroid')}
+              onClearAll={handleClearAllPhotosText}
+              onApplyToSame={() => handleApplyTextToSameTemplate('polaroid')}
+              onApplyToAll={() => handleApplyTemplateAndTextToAll('polaroid')}
+              totalPhotosCount={allPhotos?.length || 1}
+              sameTemplateCount={allPhotos?.filter((p) => p.templateConfig?.type === 'polaroid').length || 1}
+              templateName="Polaroid"
+            />
             <div>
               <label className="text-[11px] font-bold text-slate-700 block mb-1">
                 Lời nhắn dòng 1:
@@ -671,41 +1074,76 @@ export const TemplateSettingsPanel: React.FC<TemplateSettingsPanelProps> = ({
             </div>
           </div>
 
-          {/* Màu khung & Độ dày chân */}
-          <div className="grid grid-cols-2 gap-2 pt-1">
-            <div>
-              <label className="text-[11px] font-bold text-slate-700 block mb-1">Màu khung:</label>
-              <div className="flex items-center gap-1.5">
-                {['#ffffff', '#fef9c3', '#fce7f3', '#f1f5f9', '#0f172a'].map((col) => (
-                  <button
-                    key={col}
-                    type="button"
-                    onClick={() => onChangeTemplateConfig({ ...templateConfig, frameColor: col })}
-                    className={`w-6 h-6 rounded-full border-2 transition cursor-pointer ${
-                      (templateConfig.frameColor || '#ffffff').toLowerCase() === col
-                        ? 'border-blue-600 scale-110 shadow-xs'
-                        : 'border-slate-300'
-                    }`}
-                    style={{ backgroundColor: col }}
-                  />
-                ))}
-                <input
-                  type="color"
-                  value={templateConfig.frameColor || '#ffffff'}
-                  onChange={(e) => onChangeTemplateConfig({ ...templateConfig, frameColor: e.target.value })}
-                  className="w-6 h-6 p-0 rounded-full cursor-pointer border border-slate-300 hover:border-blue-500"
-                  title="Chọn màu khác"
+          {/* Màu khung Polaroid */}
+          <div className="pt-1">
+            <label className="text-[11px] font-bold text-slate-700 block mb-1">Màu khung:</label>
+            <div className="flex items-center gap-1.5">
+              {['#ffffff', '#fef9c3', '#fce7f3', '#f1f5f9', '#0f172a'].map((col) => (
+                <button
+                  key={col}
+                  type="button"
+                  onClick={() => onChangeTemplateConfig({ ...templateConfig, frameColor: col })}
+                  className={`w-6 h-6 rounded-full border-2 transition cursor-pointer ${
+                    (templateConfig.frameColor || '#ffffff').toLowerCase() === col
+                      ? 'border-blue-600 scale-110 shadow-xs'
+                      : 'border-slate-300'
+                  }`}
+                  style={{ backgroundColor: col }}
                 />
-              </div>
+              ))}
+              <input
+                type="color"
+                value={templateConfig.frameColor || '#ffffff'}
+                onChange={(e) => onChangeTemplateConfig({ ...templateConfig, frameColor: e.target.value })}
+                className="w-6 h-6 p-0 rounded-full cursor-pointer border border-slate-300 hover:border-blue-500"
+                title="Chọn màu khác"
+              />
             </div>
+          </div>
+
+          {/* Tùy chỉnh độ dày viền trắng & Chân dưới Polaroid */}
+          <div className="space-y-2.5 pt-2 border-t border-slate-100">
             <div>
-              <label className="text-[11px] font-bold text-slate-700 block mb-1">
-                Chân dưới: {templateConfig.polaroid?.bottomMm ?? 16} mm
-              </label>
+              <div className="flex items-center justify-between text-[11px] font-bold text-slate-700 mb-1">
+                <span className="flex items-center gap-1">
+                  <Sliders className="w-3.5 h-3.5 text-blue-600" />
+                  <span>Độ dày viền trắng (trên & 2 bên):</span>
+                </span>
+                <span className="text-blue-600 font-mono font-bold">{templateConfig.polaroid?.borderMm ?? 3} mm</span>
+              </div>
               <input
                 type="range"
-                min="12"
-                max="26"
+                min="1"
+                max="12"
+                step="0.5"
+                value={templateConfig.polaroid?.borderMm ?? 3}
+                onChange={(e) =>
+                  onChangeTemplateConfig({
+                    ...templateConfig,
+                    polaroid: {
+                      ...(templateConfig.polaroid || {}),
+                      borderMm: Number(e.target.value),
+                    },
+                  })
+                }
+                className="w-full accent-blue-600"
+              />
+              <div className="flex justify-between text-[9.5px] text-slate-400">
+                <span>1 mm (Viền mảnh)</span>
+                <span>3 mm (Chuẩn)</span>
+                <span>12 mm (Viền dày vintage)</span>
+              </div>
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between text-[11px] font-bold text-slate-700 mb-1">
+                <span>Độ cao chân dưới ghi chữ:</span>
+                <span className="text-blue-600 font-mono font-bold">{templateConfig.polaroid?.bottomMm ?? 16} mm</span>
+              </div>
+              <input
+                type="range"
+                min="10"
+                max="35"
                 step="1"
                 value={templateConfig.polaroid?.bottomMm ?? 16}
                 onChange={(e) =>
@@ -719,6 +1157,11 @@ export const TemplateSettingsPanel: React.FC<TemplateSettingsPanelProps> = ({
                 }
                 className="w-full accent-blue-600"
               />
+              <div className="flex justify-between text-[9.5px] text-slate-400">
+                <span>10 mm (Gọn)</span>
+                <span>16 mm (Chuẩn)</span>
+                <span>35 mm (Chân cao)</span>
+              </div>
             </div>
           </div>
         </div>
@@ -729,7 +1172,7 @@ export const TemplateSettingsPanel: React.FC<TemplateSettingsPanelProps> = ({
         <div className="bg-white p-4 rounded-2xl border border-slate-200 space-y-3.5 shadow-2xs">
           <div className="flex items-center justify-between pb-2 border-b border-slate-100">
             <span className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
-              <span>📱 Tùy chỉnh bài viết Instagram (9 × 12 cm)</span>
+              <span>📱 Tùy chỉnh bài viết Instagram</span>
             </span>
             <div className="flex items-center gap-1">
               <button
@@ -751,6 +1194,19 @@ export const TemplateSettingsPanel: React.FC<TemplateSettingsPanelProps> = ({
               </button>
             </div>
           </div>
+
+          {/* Kích thước thành phẩm */}
+          <TemplateSizeSelector
+            curW={curTargetWidth}
+            curH={curTargetHeight}
+            onSelectSize={(w, h) => onChangeTemplateConfig(templateConfig, { w, h, shape: 'rect' })}
+            presets={[
+              { label: '9 × 12 cm', w: 90, h: 120 },
+              { label: '10 × 15 cm', w: 100, h: 150 },
+              { label: '6 × 9 cm', w: 60, h: 90 },
+              { label: '9 × 9 cm (Vuông)', w: 90, h: 90 },
+            ]}
+          />
 
           {/* Tên hiển thị (Username) */}
           <div>
@@ -880,7 +1336,7 @@ export const TemplateSettingsPanel: React.FC<TemplateSettingsPanelProps> = ({
                       : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                   }`}
                 >
-                  82 × 72 mm
+                  Chữ nhật (Dọc)
                 </button>
                 <button
                   type="button"
@@ -899,7 +1355,7 @@ export const TemplateSettingsPanel: React.FC<TemplateSettingsPanelProps> = ({
                       : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                   }`}
                 >
-                  Vuông 82 mm
+                  Vuông 1:1
                 </button>
               </div>
             </div>
@@ -961,6 +1417,41 @@ export const TemplateSettingsPanel: React.FC<TemplateSettingsPanelProps> = ({
             </div>
           </div>
 
+          {/* Tùy chỉnh độ dày viền trắng quanh bài viết */}
+          <div className="pt-2 border-t border-slate-100">
+            <div className="flex items-center justify-between text-[11px] font-bold text-slate-700 mb-1">
+              <span className="flex items-center gap-1">
+                <Sliders className="w-3.5 h-3.5 text-blue-600" />
+                <span>Độ dày viền trắng quanh bài viết:</span>
+              </span>
+              <span className="text-blue-600 font-mono font-bold">
+                {(templateConfig.instagram?.borderMm ?? 4) === 0 ? '0 mm (Tràn viền)' : `${templateConfig.instagram?.borderMm ?? 4} mm`}
+              </span>
+            </div>
+            <input
+              type="range"
+              min="0"
+              max="12"
+              step="0.5"
+              value={templateConfig.instagram?.borderMm ?? 4}
+              onChange={(e) =>
+                onChangeTemplateConfig({
+                  ...templateConfig,
+                  instagram: {
+                    ...(templateConfig.instagram || { username: 'daudau_print', avatarType: 'main' }),
+                    borderMm: Number(e.target.value),
+                  },
+                })
+              }
+              className="w-full accent-blue-600"
+            />
+            <div className="flex justify-between text-[9.5px] text-slate-400">
+              <span>0 mm (Tràn mép thẻ)</span>
+              <span>4 mm (Chuẩn)</span>
+              <span>12 mm (Thẻ viền rộng)</span>
+            </div>
+          </div>
+
           {/* Lượt thích & Màu nền thẻ */}
           <div className="grid grid-cols-2 gap-2 pt-1 border-t border-slate-100">
             <div>
@@ -1012,7 +1503,17 @@ export const TemplateSettingsPanel: React.FC<TemplateSettingsPanelProps> = ({
 
           {/* Lời nhắn / Caption */}
           <div className="space-y-1.5 pt-1">
-            <label className="text-[11px] font-bold text-slate-700 block">Lời nhắn / Caption:</label>
+            <TemplateTextToolbar
+              label="Lời nhắn / Caption bài viết:"
+              hasText={Boolean(templateConfig.textLine1 || templateConfig.textLine2)}
+              onClearCurrent={() => handleClearCurrentPhotoText('instagram')}
+              onClearAll={handleClearAllPhotosText}
+              onApplyToSame={() => handleApplyTextToSameTemplate('instagram')}
+              onApplyToAll={() => handleApplyTemplateAndTextToAll('instagram')}
+              totalPhotosCount={allPhotos?.length || 1}
+              sameTemplateCount={allPhotos?.filter((p) => p.templateConfig?.type === 'instagram').length || 1}
+              templateName="Instagram"
+            />
             <input
               type="text"
               value={templateConfig.textLine1 ?? ''}
@@ -1053,7 +1554,7 @@ export const TemplateSettingsPanel: React.FC<TemplateSettingsPanelProps> = ({
 
           <div className="flex items-center justify-between pb-2 border-b border-slate-100">
             <span className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
-              <span>🎞️ Dải Photostrip (50 × 150 mm)</span>
+              <span>🎞️ Dải Photostrip</span>
             </span>
             <div className="flex gap-1 text-[11px]">
               <button
@@ -1080,6 +1581,18 @@ export const TemplateSettingsPanel: React.FC<TemplateSettingsPanelProps> = ({
               </button>
             </div>
           </div>
+
+          {/* Kích thước thành phẩm dải ảnh */}
+          <TemplateSizeSelector
+            curW={curTargetWidth}
+            curH={curTargetHeight}
+            onSelectSize={(w, h) => onChangeTemplateConfig(templateConfig, { w, h, shape: 'rect' })}
+            presets={[
+              { label: '5 × 15 cm (Chuẩn)', w: 50, h: 150 },
+              { label: '4 × 12 cm (Bỏ ví)', w: 40, h: 120 },
+              { label: '6 × 18 cm (Khổ to)', w: 60, h: 180 },
+            ]}
+          />
 
           {/* QUẢN LÝ TỪNG Ô ẢNH TRÊN DẢI (MULTI-PHOTO SLOTS) */}
           <div className="space-y-2 bg-slate-50/80 p-2.5 rounded-xl border border-slate-200/80">
@@ -1240,6 +1753,17 @@ export const TemplateSettingsPanel: React.FC<TemplateSettingsPanelProps> = ({
 
           {/* LỜI NHẮN & PHÔNG CHỮ */}
           <div className="space-y-2">
+            <TemplateTextToolbar
+              label="Lời nhắn chân dải Photostrip:"
+              hasText={Boolean(templateConfig.textLine1 || templateConfig.textLine2)}
+              onClearCurrent={() => handleClearCurrentPhotoText('photostrip')}
+              onClearAll={handleClearAllPhotosText}
+              onApplyToSame={() => handleApplyTextToSameTemplate('photostrip')}
+              onApplyToAll={() => handleApplyTemplateAndTextToAll('photostrip')}
+              totalPhotosCount={allPhotos?.length || 1}
+              sameTemplateCount={allPhotos?.filter((p) => p.templateConfig?.type === 'photostrip').length || 1}
+              templateName="Photostrip"
+            />
             <div>
               <label className="text-[11px] font-bold text-slate-700 block mb-1">
                 Lời nhắn chân dải (dòng 1):
@@ -1320,6 +1844,99 @@ export const TemplateSettingsPanel: React.FC<TemplateSettingsPanelProps> = ({
               />
             </div>
           </div>
+
+          {/* Tùy chỉnh độ dày viền trắng, khoảng cách ô & Chân dải */}
+          <div className="space-y-2.5 pt-2 border-t border-slate-100">
+            <div>
+              <div className="flex items-center justify-between text-[11px] font-bold text-slate-700 mb-1">
+                <span className="flex items-center gap-1">
+                  <Sliders className="w-3.5 h-3.5 text-blue-600" />
+                  <span>Độ dày viền quanh dải:</span>
+                </span>
+                <span className="text-blue-600 font-mono font-bold">{templateConfig.photostrip?.borderMm ?? 3} mm</span>
+              </div>
+              <input
+                type="range"
+                min="1"
+                max="8"
+                step="0.5"
+                value={templateConfig.photostrip?.borderMm ?? 3}
+                onChange={(e) =>
+                  onChangeTemplateConfig({
+                    ...templateConfig,
+                    photostrip: {
+                      ...(templateConfig.photostrip || { slotCount: 4 }),
+                      borderMm: Number(e.target.value),
+                    },
+                  })
+                }
+                className="w-full accent-blue-600"
+              />
+              <div className="flex justify-between text-[9.5px] text-slate-400">
+                <span>1 mm (Viền mảnh)</span>
+                <span>3 mm (Chuẩn)</span>
+                <span>8 mm (Viền rộng)</span>
+              </div>
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between text-[11px] font-bold text-slate-700 mb-1">
+                <span>Khoảng cách giữa các ô ảnh:</span>
+                <span className="text-blue-600 font-mono font-bold">{templateConfig.photostrip?.gapMm ?? 2} mm</span>
+              </div>
+              <input
+                type="range"
+                min="0"
+                max="6"
+                step="0.5"
+                value={templateConfig.photostrip?.gapMm ?? 2}
+                onChange={(e) =>
+                  onChangeTemplateConfig({
+                    ...templateConfig,
+                    photostrip: {
+                      ...(templateConfig.photostrip || { slotCount: 4 }),
+                      gapMm: Number(e.target.value),
+                    },
+                  })
+                }
+                className="w-full accent-blue-600"
+              />
+              <div className="flex justify-between text-[9.5px] text-slate-400">
+                <span>0 mm (Liền sát)</span>
+                <span>2 mm (Chuẩn)</span>
+                <span>6 mm (Thưa thoáng)</span>
+              </div>
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between text-[11px] font-bold text-slate-700 mb-1">
+                <span>Độ cao chân dải ghi lời nhắn:</span>
+                <span className="text-blue-600 font-mono font-bold">{templateConfig.photostrip?.bottomMm ?? 10} mm</span>
+              </div>
+              <input
+                type="range"
+                min="6"
+                max="25"
+                step="1"
+                value={templateConfig.photostrip?.bottomMm ?? 10}
+                onChange={(e) =>
+                  onChangeTemplateConfig({
+                    ...templateConfig,
+                    photostrip: {
+                      ...(templateConfig.photostrip || { slotCount: 4 }),
+                      bottomMm: Number(e.target.value),
+                    },
+                  })
+                }
+                className="w-full accent-blue-600"
+              />
+              <div className="flex justify-between text-[9.5px] text-slate-400">
+                <span>6 mm (Nhỏ gọn)</span>
+                <span>10 mm (Chuẩn)</span>
+                <span>25 mm (Chân rộng)</span>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
@@ -1330,33 +1947,32 @@ export const TemplateSettingsPanel: React.FC<TemplateSettingsPanelProps> = ({
             <span className="text-xs font-bold text-slate-900">
               🎬 Tùy chỉnh Viền Film cổ điển
             </span>
-            <div className="flex gap-1 text-[11px]">
-              <button
-                type="button"
-                onClick={() => onChangeTemplateConfig(templateConfig, { w: 60, h: 90, shape: 'rect' })}
-                className={`px-2 py-0.5 rounded-md font-bold transition ${
-                  curTargetWidth === 60 && curTargetHeight === 90
-                    ? 'bg-amber-600 text-white'
-                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                }`}
-              >
-                6 × 9 cm
-              </button>
-              <button
-                type="button"
-                onClick={() => onChangeTemplateConfig(templateConfig, { w: 100, h: 150, shape: 'rect' })}
-                className={`px-2 py-0.5 rounded-md font-bold transition ${
-                  curTargetWidth === 100 && curTargetHeight === 150
-                    ? 'bg-amber-600 text-white'
-                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                }`}
-              >
-                10 × 15 cm
-              </button>
-            </div>
           </div>
 
+          {/* Kích thước thành phẩm Film */}
+          <TemplateSizeSelector
+            curW={curTargetWidth}
+            curH={curTargetHeight}
+            onSelectSize={(w, h) => onChangeTemplateConfig(templateConfig, { w, h, shape: 'rect' })}
+            presets={[
+              { label: '6 × 9 cm', w: 60, h: 90 },
+              { label: '10 × 15 cm', w: 100, h: 150 },
+              { label: '9 × 12 cm', w: 90, h: 120 },
+            ]}
+          />
+
           <div className="space-y-2">
+            <TemplateTextToolbar
+              label="Dòng chữ kỷ niệm mép Film:"
+              hasText={Boolean(templateConfig.film?.sideText)}
+              onClearCurrent={() => handleClearCurrentPhotoText('film')}
+              onClearAll={handleClearAllPhotosText}
+              onApplyToSame={() => handleApplyTextToSameTemplate('film')}
+              onApplyToAll={() => handleApplyTemplateAndTextToAll('film')}
+              totalPhotosCount={allPhotos?.length || 1}
+              sameTemplateCount={allPhotos?.filter((p) => p.templateConfig?.type === 'film').length || 1}
+              templateName="Film"
+            />
             <div>
               <label className="text-[11px] font-bold text-slate-700 block mb-1">
                 Dòng chữ kỷ niệm mép trái:
@@ -1446,6 +2062,39 @@ export const TemplateSettingsPanel: React.FC<TemplateSettingsPanelProps> = ({
                 label="Kiểu phông chữ mép film:"
               />
             </div>
+
+            {/* Tùy chỉnh độ dày viền film */}
+            <div className="pt-2 border-t border-slate-100">
+              <div className="flex items-center justify-between text-[11px] font-bold text-slate-700 mb-1">
+                <span className="flex items-center gap-1">
+                  <Sliders className="w-3.5 h-3.5 text-amber-600" />
+                  <span>Độ dày viền film đục lỗ (2 bên):</span>
+                </span>
+                <span className="text-amber-600 font-mono font-bold">{templateConfig.film?.borderMm ?? 4} mm</span>
+              </div>
+              <input
+                type="range"
+                min="2"
+                max="10"
+                step="0.5"
+                value={templateConfig.film?.borderMm ?? 4}
+                onChange={(e) =>
+                  onChangeTemplateConfig({
+                    ...templateConfig,
+                    film: {
+                      ...(templateConfig.film || {}),
+                      borderMm: Number(e.target.value),
+                    },
+                  })
+                }
+                className="w-full accent-amber-600"
+              />
+              <div className="flex justify-between text-[9.5px] text-slate-400">
+                <span>2 mm (Mảnh)</span>
+                <span>4 mm (Chuẩn 35mm)</span>
+                <span>10 mm (Viền dày)</span>
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -1455,11 +2104,34 @@ export const TemplateSettingsPanel: React.FC<TemplateSettingsPanelProps> = ({
         <div className="bg-white p-4 rounded-2xl border border-slate-200 space-y-3.5 shadow-2xs">
           <div className="flex items-center justify-between pb-2 border-b border-slate-100">
             <span className="text-xs font-bold text-slate-900">
-              🔖 Tùy chỉnh Thẻ Bookmark (50 × 150 mm)
+              🔖 Tùy chỉnh Thẻ Bookmark
             </span>
           </div>
 
+          {/* Kích thước thành phẩm Bookmark */}
+          <TemplateSizeSelector
+            curW={curTargetWidth}
+            curH={curTargetHeight}
+            onSelectSize={(w, h) => onChangeTemplateConfig(templateConfig, { w, h, shape: 'rect' })}
+            presets={[
+              { label: '5 × 15 cm (Chuẩn)', w: 50, h: 150 },
+              { label: '4 × 12 cm (Nhỏ gọn)', w: 40, h: 120 },
+              { label: '6 × 18 cm (Cỡ lớn)', w: 60, h: 180 },
+            ]}
+          />
+
           <div className="space-y-2">
+            <TemplateTextToolbar
+              label="Lời nhắn chân thẻ Bookmark:"
+              hasText={Boolean(templateConfig.textLine1 || templateConfig.textLine2)}
+              onClearCurrent={() => handleClearCurrentPhotoText('bookmark')}
+              onClearAll={handleClearAllPhotosText}
+              onApplyToSame={() => handleApplyTextToSameTemplate('bookmark')}
+              onApplyToAll={() => handleApplyTemplateAndTextToAll('bookmark')}
+              totalPhotosCount={allPhotos?.length || 1}
+              sameTemplateCount={allPhotos?.filter((p) => p.templateConfig?.type === 'bookmark').length || 1}
+              templateName="Bookmark"
+            />
             <div>
               <label className="text-[11px] font-bold text-slate-700 block mb-1">
                 Lời nhắn chân thẻ:
@@ -1538,6 +2210,70 @@ export const TemplateSettingsPanel: React.FC<TemplateSettingsPanelProps> = ({
                 className="w-6 h-6 p-0 rounded-full cursor-pointer border border-slate-300 hover:border-blue-500"
                 title="Chọn màu khác"
               />
+            </div>
+          </div>
+
+          {/* Tùy chỉnh độ dày viền trắng & Chân thẻ Bookmark */}
+          <div className="space-y-2.5 pt-2 border-t border-slate-100">
+            <div>
+              <div className="flex items-center justify-between text-[11px] font-bold text-slate-700 mb-1">
+                <span className="flex items-center gap-1">
+                  <Sliders className="w-3.5 h-3.5 text-blue-600" />
+                  <span>Độ dày viền quanh ảnh:</span>
+                </span>
+                <span className="text-blue-600 font-mono font-bold">{templateConfig.bookmark?.borderMm ?? 3} mm</span>
+              </div>
+              <input
+                type="range"
+                min="1"
+                max="8"
+                step="0.5"
+                value={templateConfig.bookmark?.borderMm ?? 3}
+                onChange={(e) =>
+                  onChangeTemplateConfig({
+                    ...templateConfig,
+                    bookmark: {
+                      ...(templateConfig.bookmark || {}),
+                      borderMm: Number(e.target.value),
+                    },
+                  })
+                }
+                className="w-full accent-blue-600"
+              />
+              <div className="flex justify-between text-[9.5px] text-slate-400">
+                <span>1 mm (Viền mảnh)</span>
+                <span>3 mm (Chuẩn)</span>
+                <span>8 mm (Viền rộng)</span>
+              </div>
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between text-[11px] font-bold text-slate-700 mb-1">
+                <span>Độ cao chân thẻ lời nhắn:</span>
+                <span className="text-blue-600 font-mono font-bold">{templateConfig.bookmark?.bottomMm ?? 38} mm</span>
+              </div>
+              <input
+                type="range"
+                min="15"
+                max="50"
+                step="1"
+                value={templateConfig.bookmark?.bottomMm ?? 38}
+                onChange={(e) =>
+                  onChangeTemplateConfig({
+                    ...templateConfig,
+                    bookmark: {
+                      ...(templateConfig.bookmark || {}),
+                      bottomMm: Number(e.target.value),
+                    },
+                  })
+                }
+                className="w-full accent-blue-600"
+              />
+              <div className="flex justify-between text-[9.5px] text-slate-400">
+                <span>15 mm (Gọn)</span>
+                <span>38 mm (Chuẩn)</span>
+                <span>50 mm (Rộng rãi)</span>
+              </div>
             </div>
           </div>
 
