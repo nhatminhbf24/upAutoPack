@@ -174,6 +174,102 @@ export const PageLayoutSettings: React.FC<PageLayoutSettingsProps> = ({
     });
   };
 
+  // Local string state for smooth decimal input (supports both '.' and ',' for Vietnamese input e.g. 0.1 > 0.9 mm)
+  const [marginInput, setMarginInput] = useState<string>(() => String(settings.margin));
+  const [gapInput, setGapInput] = useState<string>(() => String(settings.gap));
+
+  useEffect(() => {
+    const parsedMargin = parseFloat(marginInput.replace(',', '.'));
+    if (isNaN(parsedMargin) || parsedMargin !== settings.margin) {
+      setMarginInput(String(settings.margin));
+    }
+  }, [settings.margin]);
+
+  useEffect(() => {
+    const parsedGap = parseFloat(gapInput.replace(',', '.'));
+    if (isNaN(parsedGap) || parsedGap !== settings.gap) {
+      setGapInput(String(settings.gap));
+    }
+  }, [settings.gap]);
+
+  const handleMarginChange = (val: string) => {
+    setMarginInput(val);
+    const normalized = val.replace(',', '.');
+    if (normalized === '' || normalized === '.') {
+      onUpdateSettings({ margin: 0 });
+      return;
+    }
+    const num = parseFloat(normalized);
+    if (!isNaN(num) && num >= 0 && num <= 100) {
+      onUpdateSettings({ margin: Math.round(num * 10) / 10 });
+    }
+  };
+
+  const handleMarginBlur = () => {
+    const normalized = marginInput.replace(',', '.');
+    const num = parseFloat(normalized);
+    const finalVal = isNaN(num) ? 0 : Math.max(0, Math.min(100, Math.round(num * 10) / 10));
+    setMarginInput(String(finalVal));
+    onUpdateSettings({ margin: finalVal });
+  };
+
+  const handleMarginKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      const curr = parseFloat(marginInput.replace(',', '.')) || 0;
+      const step = e.shiftKey ? 5 : 1;
+      const next = Math.min(100, Math.round((curr + step) * 10) / 10);
+      setMarginInput(String(next));
+      onUpdateSettings({ margin: next });
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      const curr = parseFloat(marginInput.replace(',', '.')) || 0;
+      const step = e.shiftKey ? 5 : 1;
+      const next = Math.max(0, Math.round((curr - step) * 10) / 10);
+      setMarginInput(String(next));
+      onUpdateSettings({ margin: next });
+    }
+  };
+
+  const handleGapChange = (val: string) => {
+    setGapInput(val);
+    const normalized = val.replace(',', '.');
+    if (normalized === '' || normalized === '.') {
+      onUpdateSettings({ gap: 0 });
+      return;
+    }
+    const num = parseFloat(normalized);
+    if (!isNaN(num) && num >= 0 && num <= 50) {
+      onUpdateSettings({ gap: Math.round(num * 100) / 100 });
+    }
+  };
+
+  const handleGapBlur = () => {
+    const normalized = gapInput.replace(',', '.');
+    const num = parseFloat(normalized);
+    const finalVal = isNaN(num) ? 0 : Math.max(0, Math.min(50, Math.round(num * 100) / 100));
+    setGapInput(String(finalVal));
+    onUpdateSettings({ gap: finalVal });
+  };
+
+  const handleGapKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      const curr = parseFloat(gapInput.replace(',', '.')) || 0;
+      const step = e.shiftKey ? 1 : 0.1;
+      const next = Math.min(50, Math.round((curr + step) * 100) / 100);
+      setGapInput(String(next));
+      onUpdateSettings({ gap: next });
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      const curr = parseFloat(gapInput.replace(',', '.')) || 0;
+      const step = e.shiftKey ? 1 : 0.1;
+      const next = Math.max(0, Math.round((curr - step) * 100) / 100);
+      setGapInput(String(next));
+      onUpdateSettings({ gap: next });
+    }
+  };
+
   // Áp dụng tag của trang hiện tại cho toàn bộ các trang
   const handleApplyTagToAllPages = () => {
     const nextPageTextTags: Record<number, FreeformTextTag> = {};
@@ -200,13 +296,15 @@ export const PageLayoutSettings: React.FC<PageLayoutSettingsProps> = ({
             Lề trang
           </label>
           <input
-            type="number"
-            min="0"
-            max="50"
-            value={settings.margin}
-            onChange={(e) => onUpdateSettings({ margin: Math.max(0, parseInt(e.target.value) || 0) })}
-            className="w-[34px] bg-indigo-50/40 border border-indigo-200 rounded-md py-0.5 text-xs font-bold text-center text-slate-800 outline-none focus:ring-1 focus:ring-indigo-400 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+            type="text"
+            inputMode="decimal"
+            value={marginInput}
+            onChange={(e) => handleMarginChange(e.target.value)}
+            onBlur={handleMarginBlur}
+            onKeyDown={handleMarginKeyDown}
+            className="w-[42px] bg-indigo-50/40 border border-indigo-200 rounded-md py-0.5 text-xs font-bold text-center text-slate-800 outline-none focus:ring-1 focus:ring-indigo-400"
             title="Lề trang in (mm)"
+            placeholder="5"
           />
         </div>
 
@@ -215,14 +313,47 @@ export const PageLayoutSettings: React.FC<PageLayoutSettingsProps> = ({
             Ảnh
           </label>
           <input
-            type="number"
-            min="0"
-            max="50"
-            value={settings.gap}
-            onChange={(e) => onUpdateSettings({ gap: Math.max(0, parseInt(e.target.value) || 0) })}
-            className="w-[34px] bg-indigo-50/40 border border-indigo-200 rounded-md py-0.5 text-xs font-bold text-center text-slate-800 outline-none focus:ring-1 focus:ring-indigo-400 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-            title="Khoảng cách giữa các ảnh (mm)"
+            type="text"
+            inputMode="decimal"
+            value={gapInput}
+            onChange={(e) => handleGapChange(e.target.value)}
+            onBlur={handleGapBlur}
+            onKeyDown={handleGapKeyDown}
+            className="w-[42px] bg-indigo-50/40 border border-indigo-200 rounded-md py-0.5 text-xs font-bold text-center text-slate-800 outline-none focus:ring-1 focus:ring-indigo-400"
+            title="Khoảng cách giữa các ảnh (mm) - Cho phép số lẻ từ 0.1 đến 0.9 mm (vd: 0.2, 0.5) cho in móc khóa rọc 1 dao"
+            placeholder="1"
           />
+        </div>
+      </div>
+
+      {/* Phím tắt chọn nhanh khoảng cách in móc khóa / rọc 1 dao */}
+      <div className="flex items-center justify-between px-1 text-[11px]">
+        <span className="text-indigo-950 font-semibold text-[10.5px]">Khe cắt:</span>
+        <div className="flex items-center gap-1">
+          {[
+            { label: '0', val: 0, desc: 'Khít sát 0mm' },
+            { label: '0.2', val: 0.2, desc: 'Móc khóa rọc 1 nhát (0.2mm)' },
+            { label: '0.5', val: 0.5, desc: 'Móc khóa rọc 1 nhát (0.5mm)' },
+            { label: '1', val: 1, desc: 'Chuẩn 1mm' },
+            { label: '2', val: 2, desc: 'Chuẩn 2mm' },
+          ].map((item) => (
+            <button
+              key={item.val}
+              type="button"
+              onClick={() => {
+                setGapInput(String(item.val));
+                onUpdateSettings({ gap: item.val });
+              }}
+              title={item.desc}
+              className={`px-1.5 py-0.5 rounded text-[10.5px] font-bold transition cursor-pointer ${
+                settings.gap === item.val
+                  ? 'bg-indigo-600 text-white shadow-2xs'
+                  : 'bg-white/80 hover:bg-white text-indigo-800 border border-indigo-200/90 hover:border-indigo-300'
+              }`}
+            >
+              {item.label}
+            </button>
+          ))}
         </div>
       </div>
 

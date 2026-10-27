@@ -108,4 +108,28 @@ describe('Bin Packing Engine (packImagesToPages)', () => {
     const expectedMirroredX = Math.round((A4_WIDTH_MM - (p1Item.x + p1Item.w)) * 100) / 100;
     expect(p2Item.x).toBe(expectedMirroredX);
   });
+
+  it('should accurately handle decimal gap values (e.g. 0.2mm, 0.5mm for keychain printing)', () => {
+    const decimalGapSettings: LayoutSettings = {
+      ...mockDefaultSettings,
+      margin: 5,
+      gap: 0.2,
+    };
+
+    const photos = [createMockPhoto('k1', 40, 60, 2)];
+    const pages = packImagesToPages(photos, decimalGapSettings);
+
+    expect(pages.length).toBe(1);
+    expect(pages[0].items.length).toBe(2);
+
+    const first = pages[0].items[0];
+    const second = pages[0].items[1];
+
+    expect(first.x).toBe(5);
+    // Second item placed at margin + width + gap = 5 + 40 + 0.2 = 45.2
+    expect(Math.round(second.x * 100) / 100).toBe(45.2);
+    // Gap between first item right edge and second item left edge
+    const calculatedGap = Math.round((second.x - (first.x + first.w)) * 100) / 100;
+    expect(calculatedGap).toBe(0.2);
+  });
 });
