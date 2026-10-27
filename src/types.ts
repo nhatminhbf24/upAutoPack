@@ -76,6 +76,8 @@ export interface PhotoItem {
   badgeGuideLines?: boolean; // Hiển thị vòng căn dập mặt chính (mặc định false)
   badgeBleedMode?: 'solid' | 'blur_expand'; // 'solid': màu trơn | 'blur_expand': kéo giãn nhòe viền
   templateConfig?: TemplateConfig; // Cấu hình mẫu thiết kế đặc thù (Polaroid, Instagram, Photostrip, Viền Film, Bookmark)
+  hasWhiteBackground?: boolean; // Tự động phát hiện ảnh có nền trắng đục (nguy cơ khi in PET / áo tối màu)
+  isTransparent?: boolean; // Đã là ảnh PNG trong suốt
 }
 
 export type PrintTemplateType = 'none' | 'polaroid' | 'instagram' | 'photostrip' | 'film' | 'bookmark' | 'photocard' | 'spotify' | 'ticket' | 'badge';
@@ -232,6 +234,7 @@ export interface LayoutSettings {
   allowRotation?: boolean; // Cho phép xoay 90° lấp khoảng trống (Tiết kiệm giấy tối đa)
   paperOrientation: 'portrait' | 'landscape';
   layoutMode?: 'auto' | 'freeform'; // Chế độ xếp: Tự động tối ưu (auto) hoặc Kéo thả di chuyển tự do (freeform)
+  previewCanvasBg?: 'paper' | 'checker' | 'dark'; // Chế độ nền xem trước: 'paper' (Giấy trắng mặc định) | 'checker' (Bàn cờ caro trong suốt PET) | 'dark' (Áo tối màu)
 }
 
 export interface PlacedPhotoItem extends PhotoItem {

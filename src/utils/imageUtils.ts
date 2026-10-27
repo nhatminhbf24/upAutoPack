@@ -4,6 +4,7 @@ import { MM_TO_PX_300DPI, A4_WIDTH_MM, A4_HEIGHT_MM } from './packing';
 import { renderTextTagOnCanvas } from './textTagUtils';
 import { detectBadgeBleedColors } from './badgeUtils';
 import { createDefaultTemplateConfig, renderTemplateOnCanvas } from './templateRenderUtils';
+import { analyzeWhiteBackground } from './petPrintUtils';
 
 export function getShortPresetLabel(label: string): string {
   if (!label) return '';
@@ -1225,6 +1226,17 @@ export async function processImageFilesToPhotos(
       const crop = calculateCrop(finalImgWidth, finalImgHeight, targetW, targetH, smartCrop);
       const baseWorkingSrc = finalRotation === 90 ? finalOriginalSrc : dataUrl;
 
+      // Phân tích nền trắng đục cho in áo / in PET
+      let hasWhiteBackground = false;
+      let isTransparent = false;
+      try {
+        const bgAnalysis = await analyzeWhiteBackground(finalOriginalSrc);
+        hasWhiteBackground = bgAnalysis.hasWhiteBackground;
+        isTransparent = !bgAnalysis.isOpaque;
+      } catch (e) {
+        // Fallback
+      }
+
       const isBadge = Boolean(activePreset.isBadgePreset);
       let badgeBleedColor: string | undefined;
       let badgeBleedPalette: string[] | undefined;
@@ -1273,6 +1285,8 @@ export async function processImageFilesToPhotos(
         badgeBleedPalette: isBadge ? badgeBleedPalette : undefined,
         badgeGuideLines: false,
         badgeBleedMode: isBadge ? 'solid' : undefined,
+        hasWhiteBackground,
+        isTransparent,
       });
     } catch (err) {
       console.error('Error processing single image:', err);

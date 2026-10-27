@@ -114,6 +114,46 @@ export const BatchToolsSidebar: React.FC<BatchToolsSidebarProps> = ({
     };
   }, [isCollapsed, onClose, onToggleCollapse]);
   const [isEnhancingAll, setIsEnhancingAll] = useState<boolean>(false);
+  const [isRemovingWhiteBgAll, setIsRemovingWhiteBgAll] = useState<boolean>(false);
+
+  const handleBatchRemoveAllWhiteBackgrounds = async () => {
+    if (photos.length === 0) {
+      onToast('error', 'Chưa có ảnh để xử lý');
+      return;
+    }
+    setIsRemovingWhiteBgAll(true);
+    let count = 0;
+    try {
+      const updatedList: PhotoItem[] = [];
+      for (const photo of photos) {
+        try {
+          const res = await removeWhiteBackground(photo.originalSrc);
+          const previewSrc = await createOptimizedPreview(res.dataUrl, 420, 0.82);
+          updatedList.push({
+            ...photo,
+            originalSrc: res.dataUrl,
+            previewSrc,
+            hasWhiteBackground: false,
+            isTransparent: true,
+          });
+          count++;
+        } catch {
+          updatedList.push(photo);
+        }
+      }
+      if (onBatchUpdatePhotos) {
+        onBatchUpdatePhotos(updatedList);
+      } else {
+        updatedList.forEach((p) => onUpdatePhoto(p.id, p));
+      }
+      onToast('success', `Đã tẩy sạch nền trắng của ${count} ảnh thành PNG trong suốt!`);
+    } catch (e) {
+      console.error(e);
+      onToast('error', 'Có lỗi khi tẩy nền trắng hàng loạt');
+    } finally {
+      setIsRemovingWhiteBgAll(false);
+    }
+  };
   const [isRevertingAll, setIsRevertingAll] = useState<boolean>(false);
   const [isAutoAdjustingAll, setIsAutoAdjustingAll] = useState<boolean>(false);
   const [isRevertingColorsAll, setIsRevertingColorsAll] = useState<boolean>(false);
@@ -857,6 +897,38 @@ export const BatchToolsSidebar: React.FC<BatchToolsSidebarProps> = ({
             onResetFreeformPositions={onResetFreeformPositions}
             onToast={onToast}
           />
+
+          {/* CỤM IN ÁO & IN PET CHUYỂN NHIỆT (DTF) */}
+          <div className="bg-purple-50/70 rounded-xl p-3.5 border border-purple-200/90 shadow-sm hover:shadow-md space-y-2.5 transition-all duration-200 hover:border-purple-300">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5 text-purple-950 font-bold">
+                <Shirt className="w-3.5 h-3.5 text-purple-600" />
+                <span className="text-[11px] uppercase tracking-wide">IN ÁO & PET CHUYỂN NHIỆT (DTF)</span>
+              </div>
+              <span className="text-[10px] text-purple-700 font-bold bg-purple-100 border border-purple-200 px-1.5 py-0.5 rounded">
+                Chống viền trắng
+              </span>
+            </div>
+
+            <p className="text-[11px] text-slate-600 leading-snug">
+              Tự động quét và tẩy sạch toàn bộ nền trắng đục thành PNG trong suốt, chống in ra mảng trắng khi ép lên áo tối màu.
+            </p>
+
+            <button
+              type="button"
+              onClick={handleBatchRemoveAllWhiteBackgrounds}
+              disabled={isRemovingWhiteBgAll || photos.length === 0}
+              className="w-full py-2 px-3 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-sm active:scale-95 cursor-pointer disabled:opacity-50"
+              title="Tự động tẩy sạch toàn bộ nền trắng của mọi ảnh trong bàn in"
+            >
+              {isRemovingWhiteBgAll ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+              )}
+              <span>⚡ Tẩy nền trắng toàn bộ ảnh (Chuẩn PET)</span>
+            </button>
+          </div>
 
           {/* CỤM MẪU IN THÀNH PHẨM HÀNG LOẠT */}
           <div className="bg-indigo-50/70 rounded-xl p-3.5 border border-indigo-200/90 shadow-sm hover:shadow-md space-y-2.5 transition-all duration-200 hover:border-indigo-300">

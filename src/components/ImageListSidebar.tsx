@@ -24,6 +24,7 @@ import { PhotoItem, DEFAULT_SIZE_PRESETS, SizePreset } from '../types';
 import { rotateImageBase64, calculateCrop, createOptimizedPreview } from '../utils/imageUtils';
 import { detectBadgeBleedColors } from '../utils/badgeUtils';
 import { enhanceImageQuality, calculatePrintDPI, getRecommendedUpscaleFactor } from '../utils/imageEnhancer';
+import { removeWhiteBackground } from '../utils/petPrintUtils';
 
 interface ImageListSidebarProps {
   photos: PhotoItem[];
@@ -803,6 +804,18 @@ export const ImageListSidebar: React.FC<ImageListSidebarProps> = ({
                                     )}
                                   </button>
 
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRemoveWhiteBgSingle(photo)}
+                                    disabled={removingWhiteBgId === photo.id}
+                                    className="w-full text-left px-2 py-1.5 rounded-lg hover:bg-purple-50 text-purple-700 flex items-center justify-between transition font-medium border-t border-slate-100 mt-1 pt-1.5 cursor-pointer"
+                                  >
+                                    <span className="flex items-center gap-1.5">
+                                      <Sparkles className="w-3.5 h-3.5 text-purple-600" />
+                                      <span>Tẩy nền trắng (In PET)</span>
+                                    </span>
+                                  </button>
+
                                   {photo.isEnhanced && (
                                     <button
                                       type="button"
@@ -872,6 +885,30 @@ export const ImageListSidebar: React.FC<ImageListSidebarProps> = ({
                             </button>
                           )}
                         </div>
+
+                        {/* PET White Background Alert Badge */}
+                        {photo.hasWhiteBackground && (
+                          <div className="flex items-center justify-between bg-amber-50/95 border border-amber-300 rounded-lg px-2 py-1 text-[10px] gap-1 shadow-2xs">
+                            <div className="flex items-center gap-1 font-bold text-amber-900 min-w-0 truncate" title="Ảnh có nền trắng đục. Nếu in áo hoặc in PET, khối trắng này sẽ bị in ra áo!">
+                              <AlertTriangle className="w-3 h-3 text-amber-600 shrink-0" />
+                              <span className="truncate">Nền trắng đục (PET)</span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveWhiteBgSingle(photo)}
+                              disabled={removingWhiteBgId === photo.id}
+                              className="px-2 py-0.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded text-[9.5px] transition flex items-center gap-1 shrink-0 cursor-pointer disabled:opacity-50"
+                              title="Tẩy sạch nền trắng thành PNG trong suốt"
+                            >
+                              {removingWhiteBgId === photo.id ? (
+                                <Loader2 className="w-2.5 h-2.5 animate-spin" />
+                              ) : (
+                                <Sparkles className="w-2.5 h-2.5" />
+                              )}
+                              <span>Tẩy nền</span>
+                            </button>
+                          </div>
+                        )}
 
                         {/* 🏅 Phôi Huy hiệu: Gộp gọn trên 1 dòng duy nhất, từ trái qua phải: Blur -> Auto -> 4 màu gợi ý -> vạch ngăn cách -> Màu lựa chọn */}
                         {photo.badgeMode && (

@@ -22,6 +22,18 @@
   }
 
   /* Đường phân cách mảnh chìm BÊN TRONG lòng ảnh trên màn hình preview để thấy rõ từng ảnh khi đặt khe hở nhỏ (0.1 - 0.5mm) mà KHÔNG lấn ra ngoài khoảng trống */
+  /* Bàn cờ Caro soi độ trong suốt chuẩn Photoshop / in PET */
+  .bg-checkerboard {
+    background-color: #f1f5f9;
+    background-image: 
+      linear-gradient(45deg, #cbd5e1 25%, transparent 25%), 
+      linear-gradient(-45deg, #cbd5e1 25%, transparent 25%), 
+      linear-gradient(45deg, transparent 75%, #cbd5e1 75%), 
+      linear-gradient(-45deg, transparent 75%, #cbd5e1 75%);
+    background-size: 16px 16px;
+    background-position: 0 0, 0 8px, 8px -8px, -8px 0px;
+  }
+
   .screen-photo-boundary {
     box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.45);
   }
@@ -88,6 +100,11 @@ input[type="number"] {
   .screen-photo-boundary {
     outline: none !important;
     box-shadow: none !important;
+  }
+
+  .a4-page-sheet {
+    background: #ffffff !important;
+    background-image: none !important;
   }
 
   /* Hide all UI elements, sidebars, modals, toolbars */
