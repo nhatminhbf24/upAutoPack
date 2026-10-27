@@ -1598,7 +1598,7 @@ export const A4PreviewArea: React.FC<A4PreviewAreaProps> = ({
                               ? 'cursor-move transition-shadow'
                               : 'cursor-grab active:cursor-grabbing transition-all'
                           } ${isCircle ? 'shape-circle' : isHeart ? 'shape-heart' : ''} ${
-                            isDashedCut ? 'cut-lines-box' : isSolidCut ? 'outline outline-1 outline-slate-400' : ''
+                            isDashedCut ? 'cut-lines-box' : isSolidCut ? 'outline outline-1 outline-slate-400' : 'screen-photo-boundary'
                           } ${!isFreeformMode && isDraggingThis ? 'opacity-30 scale-95 ring-2 ring-blue-500' : ''} ${
                             !isFreeformMode && isDragOverThis
                               ? 'ring-4 ring-emerald-500 ring-offset-2 scale-105 z-30 shadow-lg'

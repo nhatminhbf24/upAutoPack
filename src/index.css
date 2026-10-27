@@ -21,6 +21,12 @@
     outline-offset: 0px;
   }
 
+  /* Đường phân cách mảnh trên màn hình preview để thấy rõ từng ảnh khi đặt khe hở nhỏ (0.1 - 0.3mm) */
+  .screen-photo-boundary {
+    outline: 1px solid rgba(148, 163, 184, 0.45);
+    outline-offset: 0px;
+  }
+
   /* Virtualization for multiple A4 pages (Zero overhead for off-screen sheets) */
   .a4-page-sheet {
     content-visibility: auto;
@@ -78,6 +84,10 @@ input[type="number"] {
     padding: 0 !important;
     background: #ffffff !important;
     overflow: visible !important;
+  }
+
+  .screen-photo-boundary {
+    outline: none !important;
   }
 
   /* Hide all UI elements, sidebars, modals, toolbars */

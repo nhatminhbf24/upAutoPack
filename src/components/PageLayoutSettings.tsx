@@ -357,6 +357,26 @@ export const PageLayoutSettings: React.FC<PageLayoutSettingsProps> = ({
         </div>
       </div>
 
+      {/* Cảnh báo / gợi ý thông minh khi dùng khe siêu mảnh <= 0.3mm */}
+      {settings.gap > 0 && settings.gap <= 0.3 && !settings.cutLines && (
+        <div className="bg-amber-50/95 border border-amber-200/90 rounded-lg p-2 text-[10.5px] text-amber-900 space-y-1">
+          <div className="flex items-center gap-1 font-bold text-amber-800">
+            <span>💡 Mẹo in móc khóa khe {settings.gap}mm:</span>
+          </div>
+          <p className="leading-tight text-slate-600">
+            Khe {settings.gap}mm rất mảnh (bằng sợi tóc). Bạn nên bật{' '}
+            <button
+              type="button"
+              onClick={() => onUpdateSettings({ cutLines: true })}
+              className="text-blue-600 font-bold underline hover:text-blue-800 cursor-pointer"
+            >
+              Hiển thị đường xén ảnh
+            </button>{' '}
+            để có nét kẻ dẫn đường cho dao rọc và tránh lem mực in làm dính liền mép ảnh.
+          </p>
+        </div>
+      )}
+
       {/* 1. Tự động sắp xếp ảnh (Bin Packing) */}
       <div className="space-y-1.5">
         <label className="flex items-center justify-between p-2.5 bg-white rounded-lg border border-emerald-300 cursor-pointer hover:bg-emerald-50/60 transition-all duration-200 select-none shadow-xs hover:shadow-sm">
