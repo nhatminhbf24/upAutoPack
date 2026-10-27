@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
-  Sparkles,
+Sparkles,
   RotateCw,
   RotateCcw,
   Copy,
@@ -19,7 +19,11 @@ import {
   Film,
   Bookmark as BookmarkIcon,
   Instagram,
+  Shirt,
+  AlertTriangle,
+  ChevronDown,
 } from 'lucide-react';
+import { removeWhiteBackground } from '../utils/petPrintUtils';
 import { PhotoItem, DEFAULT_ADJUSTMENTS, LayoutSettings, PhotostripSlot } from '../types';
 import { rotateImageBase64, calculateCrop, createOptimizedPreview, formatPhotoToPreset, getImageDimensions } from '../utils/imageUtils';
 import { enhanceImageQuality, getRecommendedUpscaleFactor } from '../utils/imageEnhancer';
@@ -64,6 +68,46 @@ export const BatchToolsSidebar: React.FC<BatchToolsSidebarProps> = ({
   const [batchQuantity, setBatchQuantity] = useState<number>(1);
   const [enhanceStrength, setEnhanceStrength] = useState<number>(50);
   const [twinStrips, setTwinStrips] = useState<boolean>(false);
+  const [isPetCollapsed, setIsPetCollapsed] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('daudau_batch_pet_collapsed');
+      return saved !== null ? saved === 'true' : true;
+    } catch {
+      return true;
+    }
+  });
+  const [isTemplatesCollapsed, setIsTemplatesCollapsed] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('daudau_batch_templates_collapsed');
+      return saved !== null ? saved === 'true' : true;
+    } catch {
+      return true;
+    }
+  });
+
+  const togglePetCollapsed = () => {
+    setIsPetCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem('daudau_batch_pet_collapsed', String(next));
+      } catch (e) {
+        console.warn(e);
+      }
+      return next;
+    });
+  };
+
+  const toggleTemplatesCollapsed = () => {
+    setIsTemplatesCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem('daudau_batch_templates_collapsed', String(next));
+      } catch (e) {
+        console.warn(e);
+      }
+      return next;
+    });
+  };
 
   // Tự động ẩn tab Thao tác hàng loạt khi click chuột ra ngoài hoặc ấn Esc
   useEffect(() => {
@@ -899,158 +943,246 @@ export const BatchToolsSidebar: React.FC<BatchToolsSidebarProps> = ({
           />
 
           {/* CỤM IN ÁO & IN PET CHUYỂN NHIỆT (DTF) */}
-          <div className="bg-purple-50/70 rounded-xl p-3.5 border border-purple-200/90 shadow-sm hover:shadow-md space-y-2.5 transition-all duration-200 hover:border-purple-300">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-1.5 text-purple-950 font-bold">
-                <Shirt className="w-3.5 h-3.5 text-purple-600" />
-                <span className="text-[11px] uppercase tracking-wide">IN ÁO & PET CHUYỂN NHIỆT (DTF)</span>
-              </div>
-              <span className="text-[10px] text-purple-700 font-bold bg-purple-100 border border-purple-200 px-1.5 py-0.5 rounded">
-                Chống viền trắng
-              </span>
-            </div>
-
-            <p className="text-[11px] text-slate-600 leading-snug">
-              Tự động quét và tẩy sạch toàn bộ nền trắng đục thành PNG trong suốt, chống in ra mảng trắng khi ép lên áo tối màu.
-            </p>
-
+          <div className="bg-gradient-to-br from-purple-50/90 to-indigo-50/70 rounded-xl border border-purple-200/90 shadow-sm transition-all overflow-hidden">
+            {/* Clickable Header để thu gọn / mở rộng */}
             <button
               type="button"
-              onClick={handleBatchRemoveAllWhiteBackgrounds}
-              disabled={isRemovingWhiteBgAll || photos.length === 0}
-              className="w-full py-2 px-3 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-sm active:scale-95 cursor-pointer disabled:opacity-50"
-              title="Tự động tẩy sạch toàn bộ nền trắng của mọi ảnh trong bàn in"
+              onClick={togglePetCollapsed}
+              className="w-full p-2.5 flex items-center justify-between hover:bg-purple-100/50 transition cursor-pointer select-none text-left"
+              title={isPetCollapsed ? "Bấm để mở rộng công cụ in PET" : "Bấm để thu gọn"}
             >
-              {isRemovingWhiteBgAll ? (
-                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-              ) : (
-                <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-              )}
-              <span>⚡ Tẩy nền trắng toàn bộ ảnh (Chuẩn PET)</span>
+              <div className="flex items-center gap-1.5 text-purple-950 font-bold min-w-0 truncate">
+                <Shirt className="w-3.5 h-3.5 text-purple-600 shrink-0" />
+                <span className="text-[11px] uppercase tracking-wide truncate">IN ÁO & PET (DTF)</span>
+                {photos.filter((p) => p.hasWhiteBackground).length > 0 ? (
+                  <span className="text-[9px] text-amber-800 font-bold bg-amber-100 border border-amber-300 px-1.5 py-0.5 rounded shrink-0 flex items-center gap-0.5">
+                    <AlertTriangle className="w-2.5 h-2.5 text-amber-600 shrink-0" />
+                    {photos.filter((p) => p.hasWhiteBackground).length} viền trắng
+                  </span>
+                ) : photos.length > 0 ? (
+                  <span className="text-[9px] text-emerald-700 font-bold bg-emerald-50 border border-emerald-300 px-1.5 py-0.5 rounded shrink-0">
+                    ✓ Trong suốt
+                  </span>
+                ) : null}
+              </div>
+              <div className="flex items-center gap-1 text-purple-700 text-[10px] font-semibold shrink-0 ml-1">
+                <span>{isPetCollapsed ? 'Mở' : 'Thu gọn'}</span>
+                <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${isPetCollapsed ? '-rotate-90' : 'rotate-0'}`} />
+              </div>
             </button>
+
+            {!isPetCollapsed && (
+              <div className="px-2.5 pb-2.5 space-y-2 border-t border-purple-100/80 pt-2">
+                {/* 1. Đổi chế độ soi */}
+                <div className="space-y-1">
+                  <div className="text-[10px] font-bold text-slate-700 flex items-center gap-1">
+                    <span className="w-3.5 h-3.5 rounded-full bg-purple-600 text-white inline-flex items-center justify-center text-[9px] font-bold">1</span>
+                    <span>Soi nền bàn in A4:</span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-1">
+                    <button
+                      type="button"
+                      id="btn-batch-pet-paper"
+                      onClick={() => onUpdateSettings({ previewCanvasBg: 'paper' })}
+                      className={`py-1 px-1 rounded-md text-[10px] font-bold transition flex items-center justify-center gap-1 cursor-pointer border ${
+                        (settings.previewCanvasBg || 'paper') === 'paper'
+                          ? 'bg-purple-600 text-white border-purple-600 shadow-2xs'
+                          : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                      }`}
+                      title="Chế độ nền giấy trắng mặc định"
+                    >
+                      <span>📄 Giấy</span>
+                    </button>
+                    <button
+                      type="button"
+                      id="btn-batch-pet-checker"
+                      onClick={() => onUpdateSettings({ previewCanvasBg: 'checker' })}
+                      className={`py-1 px-1 rounded-md text-[10px] font-bold transition flex items-center justify-center gap-1 cursor-pointer border ${
+                        settings.previewCanvasBg === 'checker'
+                          ? 'bg-indigo-600 text-white border-indigo-600 shadow-2xs'
+                          : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                      }`}
+                      title="Soi nền caro trong suốt: chữ hoặc hình dính nền trắng sẽ lộ ngay"
+                    >
+                      <span>🏁 Caro</span>
+                    </button>
+                    <button
+                      type="button"
+                      id="btn-batch-pet-dark"
+                      onClick={() => onUpdateSettings({ previewCanvasBg: 'dark' })}
+                      className={`py-1 px-1 rounded-md text-[10px] font-bold transition flex items-center justify-center gap-1 cursor-pointer border ${
+                        settings.previewCanvasBg === 'dark'
+                          ? 'bg-slate-900 text-white border-slate-900 shadow-2xs'
+                          : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                      }`}
+                      title="Mô phỏng hình in sau khi ép lên áo đen"
+                    >
+                      <span>👕 Áo đen</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* 2. Tẩy nền hàng loạt */}
+                <div className="space-y-1">
+                  <div className="text-[10px] font-bold text-slate-700 flex items-center gap-1">
+                    <span className="w-3.5 h-3.5 rounded-full bg-purple-600 text-white inline-flex items-center justify-center text-[9px] font-bold">2</span>
+                    <span>Tẩy nền hàng loạt:</span>
+                  </div>
+                  <button
+                    type="button"
+                    id="btn-batch-remove-white-bg"
+                    onClick={handleBatchRemoveAllWhiteBackgrounds}
+                    disabled={isRemovingWhiteBgAll || photos.length === 0}
+                    className="w-full py-1.5 px-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-sm active:scale-95 cursor-pointer disabled:opacity-50"
+                  >
+                    {isRemovingWhiteBgAll ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                    )}
+                    <span>⚡ Tẩy nền trắng ({photos.length} ảnh)</span>
+                  </button>
+                </div>
+
+                {/* 3. Mẹo ngắn gọn 1 dòng */}
+                <p className="text-[9.5px] text-purple-900/80 leading-tight pt-0.5">
+                  💡 <b>Mẹo:</b> Tẩy lẻ ở cột Danh sách ảnh. Xuất file PNG trong suốt ở cột Cài đặt.
+                </p>
+              </div>
+            )}
           </div>
 
           {/* CỤM MẪU IN THÀNH PHẨM HÀNG LOẠT */}
-          <div className="bg-indigo-50/70 rounded-xl p-3.5 border border-indigo-200/90 shadow-sm hover:shadow-md space-y-2.5 transition-all duration-200 hover:border-indigo-300">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-1.5 text-indigo-950 font-bold">
-                <LayoutTemplate className="w-3.5 h-3.5 text-indigo-600" />
-                <span className="text-[11px] uppercase tracking-wide">MẪU IN THÀNH PHẨM HÀNG LOẠT</span>
+          <div className="bg-indigo-50/70 rounded-xl border border-indigo-200/90 shadow-sm transition-all overflow-hidden">
+            {/* Clickable Header để thu gọn / mở rộng */}
+            <button
+              type="button"
+              onClick={toggleTemplatesCollapsed}
+              className="w-full p-2.5 flex items-center justify-between hover:bg-indigo-100/50 transition cursor-pointer select-none text-left"
+              title={isTemplatesCollapsed ? "Bấm để mở rộng mẫu in hàng loạt" : "Bấm để thu gọn"}
+            >
+              <div className="flex items-center gap-1.5 text-indigo-950 font-bold min-w-0 truncate">
+                <LayoutTemplate className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                <span className="text-[11px] uppercase tracking-wide truncate">MẪU IN THÀNH PHẨM</span>
+                <span className="text-[9px] text-indigo-700 font-bold bg-indigo-100 border border-indigo-200 px-1.5 py-0.5 rounded shrink-0">
+                  1-Click
+                </span>
               </div>
-              <span className="text-[10px] text-indigo-700 font-bold bg-indigo-100 border border-indigo-200 px-1.5 py-0.5 rounded">
-                1-Click
-              </span>
-            </div>
+              <div className="flex items-center gap-1 text-indigo-700 text-[10px] font-semibold shrink-0 ml-1">
+                <span>{isTemplatesCollapsed ? 'Mở' : 'Thu gọn'}</span>
+                <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${isTemplatesCollapsed ? '-rotate-90' : 'rotate-0'}`} />
+              </div>
+            </button>
 
-            <p className="text-[11px] text-slate-600 leading-snug">
-              Chuyển toàn bộ ảnh sang một mẫu in thống nhất, giữ nguyên số lượng bản in.
-            </p>
-
-            <div className="grid grid-cols-2 gap-1.5">
-              <button
-                type="button"
-                onClick={() => handleBatchApplyPolaroid('60x90')}
-                className="py-1.5 px-2 bg-white hover:bg-indigo-600 hover:text-white border border-indigo-200 hover:border-indigo-600 rounded-lg text-xs font-bold text-slate-700 transition flex items-center justify-center gap-1 shadow-2xs cursor-pointer active:scale-95 group"
-              >
-                <span>📸 Polaroid 6x9</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleBatchApplyPolaroid('90x120')}
-                className="py-1.5 px-2 bg-white hover:bg-indigo-600 hover:text-white border border-indigo-200 hover:border-indigo-600 rounded-lg text-xs font-bold text-slate-700 transition flex items-center justify-center gap-1 shadow-2xs cursor-pointer active:scale-95 group"
-              >
-                <span>📸 Polaroid 9x12</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={handleBatchApplyInstagram}
-                className="py-1.5 px-2 bg-white hover:bg-indigo-600 hover:text-white border border-indigo-200 hover:border-indigo-600 rounded-lg text-xs font-bold text-slate-700 transition flex items-center justify-center gap-1 shadow-2xs cursor-pointer active:scale-95 group"
-              >
-                <span>📱 Instagram 9x12</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={handleSyncInstagramProfileAll}
-                className="py-1.5 px-2 bg-indigo-100 hover:bg-indigo-200 text-indigo-900 border border-indigo-300 rounded-lg text-[10.5px] font-bold transition flex items-center justify-center gap-1 shadow-2xs cursor-pointer active:scale-95"
-                title="Đồng bộ Tên & Avatar dùng chung cho tất cả mẫu Instagram trên bàn in"
-              >
-                <span>🔄 Đồng bộ Avatar</span>
-              </button>
-
-              <div className="col-span-2 pt-1 border-t border-indigo-200/60">
-                <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-[11px] font-bold text-slate-800 flex items-center gap-1">
-                    <span>🎞️ Dải Photostrip (50 × 150 mm)</span>
-                  </span>
-                  <label
-                    className="flex items-center gap-1 text-[10.5px] font-medium text-slate-600 cursor-pointer"
-                    title="In nhân đôi mỗi dải ảnh (Số lượng x2) chuẩn tiệm Photobooth"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={twinStrips}
-                      onChange={(e) => setTwinStrips(e.target.checked)}
-                      className="rounded text-indigo-600 text-xs"
-                    />
-                    <span>Dải đôi (x2)</span>
-                  </label>
-                </div>
+            {!isTemplatesCollapsed && (
+              <div className="px-2.5 pb-2.5 space-y-2 border-t border-indigo-100/80 pt-2">
                 <div className="grid grid-cols-2 gap-1.5">
                   <button
                     type="button"
-                    onClick={() => handleBatchAutoChunkPhotostrip(4)}
-                    className="py-1.5 px-2 bg-indigo-50 hover:bg-indigo-600 hover:text-white border border-indigo-200 hover:border-indigo-600 rounded-lg text-[11px] font-bold text-indigo-900 transition flex items-center justify-center gap-1 shadow-2xs cursor-pointer active:scale-95"
-                    title="Tự động chia danh sách ảnh thành các dải Photostrip 4 ảnh riêng biệt"
+                    onClick={() => handleBatchApplyPolaroid('60x90')}
+                    className="py-1.5 px-2 bg-white hover:bg-indigo-600 hover:text-white border border-indigo-200 hover:border-indigo-600 rounded-lg text-xs font-bold text-slate-700 transition flex items-center justify-center gap-1 shadow-2xs cursor-pointer active:scale-95 group"
                   >
-                    <span>⚡ Ghép dải 4 ô</span>
+                    <span>📸 Polaroid 6x9</span>
                   </button>
+
                   <button
                     type="button"
-                    onClick={() => handleBatchAutoChunkPhotostrip(3)}
-                    className="py-1.5 px-2 bg-indigo-50 hover:bg-indigo-600 hover:text-white border border-indigo-200 hover:border-indigo-600 rounded-lg text-[11px] font-bold text-indigo-900 transition flex items-center justify-center gap-1 shadow-2xs cursor-pointer active:scale-95"
-                    title="Tự động chia danh sách ảnh thành các dải Photostrip 3 ảnh riêng biệt"
+                    onClick={() => handleBatchApplyPolaroid('90x120')}
+                    className="py-1.5 px-2 bg-white hover:bg-indigo-600 hover:text-white border border-indigo-200 hover:border-indigo-600 rounded-lg text-xs font-bold text-slate-700 transition flex items-center justify-center gap-1 shadow-2xs cursor-pointer active:scale-95 group"
                   >
-                    <span>⚡ Ghép dải 3 ô</span>
+                    <span>📸 Polaroid 9x12</span>
                   </button>
+
                   <button
                     type="button"
-                    onClick={() => handleBatchApplyPhotostripSingle(4)}
-                    className="py-1.5 px-2 bg-white hover:bg-slate-100 border border-slate-200 rounded-lg text-[10.5px] font-medium text-slate-700 transition flex items-center justify-center gap-1 cursor-pointer col-span-2"
-                    title="Chuyển mỗi ảnh trong danh sách thành một dải Photostrip riêng biệt"
+                    onClick={handleBatchApplyInstagram}
+                    className="py-1.5 px-2 bg-white hover:bg-indigo-600 hover:text-white border border-indigo-200 hover:border-indigo-600 rounded-lg text-xs font-bold text-slate-700 transition flex items-center justify-center gap-1 shadow-2xs cursor-pointer active:scale-95 group"
                   >
-                    <span>Mỗi ảnh 1 dải độc lập</span>
+                    <span>📱 Instagram 9x12</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleSyncInstagramProfileAll}
+                    className="py-1.5 px-2 bg-indigo-100 hover:bg-indigo-200 text-indigo-900 border border-indigo-300 rounded-lg text-[10.5px] font-bold transition flex items-center justify-center gap-1 shadow-2xs cursor-pointer active:scale-95"
+                    title="Đồng bộ Tên & Avatar dùng chung cho tất cả mẫu Instagram trên bàn in"
+                  >
+                    <span>🔄 Đồng bộ Avatar</span>
+                  </button>
+
+                  <div className="col-span-2 pt-1 border-t border-indigo-200/60">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-[11px] font-bold text-slate-800 flex items-center gap-1">
+                        <span>🎞️ Dải Photostrip (50 × 150 mm)</span>
+                      </span>
+                      <label
+                        className="flex items-center gap-1 text-[10.5px] font-medium text-slate-600 cursor-pointer"
+                        title="In nhân đôi mỗi dải ảnh (Số lượng x2) chuẩn tiệm Photobooth"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={twinStrips}
+                          onChange={(e) => setTwinStrips(e.target.checked)}
+                          className="rounded text-indigo-600 text-xs"
+                        />
+                        <span>Dải đôi (x2)</span>
+                      </label>
+                    </div>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => handleBatchAutoChunkPhotostrip(4)}
+                        className="py-1.5 px-2 bg-indigo-50 hover:bg-indigo-600 hover:text-white border border-indigo-200 hover:border-indigo-600 rounded-lg text-[11px] font-bold text-indigo-900 transition flex items-center justify-center gap-1 shadow-2xs cursor-pointer active:scale-95"
+                        title="Tự động chia danh sách ảnh thành các dải Photostrip 4 ảnh riêng biệt"
+                      >
+                        <span>⚡ Ghép dải 4 ô</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleBatchAutoChunkPhotostrip(3)}
+                        className="py-1.5 px-2 bg-indigo-50 hover:bg-indigo-600 hover:text-white border border-indigo-200 hover:border-indigo-600 rounded-lg text-[11px] font-bold text-indigo-900 transition flex items-center justify-center gap-1 shadow-2xs cursor-pointer active:scale-95"
+                        title="Tự động chia danh sách ảnh thành các dải Photostrip 3 ảnh riêng biệt"
+                      >
+                        <span>⚡ Ghép dải 3 ô</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleBatchApplyPhotostripSingle(4)}
+                        className="py-1.5 px-2 bg-white hover:bg-slate-100 border border-slate-200 rounded-lg text-[10.5px] font-medium text-slate-700 transition flex items-center justify-center gap-1 cursor-pointer col-span-2"
+                        title="Chuyển mỗi ảnh trong danh sách thành một dải Photostrip riêng biệt"
+                      >
+                        <span>Mỗi ảnh 1 dải độc lập</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => handleBatchApplyFilm('60x90')}
+                    className="py-1.5 px-2 bg-white hover:bg-indigo-600 hover:text-white border border-indigo-200 hover:border-indigo-600 rounded-lg text-xs font-bold text-slate-700 transition flex items-center justify-center gap-1 shadow-2xs cursor-pointer active:scale-95 group"
+                  >
+                    <span>🎬 Viền Film 6x9</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleBatchApplyBookmark}
+                    className="py-1.5 px-2 bg-white hover:bg-indigo-600 hover:text-white border border-indigo-200 hover:border-indigo-600 rounded-lg text-xs font-bold text-slate-700 transition flex items-center justify-center gap-1 shadow-2xs cursor-pointer active:scale-95 group"
+                  >
+                    <span>🔖 Bookmark 5x15</span>
                   </button>
                 </div>
+
+                {photos.some((p) => p.templateConfig && p.templateConfig.type !== 'none') && (
+                  <button
+                    type="button"
+                    onClick={handleBatchResetTemplate}
+                    className="w-full py-1.5 px-2 bg-slate-100 hover:bg-slate-200 text-slate-600 border border-slate-300 rounded-lg text-[11px] font-bold transition flex items-center justify-center gap-1 cursor-pointer"
+                  >
+                    <span>↩️ Hủy mẫu (Về ảnh thường)</span>
+                  </button>
+                )}
               </div>
-
-              <button
-                type="button"
-                onClick={() => handleBatchApplyFilm('60x90')}
-                className="py-1.5 px-2 bg-white hover:bg-indigo-600 hover:text-white border border-indigo-200 hover:border-indigo-600 rounded-lg text-xs font-bold text-slate-700 transition flex items-center justify-center gap-1 shadow-2xs cursor-pointer active:scale-95 group"
-              >
-                <span>🎬 Viền Film 6x9</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={handleBatchApplyBookmark}
-                className="py-1.5 px-2 bg-white hover:bg-indigo-600 hover:text-white border border-indigo-200 hover:border-indigo-600 rounded-lg text-xs font-bold text-slate-700 transition flex items-center justify-center gap-1 shadow-2xs cursor-pointer active:scale-95 group"
-              >
-                <span>🔖 Bookmark 5x15</span>
-              </button>
-            </div>
-
-            {photos.some((p) => p.templateConfig && p.templateConfig.type !== 'none') && (
-              <button
-                type="button"
-                onClick={handleBatchResetTemplate}
-                className="w-full py-1.5 px-2 bg-slate-100 hover:bg-slate-200 text-slate-600 border border-slate-300 rounded-lg text-[11px] font-bold transition flex items-center justify-center gap-1 cursor-pointer"
-              >
-                <span>↩️ Hủy mẫu (Về ảnh thường)</span>
-              </button>
             )}
           </div>
 

@@ -910,6 +910,51 @@ export const A4PreviewArea: React.FC<A4PreviewAreaProps> = ({
           <span>Lưới</span>
         </button>
 
+        <div className="w-px h-4 bg-slate-200 mx-0.5" />
+
+        {/* Cụm 3 nút Soi nền in PET / Áo tối màu */}
+        <div className="flex items-center bg-slate-100/90 rounded-lg p-0.5 border border-slate-200 shadow-2xs">
+          <button
+            type="button"
+            id="btn-preview-pet-paper"
+            onClick={() => onUpdateSettings?.({ previewCanvasBg: 'paper' })}
+            className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold transition cursor-pointer ${
+              canvasBg === 'paper'
+                ? 'bg-white text-slate-900 shadow-2xs'
+                : 'text-slate-500 hover:text-slate-800'
+            }`}
+            title="Chế độ nền Giấy trắng in ảnh thường (A4 mặc định)"
+          >
+            <span>📄 Giấy</span>
+          </button>
+          <button
+            type="button"
+            id="btn-preview-pet-checker"
+            onClick={() => onUpdateSettings?.({ previewCanvasBg: 'checker' })}
+            className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold transition cursor-pointer ${
+              canvasBg === 'checker'
+                ? 'bg-indigo-600 text-white shadow-2xs ring-1 ring-indigo-400/40'
+                : 'text-slate-600 hover:text-indigo-600 hover:bg-indigo-50'
+            }`}
+            title="Chế độ Soi Nền Trong Suốt (Bàn cờ Caro): Bất kỳ chữ hay hình nào còn dính nền trắng đục sẽ lộ rõ ngay"
+          >
+            <span>🏁 Soi PET (Caro)</span>
+          </button>
+          <button
+            type="button"
+            id="btn-preview-pet-dark"
+            onClick={() => onUpdateSettings?.({ previewCanvasBg: 'dark' })}
+            className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold transition cursor-pointer ${
+              canvasBg === 'dark'
+                ? 'bg-slate-900 text-white shadow-2xs ring-1 ring-slate-700'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+            }`}
+            title="Chế độ Mô phỏng Áo tối màu: Nhìn thấy chính xác hình ảnh sau khi ép nhiệt lên áo đen"
+          >
+            <span>👕 Áo đen</span>
+          </button>
+        </div>
+
         {/* Fullscreen Zen Mode */}
         <button
           type="button"

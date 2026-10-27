@@ -19,6 +19,7 @@ import {
   ChevronsLeft,
   ChevronsRight,
   Copy,
+  Shirt,
 } from 'lucide-react';
 import { PhotoItem, DEFAULT_SIZE_PRESETS, SizePreset } from '../types';
 import { rotateImageBase64, calculateCrop, createOptimizedPreview } from '../utils/imageUtils';
@@ -567,6 +568,21 @@ export const ImageListSidebar: React.FC<ImageListSidebarProps> = ({
       ) : (
         /* Sidebar Content */
         <div ref={listContainerRef} className="flex-1 overflow-y-auto p-3 space-y-2.5">
+          {/* Cảnh báo in PET nếu có ảnh dính nền trắng đục */}
+          {photos.some((p) => p.hasWhiteBackground) && (
+            <div className="bg-amber-50 border border-amber-300 rounded-xl p-2.5 text-[11px] text-amber-900 flex items-start justify-between gap-2 shadow-2xs">
+              <div className="flex items-start gap-1.5 min-w-0">
+                <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                <div>
+                  <span className="font-bold">Lưu ý In PET: </span>
+                  <span>
+                    Có <b>{photos.filter((p) => p.hasWhiteBackground).length} ảnh</b> dính nền trắng đục. Bấm nút <b>⚡ Tẩy nền</b> trên thẻ ảnh để tránh in mảng trắng lên áo.
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Empty State */}
           {photos.length === 0 ? (
             <div className="text-center py-16 px-4 border-2 border-dashed border-emerald-200/80 rounded-xl bg-emerald-50/30 space-y-2.5">
@@ -887,6 +903,15 @@ export const ImageListSidebar: React.FC<ImageListSidebarProps> = ({
                         </div>
 
                         {/* PET White Background Alert Badge */}
+                        {photo.isTransparent && (
+                          <div className="flex items-center justify-between bg-emerald-50/80 border border-emerald-200 rounded-lg px-2 py-0.5 text-[10px] text-emerald-800">
+                            <span className="flex items-center gap-1 font-medium">
+                              <Check className="w-3 h-3 text-emerald-600" />
+                              <span>PNG trong suốt (Chuẩn PET)</span>
+                            </span>
+                          </div>
+                        )}
+
                         {photo.hasWhiteBackground && (
                           <div className="flex items-center justify-between bg-amber-50/95 border border-amber-300 rounded-lg px-2 py-1 text-[10px] gap-1 shadow-2xs">
                             <div className="flex items-center gap-1 font-bold text-amber-900 min-w-0 truncate" title="Ảnh có nền trắng đục. Nếu in áo hoặc in PET, khối trắng này sẽ bị in ra áo!">
