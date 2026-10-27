@@ -357,8 +357,8 @@ export const PageLayoutSettings: React.FC<PageLayoutSettingsProps> = ({
         </div>
       </div>
 
-      {/* Cảnh báo / gợi ý thông minh khi dùng khe siêu mảnh <= 0.3mm */}
-      {settings.gap > 0 && settings.gap <= 0.3 && !settings.cutLines && (
+      {/* Cảnh báo / gợi ý thông minh khi dùng khe siêu mảnh <= 0.5mm */}
+      {settings.gap > 0 && settings.gap <= 0.5 && !settings.cutLines && (
         <div className="bg-amber-50/95 border border-amber-200/90 rounded-lg p-2 text-[10.5px] text-amber-900 space-y-1">
           <div className="flex items-center gap-1 font-bold text-amber-800">
             <span>💡 Mẹo in móc khóa khe {settings.gap}mm:</span>
