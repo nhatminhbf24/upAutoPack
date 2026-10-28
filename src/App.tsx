@@ -1072,57 +1072,9 @@ export default function App() {
   // =========================================================================
   // GLOBAL DRAG & DROP ANYWHERE ON SCREEN (Hỗ trợ kéo thả ảnh trực tiếp vào bất kỳ đâu)
   // =========================================================================
-  useEffect(() => {
-    // Only enable when unlocked and not in png-splitter workspace
-    if (!isUnlocked || activeView === 'png-splitter') {
-      setIsGlobalDragging(false);
-      dragCounterRef.current = 0;
-      return;
-    }
-
-    const isFileDrag = (e: DragEvent): boolean => {
-      if (!e.dataTransfer) return false;
-      const types = Array.from(e.dataTransfer.types || []);
-      return types.includes('Files');
-    };
-
-    const handleDragEnter = (e: DragEvent) => {
-      if (!isFileDrag(e)) return;
-      e.preventDefault();
-      dragCounterRef.current += 1;
-      if (dragCounterRef.current === 1) {
-        setIsGlobalDragging(true);
-      }
-    };
-
-    const handleDragOver = (e: DragEvent) => {
-      if (!isFileDrag(e)) return;
-      e.preventDefault();
-      if (e.dataTransfer) {
-        e.dataTransfer.dropEffect = 'copy';
-      }
-    };
-
-    const handleDragLeave = (e: DragEvent) => {
-      if (!isFileDrag(e)) return;
-      e.preventDefault();
-      dragCounterRef.current -= 1;
-      // When leaving the window or counter hits 0
-      if (dragCounterRef.current <= 0 || (e.clientX <= 0 && e.clientY <= 0)) {
-        dragCounterRef.current = 0;
-        setIsGlobalDragging(false);
-      }
-    };
-
-    const handleDrop = async (e: DragEvent) => {
-      if (!isFileDrag(e)) return;
-      e.preventDefault();
-      e.stopPropagation();
-      dragCounterRef.current = 0;
-      setIsGlobalDragging(false);
-
-      const files = Array.from(e.dataTransfer?.files || []);
-      if (files.length === 0) return;
+  const handleProcessDroppedFiles = useCallback(
+    async (files: File[]) => {
+      if (!files || files.length === 0) return;
 
       // 1. Check if user dropped a .daudau project file
       const projectFile = files.find((f) => f.name.endsWith('.daudau'));
@@ -1171,11 +1123,104 @@ export default function App() {
           addToast('error', 'Không thể đọc file ảnh');
         }
       } catch (err) {
-        console.error('Error in global drag-drop upload:', err);
+        console.error('Error in drag-drop upload:', err);
         addToast('error', 'Lỗi khi tải ảnh lên');
       } finally {
         setIsProcessingUpload(false);
         setUploadProgress(null);
+      }
+    },
+    [
+      handleImportProject,
+      activeView,
+      setActiveView,
+      orientationMode,
+      autoMatchOrientation,
+      activePreset,
+      settings.smartCrop,
+      setPhotos,
+      setSelectedPhotoId,
+      addToast,
+    ]
+  );
+
+  useEffect(() => {
+    // Only enable when unlocked and not in png-splitter workspace
+    if (!isUnlocked || activeView === 'png-splitter') {
+      setIsGlobalDragging(false);
+      dragCounterRef.current = 0;
+      return;
+    }
+
+    const isFileDrag = (e: DragEvent): boolean => {
+      if (!e.dataTransfer) return false;
+      const types = Array.from(e.dataTransfer.types || []);
+      if (types.some((t) => t.toLowerCase().includes('file'))) return true;
+      if (e.dataTransfer.files && e.dataTransfer.files.length > 0) return true;
+      if (e.dataTransfer.items && Array.from(e.dataTransfer.items).some((it) => it.kind === 'file')) return true;
+      return false;
+    };
+
+    const handleDragEnter = (e: DragEvent) => {
+      e.preventDefault();
+      if (!isFileDrag(e)) return;
+      dragCounterRef.current += 1;
+      if (dragCounterRef.current === 1) {
+        setIsGlobalDragging(true);
+      }
+    };
+
+    const handleDragOver = (e: DragEvent) => {
+      // ALWAYS unconditionally prevent default on window to prevent browser from navigating away to dropped file
+      e.preventDefault();
+      if (e.dataTransfer) {
+        e.dataTransfer.dropEffect = 'copy';
+      }
+    };
+
+    const handleDragLeave = (e: DragEvent) => {
+      e.preventDefault();
+      if (!isFileDrag(e)) return;
+      dragCounterRef.current -= 1;
+      // If leaving window or counter reached 0
+      if (
+        dragCounterRef.current <= 0 ||
+        !e.relatedTarget ||
+        (e.clientX <= 0 && e.clientY <= 0) ||
+        (e.clientX >= window.innerWidth || e.clientY >= window.innerHeight)
+      ) {
+        dragCounterRef.current = 0;
+        setIsGlobalDragging(false);
+      }
+    };
+
+    const handleDrop = async (e: DragEvent) => {
+      // ALWAYS unconditionally prevent default and stop propagation to stop browser navigation
+      e.preventDefault();
+      e.stopPropagation();
+      dragCounterRef.current = 0;
+      setIsGlobalDragging(false);
+
+      let files = Array.from(e.dataTransfer?.files || []);
+
+      // Fallback for image dragged from another browser tab / web page
+      if (files.length === 0 && e.dataTransfer) {
+        const uri = e.dataTransfer.getData('text/uri-list') || e.dataTransfer.getData('text/plain');
+        if (uri && (uri.startsWith('http://') || uri.startsWith('https://') || uri.startsWith('data:image/'))) {
+          try {
+            const resp = await fetch(uri);
+            const blob = await resp.blob();
+            if (blob.type.startsWith('image/')) {
+              files = [new File([blob], `web_image_${Date.now()}.png`, { type: blob.type })];
+            }
+          } catch {
+            // Fetch may fail due to CORS, but browser did NOT navigate away!
+          }
+        }
+      }
+
+      if (files.length > 0) {
+        handleProcessDroppedFiles(files);
       }
     };
 
@@ -1202,14 +1247,7 @@ export default function App() {
   }, [
     isUnlocked,
     activeView,
-    orientationMode,
-    autoMatchOrientation,
-    activePreset,
-    settings.smartCrop,
-    handleImportProject,
-    setPhotos,
-    setSelectedPhotoId,
-    addToast,
+    handleProcessDroppedFiles,
   ]);
 
   // =========================================================================
@@ -1223,8 +1261,41 @@ export default function App() {
 
       {/* Global Full-Screen Drag & Drop Overlay */}
       {isGlobalDragging && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/75 backdrop-blur-sm p-6 pointer-events-none transition-all duration-200">
-          <div className="relative max-w-lg w-full border-4 border-dashed border-rose-400 bg-white/95 rounded-3xl p-8 text-center shadow-2xl shadow-rose-950/50 flex flex-col items-center justify-center">
+        <div
+          onDragOver={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (e.dataTransfer) {
+              e.dataTransfer.dropEffect = 'copy';
+            }
+          }}
+          onDragLeave={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (
+              !e.relatedTarget ||
+              e.clientX <= 0 ||
+              e.clientY <= 0 ||
+              e.clientX >= window.innerWidth ||
+              e.clientY >= window.innerHeight
+            ) {
+              dragCounterRef.current = 0;
+              setIsGlobalDragging(false);
+            }
+          }}
+          onDrop={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            dragCounterRef.current = 0;
+            setIsGlobalDragging(false);
+            const files = Array.from(e.dataTransfer.files || []);
+            if (files.length > 0) {
+              handleProcessDroppedFiles(files);
+            }
+          }}
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/60 backdrop-blur-xs p-6 select-none transition-all duration-200 cursor-copy pointer-events-auto"
+        >
+          <div className="relative max-w-lg w-full border-4 border-dashed border-rose-400 bg-white/95 rounded-3xl p-8 text-center shadow-2xl shadow-rose-950/50 flex flex-col items-center justify-center pointer-events-none">
             <div className="w-20 h-20 rounded-full bg-rose-100 flex items-center justify-center mb-4 ring-8 ring-rose-200/60 animate-bounce">
               <UploadCloud className="w-10 h-10 text-rose-600" />
             </div>
@@ -1388,6 +1459,7 @@ export default function App() {
             onUpdateFreeformPosition={handleUpdateFreeformPosition}
             onResetFreeformPositions={handleResetFreeformPositions}
             onDuplicatePhoto={handleDuplicatePhoto}
+            onDropFiles={handleProcessDroppedFiles}
           />
 
           {/* Column 5: Rightmost Page Thumbnails Navigation Sidebar */}

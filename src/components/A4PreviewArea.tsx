@@ -50,6 +50,7 @@ interface A4PreviewAreaProps {
   onUpdateFreeformPosition?: (photoId: string, instanceIndex: number, pos: { x: number; y: number; pageNumber?: number }) => void;
   onResetFreeformPositions?: () => void;
   onDuplicatePhoto?: (id: string) => void;
+  onDropFiles?: (files: File[]) => void;
 }
 
 // Trình hiển thị vạch gióng nam châm trực tiếp qua DOM để đạt 60 FPS, không re-render React
@@ -128,6 +129,7 @@ export const A4PreviewArea: React.FC<A4PreviewAreaProps> = ({
   onUpdateFreeformPosition,
   onResetFreeformPositions,
   onDuplicatePhoto,
+  onDropFiles,
 }) => {
   const [zoom, setZoom] = useState<number>(70); // Percentage: 30% to 150%
   const [removingWhiteBgId, setRemovingWhiteBgId] = useState<string | null>(null);
@@ -587,6 +589,10 @@ export const A4PreviewArea: React.FC<A4PreviewAreaProps> = ({
   const handleDragOver = (e: React.DragEvent, targetItem: PlacedPhotoItem) => {
     e.preventDefault();
     e.stopPropagation();
+    if (e.dataTransfer.types.includes('Files')) {
+      e.dataTransfer.dropEffect = 'copy';
+      return;
+    }
     if (draggedPhotoId && draggedPhotoId !== targetItem.id) {
       e.dataTransfer.dropEffect = 'move';
       if (dragOverPhotoId !== targetItem.id) {
@@ -606,6 +612,15 @@ export const A4PreviewArea: React.FC<A4PreviewAreaProps> = ({
   const handleDrop = (e: React.DragEvent, targetItem: PlacedPhotoItem) => {
     e.preventDefault();
     e.stopPropagation();
+    // Support dropping external files onto existing item
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      if (onDropFiles) {
+        onDropFiles(Array.from(e.dataTransfer.files));
+      }
+      setDraggedPhotoId(null);
+      setDragOverPhotoId(null);
+      return;
+    }
     const sourceId = draggedPhotoId || e.dataTransfer.getData('text/plain');
     if (sourceId && sourceId !== targetItem.id && onReorderPhotos) {
       onReorderPhotos(sourceId, targetItem.id);
@@ -1217,6 +1232,19 @@ export const A4PreviewArea: React.FC<A4PreviewAreaProps> = ({
                   <div
                     key={`page-${page.pageNumber}`}
                     id={`a4-page-${page.pageNumber}`}
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      if (e.dataTransfer) {
+                        e.dataTransfer.dropEffect = 'copy';
+                      }
+                    }}
+                    onDrop={(e) => {
+                      if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        onDropFiles?.(Array.from(e.dataTransfer.files));
+                      }
+                    }}
                     className={`a4-page-sheet relative shadow-xl rounded-xs ring-1 ring-slate-300/60 overflow-hidden ${
     canvasBg === 'checker'
       ? 'bg-checkerboard'
