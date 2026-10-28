@@ -9,6 +9,7 @@ import {
   FileText,
   Sparkles,
   FolderArchive,
+  AlertTriangle,
 } from 'lucide-react';
 import { LayoutSettings, SizePreset, OrientationMode, PhotoItem } from '../types';
 import { Uploader } from './Uploader';

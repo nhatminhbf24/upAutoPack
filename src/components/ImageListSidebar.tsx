@@ -66,6 +66,27 @@ export const ImageListSidebar: React.FC<ImageListSidebarProps> = ({
   const [rotatingId, setRotatingId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [upscaleMenuId, setUpscaleMenuId] = useState<string | null>(null);
+  const [removingWhiteBgId, setRemovingWhiteBgId] = useState<string | null>(null);
+
+  const handleRemoveWhiteBgSingle = async (photo: PhotoItem) => {
+    try {
+      setRemovingWhiteBgId(photo.id);
+      const res = await removeWhiteBackground(photo.originalSrc);
+      const previewSrc = await createOptimizedPreview(res.dataUrl, 420, 0.82);
+      onUpdatePhoto(photo.id, {
+        originalSrc: res.dataUrl,
+        previewSrc,
+        hasWhiteBackground: false,
+        isTransparent: true,
+      });
+      onToast('success', 'Đã tẩy sạch nền trắng đục thành PNG trong suốt');
+    } catch (err) {
+      console.error('Error removing white background:', err);
+      onToast('error', 'Lỗi khi tẩy nền trắng');
+    } finally {
+      setRemovingWhiteBgId(null);
+    }
+  };
 
   // Hệ thống kéo thả thẻ Kanban: Thẻ nhấc nghiêng 3° + SIZED SLOT (ô trống bằng chiều cao thẻ)
   interface DragState {

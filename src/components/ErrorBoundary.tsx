@@ -1,23 +1,34 @@
-import React, { Component, ErrorInfo, ReactNode } from 'react';
+import React, { ErrorInfo, ReactNode } from 'react';
 import { AlertTriangle, RefreshCw, RotateCcw } from 'lucide-react';
 
-interface Props {
+export interface Props {
   children: ReactNode;
   fallback?: ReactNode;
 }
 
-interface State {
+export interface State {
   hasError: boolean;
   error: Error | null;
   errorInfo: ErrorInfo | null;
 }
 
-export class ErrorBoundary extends Component<Props, State> {
+export class ErrorBoundary extends React.Component<Props, State> {
+  // Explicitly type class fields for TypeScript environments without @types/react
   public state: State = {
     hasError: false,
     error: null,
     errorInfo: null,
   };
+
+  public declare props: Props;
+  public declare setState: <K extends keyof State>(
+    state: ((prevState: Readonly<State>, props: Readonly<Props>) => (Pick<State, K> | State | null)) | (Pick<State, K> | State | null),
+    callback?: () => void
+  ) => void;
+
+  constructor(props: Props) {
+    super(props);
+  }
 
   public static getDerivedStateFromError(error: Error): State {
     return { hasError: true, error, errorInfo: null };
