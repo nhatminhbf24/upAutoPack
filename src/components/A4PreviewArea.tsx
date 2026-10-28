@@ -29,7 +29,6 @@ import { getDefaultTextTag, getEffectiveTextTagForPage } from '../utils/textTagU
 import { DraggableTextTag } from './DraggableTextTag';
 import { calculateAlignmentSnap, AlignmentGuideLine, SnapTarget } from '../utils/alignmentGuides';
 import { TemplateFramePreview } from './TemplateFramePreview';
-import { removeWhiteBackground } from '../utils/petPrintUtils';
 
 interface A4PreviewAreaProps {
   pages: PackedPage[];
@@ -132,26 +131,7 @@ export const A4PreviewArea: React.FC<A4PreviewAreaProps> = ({
   onDropFiles,
 }) => {
   const [zoom, setZoom] = useState<number>(70); // Percentage: 30% to 150%
-  const [removingWhiteBgId, setRemovingWhiteBgId] = useState<string | null>(null);
   const canvasBg = settings.previewCanvasBg || 'paper';
-
-  const handleRemoveWhiteBg = async (photo: PhotoItem) => {
-    try {
-      setRemovingWhiteBgId(photo.id);
-      const res = await removeWhiteBackground(photo.originalSrc);
-      const previewSrc = await createOptimizedPreview(res.dataUrl, 420, 0.82);
-      onUpdatePhoto(photo.id, {
-        originalSrc: res.dataUrl,
-        previewSrc,
-        hasWhiteBackground: false,
-        isTransparent: true,
-      });
-    } catch (err) {
-      console.error('Error removing white background:', err);
-    } finally {
-      setRemovingWhiteBgId(null);
-    }
-  };
   const [showRuler, setShowRuler] = useState<boolean>(false);
   const [showGrid, setShowGrid] = useState<boolean>(false);
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
@@ -1711,33 +1691,6 @@ export const A4PreviewArea: React.FC<A4PreviewAreaProps> = ({
                               : ''
                           }`}
                         >
-                        {/* PET White Background Warning Badge (Visible in Caro or Dark mode, or when item has white background) */}
-                        {(item.hasWhiteBackground || (canvasBg !== 'paper' && !item.isTransparent)) && (
-                          <div
-                            className="no-print absolute top-1.5 left-1.5 bg-amber-600/95 text-white text-[9px] font-bold px-1.5 py-0.5 rounded shadow-sm flex items-center gap-1 z-30 border border-amber-300/40 select-none animate-pulse"
-                            title="CẢNH BÁO IN PET: Ảnh có nền trắng đục! Nếu in áo tối màu, vùng trắng này sẽ in thành khối trắng lên áo."
-                          >
-                            <AlertTriangle className="w-2.5 h-2.5 text-amber-200 shrink-0" />
-                            <span>Nền trắng</span>
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleRemoveWhiteBg(item);
-                              }}
-                              disabled={removingWhiteBgId === item.id}
-                              className="ml-1 px-1.5 py-0.2 bg-white hover:bg-amber-100 text-amber-900 rounded text-[8.5px] font-bold transition flex items-center gap-0.5 cursor-pointer disabled:opacity-50"
-                              title="Tẩy sạch nền trắng thành PNG trong suốt"
-                            >
-                              {removingWhiteBgId === item.id ? (
-                                <Loader2 className="w-2.5 h-2.5 animate-spin" />
-                              ) : (
-                                <Sparkles className="w-2.5 h-2.5 text-amber-600" />
-                              )}
-                              <span>Tẩy nền</span>
-                            </button>
-                          </div>
-                        )}
                         {/* Out-of-bounds warning badge (Freeform mode) */}
                         {isOutOfBounds && (
                           <div

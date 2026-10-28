@@ -23,7 +23,6 @@ Sparkles,
   AlertTriangle,
   ChevronDown,
 } from 'lucide-react';
-import { removeWhiteBackground } from '../utils/petPrintUtils';
 import { PhotoItem, DEFAULT_ADJUSTMENTS, LayoutSettings, PhotostripSlot } from '../types';
 import { rotateImageBase64, calculateCrop, createOptimizedPreview, formatPhotoToPreset, getImageDimensions } from '../utils/imageUtils';
 import { enhanceImageQuality, getRecommendedUpscaleFactor } from '../utils/imageEnhancer';
@@ -158,46 +157,6 @@ export const BatchToolsSidebar: React.FC<BatchToolsSidebarProps> = ({
     };
   }, [isCollapsed, onClose, onToggleCollapse]);
   const [isEnhancingAll, setIsEnhancingAll] = useState<boolean>(false);
-  const [isRemovingWhiteBgAll, setIsRemovingWhiteBgAll] = useState<boolean>(false);
-
-  const handleBatchRemoveAllWhiteBackgrounds = async () => {
-    if (photos.length === 0) {
-      onToast('error', 'Chưa có ảnh để xử lý');
-      return;
-    }
-    setIsRemovingWhiteBgAll(true);
-    let count = 0;
-    try {
-      const updatedList: PhotoItem[] = [];
-      for (const photo of photos) {
-        try {
-          const res = await removeWhiteBackground(photo.originalSrc);
-          const previewSrc = await createOptimizedPreview(res.dataUrl, 420, 0.82);
-          updatedList.push({
-            ...photo,
-            originalSrc: res.dataUrl,
-            previewSrc,
-            hasWhiteBackground: false,
-            isTransparent: true,
-          });
-          count++;
-        } catch {
-          updatedList.push(photo);
-        }
-      }
-      if (onBatchUpdatePhotos) {
-        onBatchUpdatePhotos(updatedList);
-      } else {
-        updatedList.forEach((p) => onUpdatePhoto(p.id, p));
-      }
-      onToast('success', `Đã tẩy sạch nền trắng của ${count} ảnh thành PNG trong suốt!`);
-    } catch (e) {
-      console.error(e);
-      onToast('error', 'Có lỗi khi tẩy nền trắng hàng loạt');
-    } finally {
-      setIsRemovingWhiteBgAll(false);
-    }
-  };
   const [isRevertingAll, setIsRevertingAll] = useState<boolean>(false);
   const [isAutoAdjustingAll, setIsAutoAdjustingAll] = useState<boolean>(false);
   const [isRevertingColorsAll, setIsRevertingColorsAll] = useState<boolean>(false);
@@ -942,28 +901,18 @@ export const BatchToolsSidebar: React.FC<BatchToolsSidebarProps> = ({
             onToast={onToast}
           />
 
-          {/* CỤM IN ÁO & IN PET CHUYỂN NHIỆT (DTF) */}
+          {/* CỤM SOI NỀN TRONG SUỐT (IN ÁO / PET) */}
           <div className="bg-gradient-to-br from-purple-50/90 to-indigo-50/70 rounded-xl border border-purple-200/90 shadow-sm transition-all overflow-hidden">
             {/* Clickable Header để thu gọn / mở rộng */}
             <button
               type="button"
               onClick={togglePetCollapsed}
               className="w-full p-2.5 flex items-center justify-between hover:bg-purple-100/50 transition cursor-pointer select-none text-left"
-              title={isPetCollapsed ? "Bấm để mở rộng công cụ in PET" : "Bấm để thu gọn"}
+              title={isPetCollapsed ? "Bấm để mở rộng" : "Bấm để thu gọn"}
             >
               <div className="flex items-center gap-1.5 text-purple-950 font-bold min-w-0 truncate">
                 <Shirt className="w-3.5 h-3.5 text-purple-600 shrink-0" />
-                <span className="text-[11px] uppercase tracking-wide truncate">IN ÁO & PET (DTF)</span>
-                {photos.filter((p) => p.hasWhiteBackground).length > 0 ? (
-                  <span className="text-[9px] text-amber-800 font-bold bg-amber-100 border border-amber-300 px-1.5 py-0.5 rounded shrink-0 flex items-center gap-0.5">
-                    <AlertTriangle className="w-2.5 h-2.5 text-amber-600 shrink-0" />
-                    {photos.filter((p) => p.hasWhiteBackground).length} viền trắng
-                  </span>
-                ) : photos.length > 0 ? (
-                  <span className="text-[9px] text-emerald-700 font-bold bg-emerald-50 border border-emerald-300 px-1.5 py-0.5 rounded shrink-0">
-                    ✓ Trong suốt
-                  </span>
-                ) : null}
+                <span className="text-[11px] uppercase tracking-wide truncate">SOI NỀN IN ÁO & PET</span>
               </div>
               <div className="flex items-center gap-1 text-purple-700 text-[10px] font-semibold shrink-0 ml-1">
                 <span>{isPetCollapsed ? 'Mở' : 'Thu gọn'}</span>
@@ -972,82 +921,54 @@ export const BatchToolsSidebar: React.FC<BatchToolsSidebarProps> = ({
             </button>
 
             {!isPetCollapsed && (
-              <div className="px-2.5 pb-2.5 space-y-2 border-t border-purple-100/80 pt-2">
-                {/* 1. Đổi chế độ soi */}
-                <div className="space-y-1">
-                  <div className="text-[10px] font-bold text-slate-700 flex items-center gap-1">
-                    <span className="w-3.5 h-3.5 rounded-full bg-purple-600 text-white inline-flex items-center justify-center text-[9px] font-bold">1</span>
-                    <span>Soi nền bàn in A4:</span>
-                  </div>
-                  <div className="grid grid-cols-3 gap-1">
-                    <button
-                      type="button"
-                      id="btn-batch-pet-paper"
-                      onClick={() => onUpdateSettings({ previewCanvasBg: 'paper' })}
-                      className={`py-1 px-1 rounded-md text-[10px] font-bold transition flex items-center justify-center gap-1 cursor-pointer border ${
-                        (settings.previewCanvasBg || 'paper') === 'paper'
-                          ? 'bg-purple-600 text-white border-purple-600 shadow-2xs'
-                          : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
-                      }`}
-                      title="Chế độ nền giấy trắng mặc định"
-                    >
-                      <span>📄 Giấy</span>
-                    </button>
-                    <button
-                      type="button"
-                      id="btn-batch-pet-checker"
-                      onClick={() => onUpdateSettings({ previewCanvasBg: 'checker' })}
-                      className={`py-1 px-1 rounded-md text-[10px] font-bold transition flex items-center justify-center gap-1 cursor-pointer border ${
-                        settings.previewCanvasBg === 'checker'
-                          ? 'bg-indigo-600 text-white border-indigo-600 shadow-2xs'
-                          : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
-                      }`}
-                      title="Soi nền caro trong suốt: chữ hoặc hình dính nền trắng sẽ lộ ngay"
-                    >
-                      <span>🏁 Caro</span>
-                    </button>
-                    <button
-                      type="button"
-                      id="btn-batch-pet-dark"
-                      onClick={() => onUpdateSettings({ previewCanvasBg: 'dark' })}
-                      className={`py-1 px-1 rounded-md text-[10px] font-bold transition flex items-center justify-center gap-1 cursor-pointer border ${
-                        settings.previewCanvasBg === 'dark'
-                          ? 'bg-slate-900 text-white border-slate-900 shadow-2xs'
-                          : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
-                      }`}
-                      title="Mô phỏng hình in sau khi ép lên áo đen"
-                    >
-                      <span>👕 Áo đen</span>
-                    </button>
-                  </div>
+              <div className="px-2.5 pb-2.5 space-y-1.5 border-t border-purple-100/80 pt-2">
+                <div className="text-[10px] font-bold text-slate-700 flex items-center justify-between">
+                  <span>Màu nền bàn in A4:</span>
+                  <span className="text-[9.5px] font-medium text-slate-500">
+                    {settings.previewCanvasBg === 'paper' ? 'Giấy trắng' : settings.previewCanvasBg === 'checker' ? 'Caro (Soi nét)' : 'Áo đen'}
+                  </span>
                 </div>
-
-                {/* 2. Tẩy nền hàng loạt */}
-                <div className="space-y-1">
-                  <div className="text-[10px] font-bold text-slate-700 flex items-center gap-1">
-                    <span className="w-3.5 h-3.5 rounded-full bg-purple-600 text-white inline-flex items-center justify-center text-[9px] font-bold">2</span>
-                    <span>Tẩy nền hàng loạt:</span>
-                  </div>
+                <div className="grid grid-cols-3 gap-1">
                   <button
                     type="button"
-                    id="btn-batch-remove-white-bg"
-                    onClick={handleBatchRemoveAllWhiteBackgrounds}
-                    disabled={isRemovingWhiteBgAll || photos.length === 0}
-                    className="w-full py-1.5 px-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-sm active:scale-95 cursor-pointer disabled:opacity-50"
+                    id="btn-batch-pet-paper"
+                    onClick={() => onUpdateSettings({ previewCanvasBg: 'paper' })}
+                    className={`py-1 px-1 rounded-md text-[10px] font-bold transition flex items-center justify-center gap-1 cursor-pointer border ${
+                      (settings.previewCanvasBg || 'paper') === 'paper'
+                        ? 'bg-purple-600 text-white border-purple-600 shadow-2xs'
+                        : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                    }`}
+                    title="Chế độ nền giấy trắng mặc định"
                   >
-                    {isRemovingWhiteBgAll ? (
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    ) : (
-                      <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-                    )}
-                    <span>⚡ Tẩy nền trắng ({photos.length} ảnh)</span>
+                    <span>📄 Giấy</span>
+                  </button>
+                  <button
+                    type="button"
+                    id="btn-batch-pet-checker"
+                    onClick={() => onUpdateSettings({ previewCanvasBg: 'checker' })}
+                    className={`py-1 px-1 rounded-md text-[10px] font-bold transition flex items-center justify-center gap-1 cursor-pointer border ${
+                      settings.previewCanvasBg === 'checker'
+                        ? 'bg-indigo-600 text-white border-indigo-600 shadow-2xs'
+                        : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                    }`}
+                    title="Soi nền caro: phát hiện ngay các viền trắng còn sót"
+                  >
+                    <span>🏁 Caro</span>
+                  </button>
+                  <button
+                    type="button"
+                    id="btn-batch-pet-dark"
+                    onClick={() => onUpdateSettings({ previewCanvasBg: 'dark' })}
+                    className={`py-1 px-1 rounded-md text-[10px] font-bold transition flex items-center justify-center gap-1 cursor-pointer border ${
+                      settings.previewCanvasBg === 'dark'
+                        ? 'bg-slate-900 text-white border-slate-900 shadow-2xs'
+                        : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                    }`}
+                    title="Mô phỏng hình in sau khi ép lên áo đen"
+                  >
+                    <span>👕 Áo đen</span>
                   </button>
                 </div>
-
-                {/* 3. Mẹo ngắn gọn 1 dòng */}
-                <p className="text-[9.5px] text-purple-900/80 leading-tight pt-0.5">
-                  💡 <b>Mẹo:</b> Tẩy lẻ ở cột Danh sách ảnh. Xuất file PNG trong suốt ở cột Cài đặt.
-                </p>
               </div>
             )}
           </div>

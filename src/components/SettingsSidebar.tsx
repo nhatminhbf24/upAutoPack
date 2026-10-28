@@ -96,7 +96,6 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
   });
 
   const exportPanelRef = useRef<HTMLDivElement>(null);
-  const whiteBgCount = photos.filter((p) => p.hasWhiteBackground).length;
 
   // Tự động hạ xuống khi nhấp chuột ra ngoài vùng bảng xuất file & in ấn (cho gọn thanh công cụ)
   useEffect(() => {
@@ -392,18 +391,6 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
                 </button>
               </div>
 
-              {/* Cảnh báo in PET nếu có ảnh dính nền trắng */}
-              {whiteBgCount > 0 && (
-                <div className="bg-amber-50/95 border border-amber-300 rounded-xl p-2 text-[10.5px] text-amber-900 flex items-start gap-1.5 shadow-2xs">
-                  <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" />
-                  <div className="flex-1 min-w-0">
-                    <span className="font-bold text-amber-900">Lưu ý in áo PET: </span>
-                    <span className="text-amber-800">
-                      Có <b>{whiteBgCount} ảnh</b> dính nền trắng đục. Bật nút <b>🏁 Soi PET (Caro)</b> trên thanh công cụ để kiểm tra hoặc bấm <b>Tẩy nền</b> để áo không bị mảng trắng.
-                    </span>
-                  </div>
-                </div>
-              )}
 
               {/* Row 3: Tải PNG Tách Nền (Trong suốt) */}
               <div className="pt-0.5 space-y-1.5">

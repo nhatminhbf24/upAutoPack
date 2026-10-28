@@ -18,7 +18,6 @@ import { PageThumbnailsSidebar } from './components/PageThumbnailsSidebar';
 import { ToolSelectorHub } from './components/ToolSelectorHub';
 import { ToastContainer, ToastMessage } from './components/Toast';
 import { useHistoryState } from './hooks/useHistoryState';
-import { analyzeWhiteBackground } from './utils/petPrintUtils';
 
 // Code-splitting via React.lazy for on-demand bundle loading
 const CropModal = React.lazy(() => import('./components/CropModal').then((m) => ({ default: m.CropModal })));
@@ -546,52 +545,6 @@ export default function App() {
     },
     [setPhotos, addToast]
   );
-
-  const analyzedPhotoIdsRef = useRef<Set<string>>(new Set());
-
-  // Tự động quét và phát hiện ảnh có nền trắng đục cho toàn bộ ảnh hiện có trong bàn in
-  useEffect(() => {
-    const unanalyzed = photos.filter(
-      (p) => p.hasWhiteBackground === undefined && p.originalSrc && !analyzedPhotoIdsRef.current.has(p.id)
-    );
-    if (unanalyzed.length === 0) return;
-
-    unanalyzed.forEach((p) => analyzedPhotoIdsRef.current.add(p.id));
-
-    let isMounted = true;
-    Promise.all(
-      unanalyzed.map(async (photo) => {
-        try {
-          const analysis = await analyzeWhiteBackground(photo.originalSrc);
-          return {
-            id: photo.id,
-            hasWhiteBackground: analysis.hasWhiteBackground,
-            isTransparent: !analysis.isOpaque,
-          };
-        } catch {
-          return { id: photo.id, hasWhiteBackground: false, isTransparent: true };
-        }
-      })
-    ).then((results) => {
-      if (!isMounted || results.length === 0) return;
-      setPhotos((prev) =>
-        prev.map((p) => {
-          const match = results.find((r) => r.id === p.id);
-          return match
-            ? {
-                ...p,
-                hasWhiteBackground: match.hasWhiteBackground,
-                isTransparent: match.isTransparent,
-              }
-            : p;
-        })
-      );
-    });
-
-    return () => {
-      isMounted = false;
-    };
-  }, [photos, setPhotos]);
 
   const packedPages = useMemo(() => {
     return packImagesToPages(photos, settings);
